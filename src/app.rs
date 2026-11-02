@@ -398,8 +398,100 @@ struct AlwaysOnTopArgs {
     enabled: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateInfo {
+    pub has_update: bool,
+    pub current_version: String,
+    pub latest_version: String,
+    pub release_notes: Option<String>,
+    pub release_date: Option<String>,
+    pub should_prompt: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CheckUpdateArgs {
+    manual: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SetUpdateActionArgs {
+    action: String,
+    target_version: Option<String>,
+}
+
 #[component]
 pub fn App() -> impl IntoView {
+    // Trạng thái cập nhật ứng dụng (Updater Lifecycle)
+    let (update_modal_open, set_update_modal_open) = signal(false);
+    let (available_update, set_available_update) = signal(None::<UpdateInfo>);
+    let (is_checking_update, set_is_checking_update) = signal(false);
+    let (is_installing_update, set_is_installing_update) = signal(false);
+    let (update_toast, set_update_toast) = signal(None::<String>);
+
+    // Hàm gọi kiểm tra cập nhật (thủ công hoặc tự động ngầm)
+    let check_for_updates = move |manual: bool| {
+        set_is_checking_update.set(true);
+        spawn_local(async move {
+            let args = serde_wasm_bindgen::to_value(&CheckUpdateArgs { manual }).unwrap();
+            let resp = invoke("check_app_update", args).await;
+            if let Ok(info) = serde_wasm_bindgen::from_value::<UpdateInfo>(resp) {
+                if info.has_update {
+                    set_available_update.set(Some(info.clone()));
+                    if info.should_prompt || manual {
+                        set_update_modal_open.set(true);
+                    }
+                } else if manual {
+                    set_update_toast.set(Some(format!(
+                        "Bạn đang dùng phiên bản v{} mới nhất!",
+                        info.current_version
+                    )));
+                }
+            } else if manual {
+                set_update_toast.set(Some("Không thể kết nối máy chủ cập nhật lúc này.".to_string()));
+            }
+            set_is_checking_update.set(false);
+        });
+    };
+
+    // Tự động kiểm tra sau 3s khởi động (Non-blocking Cold Start SLA < 300ms)
+    {
+        let check_fn = check_for_updates;
+        spawn_local(async move {
+            let promise = js_sys::Promise::new(&mut |resolve, _| {
+                if let Some(win) = web_sys::window() {
+                    let _ = win.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 3000);
+                }
+            });
+            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+            check_fn(false);
+        });
+    }
+
+    // Xử lý lựa chọn: NOW, LATER, SKIP
+    let handle_update_action = move |action: &'static str| {
+        let current_target = available_update.get().map(|u| u.latest_version);
+        if action == "NOW" {
+            set_is_installing_update.set(true);
+            spawn_local(async move {
+                let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
+                let _ = invoke("install_app_update", empty_args).await;
+                set_is_installing_update.set(false);
+                set_update_modal_open.set(false);
+            });
+        } else {
+            let act_str = action.to_string();
+            spawn_local(async move {
+                let args = serde_wasm_bindgen::to_value(&SetUpdateActionArgs {
+                    action: act_str,
+                    target_version: current_target,
+                })
+                .unwrap();
+                let _ = invoke("set_update_action", args).await;
+            });
+            set_update_modal_open.set(false);
+        }
+    };
+
     // Trạng thái công cụ hiện tại
     let (current_slug, set_current_slug) = signal("vietnamese-number-to-words".to_string());
     let (input_value, set_input_value) = signal("1250000".to_string());
@@ -562,6 +654,14 @@ pub fn App() -> impl IntoView {
                     <span style="font-size: 16px;">"⚡"</span>
                     <span>"Office Utility VN"</span>
                     <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">"v0.1.0"</span>
+                    <button
+                        class="titlebar-update-btn"
+                        prop:disabled=move || is_checking_update.get()
+                        on:click=move |_| check_for_updates(true)
+                        title="Kiểm tra bản cập nhật mới nhất"
+                    >
+                        { move || if is_checking_update.get() { "🔄 Đang kiểm tra..." } else { "🔄 Kiểm tra cập nhật" } }
+                    </button>
                 </div>
 
                 <div class="titlebar-center">
@@ -819,6 +919,82 @@ pub fn App() -> impl IntoView {
                     view! {
                         <div class="clipboard-toast">
                             <span>"📋"</span>
+                            <span>{msg}</span>
+                        </div>
+                    }.into_any()
+                } else {
+                    view! { <div></div> }.into_any()
+                }
+            }}
+
+            { move || if update_modal_open.get() {
+                if let Some(info) = available_update.get() {
+                    let notes = info.release_notes.unwrap_or_else(|| "Bản cập nhật tối ưu hóa hiệu năng, sửa lỗi và cải tiến trải nghiệm người dùng.".to_string());
+                    let latest_ver = info.latest_version.clone();
+                    view! {
+                        <div class="modal-overlay" on:click=move |_| set_update_modal_open.set(false)>
+                            <div class="update-dialog" on:click=move |ev: MouseEvent| ev.stop_propagation()>
+                                <div class="update-dialog-header">
+                                    <div class="update-dialog-title">
+                                        <span>"🚀"</span>
+                                        <span>"Đã có Bản Cập nhật Mới!"</span>
+                                    </div>
+                                    <button class="window-control-btn close" on:click=move |_| set_update_modal_open.set(false)>"✕"</button>
+                                </div>
+
+                                <div class="update-dialog-body">
+                                    <div class="update-version-badge">
+                                        {format!("Phiên bản mới: v{}", latest_ver)}
+                                    </div>
+                                    <p style="margin: 0; font-size: 13px; color: #E2E8F0;">
+                                        "Phiên bản mới của Office Utility VN đã sẵn sàng. Dưới đây là tóm tắt những thay đổi nổi bật:"
+                                    </p>
+                                    <div class="update-notes-box">
+                                        {notes}
+                                    </div>
+                                </div>
+
+                                <div class="update-dialog-footer">
+                                    <button
+                                        class="btn-skip-version"
+                                        title="Không bao giờ hỏi lại về phiên bản này"
+                                        on:click=move |_| handle_update_action("SKIP")
+                                    >
+                                        "Bỏ qua bản này"
+                                    </button>
+
+                                    <div style="display: flex; gap: 8px;">
+                                        <button
+                                            class="btn-update-later"
+                                            title="Nhắc tôi lại sau 24 giờ"
+                                            on:click=move |_| handle_update_action("LATER")
+                                        >
+                                            "⏰ Nhắc lại sau"
+                                        </button>
+                                        <button
+                                            class="btn-update-now"
+                                            prop:disabled=move || is_installing_update.get()
+                                            on:click=move |_| handle_update_action("NOW")
+                                        >
+                                            { move || if is_installing_update.get() { "⏳ Đang cài đặt..." } else { "🚀 Cập nhật ngay" } }
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }.into_any()
+                } else {
+                    view! { <div></div> }.into_any()
+                }
+            } else {
+                view! { <div></div> }.into_any()
+            }}
+
+            { move || {
+                if let Some(msg) = update_toast.get() {
+                    view! {
+                        <div class="clipboard-toast" on:click=move |_| set_update_toast.set(None)>
+                            <span>"🔄"</span>
                             <span>{msg}</span>
                         </div>
                     }.into_any()

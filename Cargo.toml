@@ -9,7 +9,7 @@ leptos = { version = "0.8", features = ["csr"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["KeyboardEvent"] }
+web-sys = { version = "0.3", features = ["KeyboardEvent", "Window"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-wasm-bindgen = "0.6"
@@ -50,3 +50,11 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Fast compilation, reduced RAM peak, and lean target directory for dev/tests
+[profile.dev]
+debug = 1
+
+# Optimize 3rd-party dependencies in dev so UI & runtime run smoothly without lag
+[profile.dev.package."*"]
+opt-level = 2
