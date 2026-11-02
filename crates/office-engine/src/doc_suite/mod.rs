@@ -10,6 +10,7 @@ pub mod pdf_flatten_forms;
 pub mod pdf_crop_margin;
 pub mod pdf_booklet_imposition;
 pub mod pdf_visual_diff;
+pub mod docx_template_mailmerge;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -23,6 +24,8 @@ pub use pdf_flatten_forms::{PdfFlattenFormsTool, PdfFlattenOptions};
 pub use pdf_crop_margin::{PdfCropMarginTool, PdfCropOptions};
 pub use pdf_booklet_imposition::{ImpositionMode, PdfBookletImpositionTool, PdfImpositionOptions};
 pub use pdf_visual_diff::{DiffMode, PdfDiffOptions, PdfVisualDiffTool};
+pub use docx_template_mailmerge::{DocxTemplateMailmergeTool, MailmergeOptions};
+
 
 
 

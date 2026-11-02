@@ -125,6 +125,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Hỗ trợ 2 chế độ: Text Diff (so sánh câu chữ) và Visual Pixel Diff (so sánh hình ảnh và tô đỏ vùng sai khác).",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "docx-template-mailmerge",
+        name: "Trộn Hợp đồng Mailmerge Hàng loạt",
+        domain: "doc-suite",
+        description: "Giải nén luồng XML, hợp nhất thẻ <w:r> bị cắt vụn và trộn hàng loạt file Word tốc độ cao.",
+        is_pinned: false,
+    },
+
 
 
     ToolItem {
