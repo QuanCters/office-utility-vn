@@ -84,6 +84,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-page-number-header",
+        name: "Đánh số trang & Bates Numbering",
+        domain: "doc-suite",
+        description: "Đánh số trang tự động, Bates Numbering và tùy biến căn lề header/footer.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
