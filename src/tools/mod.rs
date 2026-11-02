@@ -58,3 +58,14 @@ pub use list_set_operations_view::ListSetOperationsView;
 pub use sql_formatter_linter_view::SqlFormatterLinterView;
 pub use text_pii_anonymizer_view::TextPiiAnonymizerView;
 pub use vietnamese_font_converter_view::VietnameseFontConverterView;
+
+// Vietnam Office (9 tools)
+pub mod gross_net_salary_calculator_view;
+pub mod vietnamese_number_to_words_view;
+pub mod vietqr_napas247_generator_view;
+pub mod vn_address_normalizer_view;
+pub mod vn_bank_bin_mapper_view;
+pub mod vn_cccd_mst_validator_view;
+pub mod vn_einvoice_xml_reader_view;
+pub mod vn_loan_amortization_view;
+pub mod vn_working_days_calc_view;
