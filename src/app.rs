@@ -8,6 +8,9 @@ use wasm_bindgen::prelude::*;
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+
+    #[wasm_bindgen(js_namespace = ["navigator", "clipboard"])]
+    fn writeText(text: &str) -> js_sys::Promise;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -508,8 +511,50 @@ pub fn App() -> impl IntoView {
     let (is_always_on_top, set_is_always_on_top) = signal(false);
     let (palette_open, set_palette_open) = signal(false);
     let (search_query, set_search_query) = signal(String::new());
-    let (clipboard_toast, _set_clipboard_toast) = signal(None::<String>);
+    let (clipboard_toast, set_clipboard_toast) = signal(None::<String>);
     let (selected_files, set_selected_files) = signal(Vec::<String>::new());
+
+    // Window controls & system operations
+    let minimize_win = move || {
+        spawn_local(async move {
+            let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
+            let _ = invoke("minimize_window", empty_args).await;
+        });
+    };
+    let toggle_maximize_win = move || {
+        spawn_local(async move {
+            let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
+            let _ = invoke("toggle_maximize_window", empty_args).await;
+        });
+    };
+    let close_win = move || {
+        spawn_local(async move {
+            let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
+            let _ = invoke("close_window", empty_args).await;
+        });
+    };
+    let open_output_dir = move || {
+        spawn_local(async move {
+            let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
+            let _ = invoke("open_output_folder", empty_args).await;
+        });
+    };
+    let copy_result_to_clipboard = move || {
+        let res = output_result.get();
+        if !res.is_empty() {
+            let _ = writeText(&res);
+            set_clipboard_toast.set(Some("Đã sao chép kết quả vào bộ nhớ tạm!".to_string()));
+            spawn_local(async move {
+                let promise = js_sys::Promise::new(&mut |resolve, _| {
+                    if let Some(win) = web_sys::window() {
+                        let _ = win.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 2500);
+                    }
+                });
+                let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                set_clipboard_toast.set(None);
+            });
+        }
+    };
 
     // IME-Safe flag cho bộ gõ tiếng Việt (UniKey, EVKey)
     let (_is_ime_composing, set_is_ime_composing) = signal(false);
@@ -615,8 +660,12 @@ pub fn App() -> impl IntoView {
         } else if ctrl_or_meta && (key == "p" || key == "P") {
             ev.prevent_default();
             toggle_pin();
-        } else if ctrl_or_meta && (key == "w" || key == "W" || key == "o" || key == "O") {
+        } else if ctrl_or_meta && (key == "o" || key == "O") {
             ev.prevent_default();
+            open_output_dir();
+        } else if ctrl_or_meta && (key == "w" || key == "W") {
+            ev.prevent_default();
+            close_win();
         } else if key == "Escape" {
             if palette_open.get() {
                 set_palette_open.set(false);
@@ -678,9 +727,9 @@ pub fn App() -> impl IntoView {
                     >
                         { move || if is_always_on_top.get() { "📌 Đã ghim" } else { "📌 Ghim" } }
                     </button>
-                    <button class="window-control-btn" title="Thu nhỏ">"🗕"</button>
-                    <button class="window-control-btn" title="Phóng to">"🗖"</button>
-                    <button class="window-control-btn close" title="Đóng">"✕"</button>
+                    <button class="window-control-btn" title="Thu nhỏ (Minimize)" on:click=move |_| minimize_win()>"🗕"</button>
+                    <button class="window-control-btn" title="Phóng to (Maximize)" on:click=move |_| toggle_maximize_win()>"🗖"</button>
+                    <button class="window-control-btn close" title="Đóng (Close)" on:click=move |_| close_win()>"✕"</button>
                 </div>
             </header>
 
@@ -797,10 +846,20 @@ pub fn App() -> impl IntoView {
                         { move || {
                             let res = output_result.get();
                             if !res.is_empty() {
+                                let res_val = res.clone();
                                 view! {
-                                    <div style="margin-top: 12px; padding: 14px; background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.3); border-radius: 6px;">
-                                        <div style="font-size: 11px; color: #10B981; font-weight: 600; margin-bottom: 4px;">"KẾT QUẢ ĐỌC SỐ CHUẨN:"</div>
-                                        <div style="font-size: 16px; font-weight: 600; color: #F8FAFC;">{res}</div>
+                                    <div class="result-box">
+                                        <div class="result-header">
+                                            <span class="result-label">"KẾT QUẢ ĐỌC SỐ CHUẨN:"</span>
+                                            <button
+                                                class="copy-btn"
+                                                title="Sao chép kết quả vào bộ nhớ tạm"
+                                                on:click=move |_| copy_result_to_clipboard()
+                                            >
+                                                "📋 Sao chép"
+                                            </button>
+                                        </div>
+                                        <div class="result-content selectable-text">{res_val}</div>
                                     </div>
                                 }.into_any()
                             } else {
@@ -840,7 +899,11 @@ pub fn App() -> impl IntoView {
                             <span>"🛑 HỦY (Esc)"</span>
                         </button>
 
-                        <button class="btn-secondary" title="Mở thư mục lưu tệp kết quả (Ctrl + O)">
+                        <button
+                            class="btn-secondary"
+                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
+                            on:click=move |_| open_output_dir()
+                        >
                             <span>"📂 MỞ THƯ MỤC KẾT QUẢ (Ctrl + O)"</span>
                         </button>
                     </div>

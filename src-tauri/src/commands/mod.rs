@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use office_shared::{
     AddonStatusResponse, CommandError, DispatchTaskRequest, DispatchTaskResponse,
     FileMetadataResponse, TaskHistoryRecord, TaskProgress, ToolPreset, ToolSettingRecord,
@@ -417,3 +417,42 @@ pub async fn toggle_always_on_top(
         })?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn minimize_window(window: tauri::Window) -> Result<(), CommandError> {
+    window.minimize().map_err(|e| CommandError::ProcessExecutionError {
+        message: format!("Không thể thu nhỏ cửa sổ: {e}"),
+    })
+}
+
+#[tauri::command]
+pub async fn toggle_maximize_window(window: tauri::Window) -> Result<(), CommandError> {
+    if window.is_maximized().unwrap_or(false) {
+        window.unmaximize().map_err(|e| CommandError::ProcessExecutionError {
+            message: format!("Không thể thu nhỏ cửa sổ: {e}"),
+        })
+    } else {
+        window.maximize().map_err(|e| CommandError::ProcessExecutionError {
+            message: format!("Không thể phóng to cửa sổ: {e}"),
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn close_window(window: tauri::Window) -> Result<(), CommandError> {
+    window.close().map_err(|e| CommandError::ProcessExecutionError {
+        message: format!("Không thể đóng cửa sổ: {e}"),
+    })
+}
+
+#[tauri::command]
+pub async fn open_output_folder(app: AppHandle) -> Result<(), CommandError> {
+    use tauri_plugin_opener::OpenerExt;
+    let download_dir = app.path().download_dir().unwrap_or_else(|_| PathBuf::from("./"));
+    app.opener()
+        .open_path(download_dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| CommandError::ProcessExecutionError {
+            message: format!("Không thể mở thư mục kết quả: {e}"),
+        })
+}
+

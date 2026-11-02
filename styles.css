@@ -23,6 +23,11 @@
   overflow: hidden;
 }
 
+input, textarea, .selectable-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -643,4 +648,60 @@
   color: #94A3B8;
   text-decoration: underline;
 }
+
+/* Result Card & Copy Action */
+.result-box {
+  margin-top: 14px;
+  padding: 16px;
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.result-label {
+  font-size: 11px;
+  color: #10B981;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.copy-btn {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34D399;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: #34D399;
+  color: #A7F3D0;
+  transform: translateY(-1px);
+}
+
+.result-content {
+  font-size: 17px;
+  font-weight: 600;
+  color: #F8FAFC;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
 

@@ -59,6 +59,10 @@ pub fn run() {
             commands::save_tool_preset,
             commands::delete_tool_preset,
             commands::toggle_always_on_top,
+            commands::minimize_window,
+            commands::toggle_maximize_window,
+            commands::close_window,
+            commands::open_output_folder,
             // Lệnh cập nhật ứng dụng (Updater Lifecycle)
             commands::check_app_update,
             commands::install_app_update,
