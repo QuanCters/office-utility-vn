@@ -146,6 +146,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Kết xuất từng trang PDF và ghép nối tiếp theo chiều dọc thành một ảnh dài duy nhất kèm đường phân cách trang.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "pdf-grayscale-print",
+        name: "Chuyển PDF sang Đen trắng",
+        domain: "doc-suite",
+        description: "Chuyển đổi toàn bộ toán tử màu trong luồng nội dung và hình ảnh nhúng sang DeviceGray 8-bit tiết kiệm mực in.",
+        is_pinned: false,
+    },
+
 
 
 
