@@ -91,7 +91,6 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
-<<<<<<< HEAD
         slug: "pdf-protect-sign",
         name: "Bảo mật & Mở khóa PDF",
         domain: "doc-suite",
