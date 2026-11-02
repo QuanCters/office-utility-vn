@@ -139,6 +139,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Quét và ẩn tự động số CCCD, SĐT di động VN, MST, STK ngân hàng thành nhãn ẩn danh.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "sql-formatter-linter",
+        name: "Định dạng & Linter Câu lệnh SQL",
+        domain: "data-lab",
+        description: "Kiểm tra lỗi cú pháp AST bằng linter và căn chỉnh thụt lề, viết hoa từ khóa theo các phương ngữ SQL.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]

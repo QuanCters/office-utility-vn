@@ -7,6 +7,7 @@ pub mod excel_sheet_unlocker;
 pub mod excel_split_by_column;
 pub mod excel_visual_joiner;
 pub mod list_set_operations;
+pub mod sql_formatter_linter;
 pub mod text_pii_anonymizer;
 pub mod vietnamese_font_converter;
 
@@ -36,6 +37,10 @@ pub use excel_visual_joiner::{
 };
 pub use list_set_operations::{
     compute_set_operation, ListSetOperationsTool, ListSetOptions, SetOperation,
+};
+pub use sql_formatter_linter::{
+    format_sql_query, lint_sql_syntax, SqlDialect, SqlFormatterLinterTool, SqlFormatterOptions,
+    SqlLintResult,
 };
 pub use text_pii_anonymizer::{
     anonymize_pii_text, PiiAnonymizerOptions, TextPiiAnonymizerTool,
