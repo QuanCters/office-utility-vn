@@ -90,6 +90,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Chuyển đổi hai chiều tốc độ cao giữa bảng tính với JSON, SQL INSERT INTO hoặc Markdown.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "excel-split-by-column",
+        name: "Tách File Excel theo Cột",
+        domain: "data-lab",
+        description: "Phân nhóm dữ liệu theo giá trị của cột chỉ định và xuất thành các file riêng biệt.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]
