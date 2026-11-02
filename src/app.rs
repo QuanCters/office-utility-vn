@@ -56,6 +56,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "photo-id-crop",
+        name: "Cắt Ảnh Thẻ Chuẩn 300 DPI",
+        domain: "media-studio",
+        description: "Cắt ảnh thẻ theo tỷ lệ chuẩn và dàn trang khổ in 10x15 cm ở 300 DPI.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "universal-file-converter-hub",
         name: "Trạm Chuyển đổi Tệp Vạn năng",
         domain: "sys-hub",
