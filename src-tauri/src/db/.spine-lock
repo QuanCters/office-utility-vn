@@ -1,0 +1,10 @@
+# SPINE ARCHITECTURE LOCK FILE
+# Khóa bảo vệ CSDL SQLite 3 WAL & IPC Core (Phase 0 / Spine Layer)
+# Các Subagent / Pod Agent chỉ được phép thêm module công cụ qua trait OfficeTool trong crates/office-engine.
+# TUYỆT ĐỐI CẤM SỬA ĐỔI tệp này hoặc các tệp trong src-tauri/src/db.
+
+LOCKED_AT="2026-11-02T08:39:15Z"
+STATUS="LOCKED_READ_ONLY"
+SHA256_DB_MOD="28c86a6e4f2d9e1366188eb984640247e840844cc72bcd348272f7f6f71874ec"
+SHA256_COMMANDS_MOD="e42f6e5ad371ef9cdd4c05c0fd27f7ad6fcc3b632786916694a935fdd5d92416"
+POLICY="POD_AGENTS_READ_ONLY"

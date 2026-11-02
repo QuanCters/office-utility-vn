@@ -1,5 +1,6 @@
+use leptos::ev::{KeyboardEvent, MouseEvent};
+use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos::{ev::SubmitEvent, prelude::*};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -9,59 +10,511 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ToolItem {
+    pub slug: &'static str,
+    pub name: &'static str,
+    pub domain: &'static str,
+    pub description: &'static str,
+    pub is_pinned: bool,
+}
+
+const ALL_TOOLS: &[ToolItem] = &[
+    ToolItem {
+        slug: "vietnamese-number-to-words",
+        name: "Đọc Số Tiền Thành Chữ Chuẩn",
+        domain: "vn-office",
+        description: "Chuyển đổi số tiền thành chữ tiếng Việt chuẩn xác theo quy tắc kế toán.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "salary-gross-net-tax-calc",
+        name: "Tính Lương Gross - Net & Thuế",
+        domain: "vn-office",
+        description: "Tính lương Gross sang Net và đối soát thuế TNCN, BHXH theo luật mới.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "vietqr-napas-generator",
+        name: "Tạo Mã VietQR Napas247",
+        domain: "vn-office",
+        description: "Tạo mã QR thanh toán Napas247 chuẩn EMVCo kèm logo ngân hàng.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "pdf-merge-split",
+        name: "Ghép, Tách & Xoay trang PDF",
+        domain: "doc-suite",
+        description: "Ghép nhiều file PDF hoặc tách trang theo dải lựa chọn cực nhanh.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "image-batch-convert",
+        name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
+        domain: "media-studio",
+        description: "Tối ưu hóa ảnh WebP, AVIF, JPEG đa luồng với Rayon.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "universal-file-converter-hub",
+        name: "Trạm Chuyển đổi Tệp Vạn năng",
+        domain: "sys-hub",
+        description: "Tự động nhận diện chữ ký file và chuyển đổi định dạng linh hoạt.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "vietnamese-font-converter",
+        name: "Chuyển mã Font Tiếng Việt",
+        domain: "data-lab",
+        description: "Chuyển mã font TCVN3 (ABC), VNI sang Unicode tổ hợp và dựng sẵn.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "spreadsheet-cleanse-normalize",
+        name: "Làm sạch & Chuẩn hóa Bảng tính",
+        domain: "data-lab",
+        description: "Xử lý ô trống, trùng lặp và định dạng dữ liệu bảng tính.",
+        is_pinned: false,
+    },
+];
+
 #[derive(Serialize, Deserialize)]
-struct GreetArgs<'a> {
-    name: &'a str,
+struct DispatchArgs {
+    request: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AlwaysOnTopArgs {
+    enabled: bool,
 }
 
 #[component]
 pub fn App() -> impl IntoView {
-    let (name, set_name) = signal(String::new());
-    let (greet_msg, set_greet_msg) = signal(String::new());
+    // Trạng thái công cụ hiện tại
+    let (current_slug, set_current_slug) = signal("vietnamese-number-to-words".to_string());
+    let (input_value, set_input_value) = signal("1250000".to_string());
+    let (dialect, set_dialect) = signal("North".to_string());
+    let (use_dong_chan, set_use_dong_chan) = signal(true);
+    let (output_result, set_output_result) = signal(String::new());
 
-    let update_name = move |ev| {
-        let v = event_target_value(&ev);
-        set_name.set(v);
+    // Trạng thái thanh tiến trình
+    let (progress_percent, set_progress_percent) = signal(0.0f32);
+    let (progress_message, set_progress_message) = signal(String::new());
+    let (is_running, set_is_running) = signal(false);
+
+    // Trạng thái giao diện cửa sổ
+    let (is_always_on_top, set_is_always_on_top) = signal(false);
+    let (palette_open, set_palette_open) = signal(false);
+    let (search_query, set_search_query) = signal(String::new());
+    let (clipboard_toast, _set_clipboard_toast) = signal(None::<String>);
+    let (selected_files, set_selected_files) = signal(Vec::<String>::new());
+
+    // IME-Safe flag cho bộ gõ tiếng Việt (UniKey, EVKey)
+    let (_is_ime_composing, set_is_ime_composing) = signal(false);
+
+    // Lấy thông tin công cụ đang chọn
+    let current_tool = move || {
+        let slug = current_slug.get();
+        ALL_TOOLS
+            .iter()
+            .find(|t| t.slug == slug)
+            .cloned()
+            .unwrap_or(ALL_TOOLS[0].clone())
     };
 
-    let greet = move |ev: SubmitEvent| {
-        ev.prevent_default();
+    // Toggle Always-on-Top
+    let toggle_pin = move || {
+        let new_state = !is_always_on_top.get();
+        set_is_always_on_top.set(new_state);
         spawn_local(async move {
-            let name = name.get_untracked();
-            if name.is_empty() {
-                return;
-            }
-
-            let args = serde_wasm_bindgen::to_value(&GreetArgs { name: &name }).unwrap();
-            // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-            let new_msg = invoke("greet", args).await.as_string().unwrap();
-            set_greet_msg.set(new_msg);
+            let args = serde_wasm_bindgen::to_value(&AlwaysOnTopArgs { enabled: new_state }).unwrap();
+            let _ = invoke("toggle_always_on_top", args).await;
         });
     };
 
+    // Thực thi tác vụ (Ctrl + Enter)
+    let run_task = move || {
+        if is_running.get() {
+            return;
+        }
+
+        set_is_running.set(true);
+        set_progress_percent.set(10.0);
+        set_progress_message.set("Đang chuẩn bị tác vụ...".to_string());
+
+        let slug = current_slug.get();
+        let num_str = input_value.get();
+        let cur_dialect = dialect.get();
+        let dong_chan = use_dong_chan.get();
+
+        spawn_local(async move {
+            set_progress_percent.set(50.0);
+            set_progress_message.set("Đang tính toán nội bộ 100% On-Device...".to_string());
+
+            let request_payload = serde_json::json!({
+                "task_id": format!("task-{}", js_sys::Date::now() as u64),
+                "tool_slug": slug,
+                "input_paths": [],
+                "output_directory": null,
+                "options": {
+                    "number": num_str,
+                    "dialect": cur_dialect,
+                    "currency": "VND",
+                    "use_dong_chan": dong_chan,
+                    "capitalize_first": true,
+                    "negative_prefix": "âm"
+                }
+            });
+
+            let args = serde_wasm_bindgen::to_value(&DispatchArgs {
+                request: request_payload,
+            })
+            .unwrap();
+
+            let resp = invoke("dispatch_tool_task", args).await;
+            if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp) {
+                if let Some(outputs) = res_obj.get("output_paths").and_then(|v| v.as_array()) {
+                    if let Some(first) = outputs.first().and_then(|v| v.as_str()) {
+                        set_output_result.set(first.to_string());
+                    }
+                }
+                set_progress_percent.set(100.0);
+                set_progress_message.set("Đã hoàn thành xuất sắc".to_string());
+            } else {
+                set_output_result.set("Lỗi thực thi tác vụ".to_string());
+                set_progress_message.set("Có lỗi phát sinh".to_string());
+            }
+
+            set_is_running.set(false);
+        });
+    };
+
+    // Hủy tác vụ (Esc)
+    let cancel_current_task = move || {
+        if is_running.get() {
+            set_is_running.set(false);
+            set_progress_percent.set(0.0);
+            set_progress_message.set("Đã dừng tác vụ".to_string());
+        }
+    };
+
+    // Global keyboard shortcuts interception (Ctrl+P, Ctrl+W, Ctrl+O, Ctrl+K, Ctrl+V)
+    let on_global_keydown = move |ev: KeyboardEvent| {
+        let key = ev.key();
+        let ctrl_or_meta = ev.ctrl_key() || ev.meta_key();
+
+        if ctrl_or_meta && (key == "k" || key == "K") {
+            ev.prevent_default();
+            ev.stop_propagation();
+            set_palette_open.update(|v| *v = !*v);
+        } else if ctrl_or_meta && (key == "p" || key == "P") {
+            ev.prevent_default();
+            toggle_pin();
+        } else if ctrl_or_meta && (key == "w" || key == "W") {
+            ev.prevent_default();
+        } else if ctrl_or_meta && (key == "o" || key == "O") {
+            ev.prevent_default();
+        } else if key == "Escape" {
+            if palette_open.get() {
+                set_palette_open.set(false);
+            } else if is_running.get() {
+                cancel_current_task();
+            }
+        } else if ctrl_or_meta && key == "Enter" {
+            ev.prevent_default();
+            run_task();
+        }
+    };
+
+    // Lọc công cụ trong Command Palette
+    let filtered_tools = move || {
+        let q = search_query.get().trim().to_lowercase();
+        if q.is_empty() {
+            ALL_TOOLS.to_vec()
+        } else {
+            ALL_TOOLS
+                .iter()
+                .filter(|t| {
+                    t.name.to_lowercase().contains(&q)
+                        || t.slug.to_lowercase().contains(&q)
+                        || t.domain.to_lowercase().contains(&q)
+                })
+                .cloned()
+                .collect()
+        }
+    };
+
     view! {
-        <main class="container">
-            <h1>"Welcome to Tauri + Leptos"</h1>
+        <div class="app-window" on:keydown=on_global_keydown tabindex="0">
+            <header class="titlebar" data-tauri-drag-region="true">
+                <div class="titlebar-left">
+                    <span style="font-size: 16px;">"⚡"</span>
+                    <span>"Office Utility VN"</span>
+                    <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">"v0.1.0"</span>
+                </div>
 
-            <div class="row">
-                <a href="https://tauri.app" target="_blank">
-                    <img src="public/tauri.svg" class="logo tauri" alt="Tauri logo"/>
-                </a>
-                <a href="https://docs.rs/leptos/" target="_blank">
-                    <img src="public/leptos.svg" class="logo leptos" alt="Leptos logo"/>
-                </a>
-            </div>
-            <p>"Click on the Tauri and Leptos logos to learn more."</p>
+                <div class="titlebar-center">
+                    <button class="quick-search-btn" on:click=move |_| set_palette_open.set(true)>
+                        <span>"🔍 Tìm nhanh công cụ hoặc mẫu Preset... (Ctrl + K)"</span>
+                    </button>
+                </div>
 
-            <form class="row" on:submit=greet>
-                <input
-                    id="greet-input"
-                    placeholder="Enter a name..."
-                    on:input=update_name
-                />
-                <button type="submit">"Greet"</button>
-            </form>
-            <p>{ move || greet_msg.get() }</p>
-        </main>
+                <div class="titlebar-right">
+                    <button
+                        class=move || if is_always_on_top.get() { "pin-btn pinned" } else { "pin-btn" }
+                        on:click=move |_| toggle_pin()
+                        title="Ghim cửa sổ nổi Always-on-Top (Ctrl + P)"
+                    >
+                        { move || if is_always_on_top.get() { "📌 Đã ghim" } else { "📌 Ghim" } }
+                    </button>
+                    <button class="window-control-btn" title="Thu nhỏ">"🗕"</button>
+                    <button class="window-control-btn" title="Phóng to">"🗖"</button>
+                    <button class="window-control-btn close" title="Đóng">"✕"</button>
+                </div>
+            </header>
+
+            <nav class="pinned-bar">
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; margin-right: 4px;">"📌 Ghim nhanh:"</span>
+                {
+                    ALL_TOOLS.iter().filter(|t| t.is_pinned).map(|t| {
+                        let slug_copy = t.slug.to_string();
+                        let slug_for_active = slug_copy.clone();
+                        view! {
+                            <button
+                                class=move || if current_slug.get() == slug_for_active { "pinned-tab active" } else { "pinned-tab" }
+                                on:click=move |_| {
+                                    set_current_slug.set(slug_copy.clone());
+                                    set_output_result.set(String::new());
+                                }
+                            >
+                                {t.name}
+                            </button>
+                        }
+                    }).collect::<Vec<_>>()
+                }
+            </nav>
+
+            <main class="workspace">
+                <section class="zone-1">
+                    <div class="tool-info">
+                        <span style="font-size: 20px;">"🛠️"</span>
+                        <div>
+                            <div class="tool-name">{ move || current_tool().name }</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">
+                                { move || current_tool().description }
+                            </div>
+                        </div>
+                        <span class="trust-badge">
+                            "🟢 100% On-Device Native (Rayon)"
+                        </span>
+                    </div>
+
+                    <div class="preset-selector">
+                        <label style="font-size: 12px; color: var(--text-muted);">"🎛️ Mẫu cấu hình:"</label>
+                        <select class="preset-select">
+                            <option>"Mặc định tiêu chuẩn"</option>
+                            <option>"Kế toán thuế (Có chẵn)"</option>
+                            <option>"Báo cáo tài chính năm"</option>
+                        </select>
+                        <button class="save-preset-btn">"💾 Lưu mẫu"</button>
+                    </div>
+                </section>
+
+                <section class="zone-2">
+                    <div
+                        class="dropzone"
+                        on:click=move |_| {
+                            set_selected_files.update(|f| f.push("hóa_đơn_tháng_11.xlsx".to_string()));
+                        }
+                    >
+                        <div style="font-size: 28px; margin-bottom: 6px;">"📥"</div>
+                        <div class="dropzone-title">"KÉO THẢ TỆP TỪ EXPLORER / FINDER VÀO ĐÂY HOẶC NHẤN ĐỂ CHỌN"</div>
+                        <div class="dropzone-sub">
+                            "(Hỗ trợ dán dữ liệu hoặc tệp trực tiếp từ Clipboard qua phím tắt Ctrl + V)"
+                        </div>
+                    </div>
+
+                    { move || {
+                        let fs = selected_files.get();
+                        if !fs.is_empty() {
+                            view! {
+                                <div style="font-size: 12px; color: #10B981; display: flex; align-items: center; gap: 6px;">
+                                    <span>"✓ Đã nạp:"</span>
+                                    <b>{ fs.join(", ") }</b>
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! { <div></div> }.into_any()
+                        }
+                    }}
+
+                    <div class="tool-config-panel">
+                        <div class="form-group">
+                            <label class="form-label">"Nhập số tiền hoặc số bất kỳ cần đọc:"</label>
+                            <input
+                                class="form-input"
+                                type="text"
+                                prop:value=input_value
+                                on:compositionstart=move |_| set_is_ime_composing.set(true)
+                                on:compositionend=move |_| set_is_ime_composing.set(false)
+                                on:input=move |ev| {
+                                    set_input_value.set(event_target_value(&ev));
+                                }
+                                placeholder="Ví dụ: 1250000 hoặc 1.250.000"
+                            />
+                        </div>
+
+                        <div class="options-row">
+                            <div class="form-group">
+                                <label class="form-label">"Phương ngữ:"</label>
+                                <div style="display: flex; gap: 12px; margin-top: 4px;">
+                                    <label class="radio-item">
+                                        <input
+                                            type="radio"
+                                            name="dialect"
+                                            checked=move || dialect.get() == "North"
+                                            on:change=move |_| set_dialect.set("North".to_string())
+                                        />
+                                        "Miền Bắc (nghìn, lẻ)"
+                                    </label>
+                                    <label class="radio-item">
+                                        <input
+                                            type="radio"
+                                            name="dialect"
+                                            checked=move || dialect.get() == "South"
+                                            on:change=move |_| set_dialect.set("South".to_string())
+                                        />
+                                        "Miền Nam (ngàn, linh)"
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">"Quy chuẩn kế toán:"</label>
+                                <div style="display: flex; gap: 12px; margin-top: 4px;">
+                                    <label class="radio-item">
+                                        <input
+                                            type="checkbox"
+                                            checked=use_dong_chan
+                                            on:change=move |ev| set_use_dong_chan.set(event_target_checked(&ev))
+                                        />
+                                        "Thêm hậu tố 'đồng chẵn'"
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        { move || {
+                            let res = output_result.get();
+                            if !res.is_empty() {
+                                view! {
+                                    <div style="margin-top: 12px; padding: 14px; background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.3); border-radius: 6px;">
+                                        <div style="font-size: 11px; color: #10B981; font-weight: 600; margin-bottom: 4px;">"KẾT QUẢ ĐỌC SỐ CHUẨN:"</div>
+                                        <div style="font-size: 16px; font-weight: 600; color: #F8FAFC;">{res}</div>
+                                    </div>
+                                }.into_any()
+                            } else {
+                                view! { <div></div> }.into_any()
+                            }
+                        }}
+                    </div>
+                </section>
+
+                <section class="zone-3">
+                    <div class="progress-track">
+                        <div
+                            class="progress-bar"
+                            style=move || format!("width: {}%", progress_percent.get())
+                        ></div>
+                    </div>
+
+                    <div class="progress-meta">
+                        <span>{ move || progress_message.get() }</span>
+                        <span>{ move || format!("{:.0}%", progress_percent.get()) }</span>
+                    </div>
+
+                    <div class="action-bar">
+                        <button
+                            class="btn-primary"
+                            prop:disabled=move || is_running.get()
+                            on:click=move |_| run_task()
+                        >
+                            <span>"⚡ THỰC THI NGAY (Ctrl + Enter)"</span>
+                        </button>
+
+                        <button
+                            class="btn-danger"
+                            prop:disabled=move || !is_running.get()
+                            on:click=move |_| cancel_current_task()
+                        >
+                            <span>"🛑 HỦY (Esc)"</span>
+                        </button>
+
+                        <button class="btn-secondary" title="Mở thư mục lưu tệp kết quả (Ctrl + O)">
+                            <span>"📂 MỞ THƯ MỤC KẾT QUẢ (Ctrl + O)"</span>
+                        </button>
+                    </div>
+                </section>
+            </main>
+
+            { move || if palette_open.get() {
+                view! {
+                    <div class="modal-overlay" on:click=move |_| set_palette_open.set(false)>
+                        <div class="command-palette" on:click=move |ev: MouseEvent| ev.stop_propagation()>
+                            <div class="palette-input-box">
+                                <span style="font-size: 18px;">"🔍"</span>
+                                <input
+                                    class="palette-input"
+                                    type="text"
+                                    placeholder="Tìm kiếm công cụ theo tên, chức năng hoặc miền nghiệp vụ..."
+                                    autofocus=true
+                                    prop:value=search_query
+                                    on:input=move |ev| set_search_query.set(event_target_value(&ev))
+                                />
+                                <span style="font-size: 11px; color: var(--text-muted); background: #334155; padding: 2px 6px; border-radius: 4px;">"Esc để đóng"</span>
+                            </div>
+
+                            <div class="palette-list">
+                                {
+                                    filtered_tools().into_iter().map(|tool| {
+                                        let slug_copy = tool.slug.to_string();
+                                        view! {
+                                            <div
+                                                class="palette-item"
+                                                on:click=move |_| {
+                                                    set_current_slug.set(slug_copy.clone());
+                                                    set_palette_open.set(false);
+                                                }
+                                            >
+                                                <div>
+                                                    <div style="font-weight: 600;">{tool.name}</div>
+                                                    <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
+                                                </div>
+                                                <span class="palette-item-badge">{tool.domain}</span>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }.into_any()
+            } else {
+                view! { <div></div> }.into_any()
+            }}
+
+            { move || {
+                if let Some(msg) = clipboard_toast.get() {
+                    view! {
+                        <div class="clipboard-toast">
+                            <span>"📋"</span>
+                            <span>{msg}</span>
+                        </div>
+                    }.into_any()
+                } else {
+                    view! { <div></div> }.into_any()
+                }
+            }}
+        </div>
     }
 }

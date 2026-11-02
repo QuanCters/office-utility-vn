@@ -1,408 +1,341 @@
-# 7. Kiến trúc Triển khai Hạ tầng, Cấu hình Docker Compose & Vận hành Giám sát (Deployment Architecture, DevOps & Observability)
-
-Kiến trúc triển khai hạ tầng của nền tảng được xây dựng để hiện thực hóa ba cam kết cốt lõi trong tài liệu: **Chi phí vận hành tối thiểu (Hybrid Edge + Stateless Workers)**, **Hiệu năng I/O cực đại bằng ổ đĩa RAM (`tmpfs`)**, và **Cô lập an toàn tuyệt đối (Sandboxed Zero-Trace Execution)**.
+# 7. Kiến trúc Đóng gói Đa nền tảng, Đường ống CI/CD & Cơ chế Tự động Cập nhật (Packaging, CI/CD & Auto-Updater)
 
 ---
 
-## 7.1. Sơ đồ Tô-pô Triển khai Hạ tầng (Infrastructure Topology Diagram)
+Kiến trúc phân phối và vận hành của **Office Utility VN** được xây dựng xung quanh mô hình **Phát hành Phần mềm Máy tính để bàn Bản địa (Native Desktop Distribution)**: loại bỏ hoàn toàn các gánh nặng bảo trì máy chủ, container Docker hay cụm cơ sở dữ liệu trên đám mây. Toàn bộ quy trình tập trung vào: **Đóng gói nhị phân siêu tối ưu trên cả 3 hệ điều hành (Windows, macOS, Linux)**, **Đường ống CI/CD tự động hóa hoàn chỉnh** và **Cơ chế cập nhật an toàn với chữ ký mật mã học Minisign**.
 
-Hệ thống phân tách hoàn toàn luồng phân phối giao diện tĩnh / mô-đun WebAssembly ở tầng Biên (Edge CDN) và luồng xử lý tác vụ nặng ở cụm máy chủ Backend thông qua mạng nội bộ cô lập (Isolated Docker Networks):
+---
+
+## 7.1. Tổng quan Kiến trúc Đóng gói Đa nền tảng (Packaging Architecture)
+
+Quy trình biên dịch và đóng gói ứng dụng kết hợp giữa **Trunk** (biên dịch giao diện Leptos Rust sang WebAssembly) và **Tauri CLI** (biên dịch nhân Rust và đóng gói thành tệp cài đặt hệ điều hành):
 
 ```mermaid
-flowchart TB
-    %% Tầng Người dùng
-    Client(["💻 Trình duyệt Người dùng<br/>(Web Workers + WASM + IndexedDB Cache)"])
-    Mobile(["📱 Điện thoại Di động<br/>(Quick Drop PWA / QR Scanner)"])
-
-    %% Tầng Edge & Lưu trữ Đám mây
-    subgraph CloudflareEdge ["Tầng Phân phối Biên & Lưu trữ Tạm (Cloudflare Edge)"]
-        CDN["⚡ Cloudflare Pages / CDN<br/>(App Shell < 180KB + Lazy WASM Bundles)"]
-        R2[("🪣 Cloudflare R2 / MinIO<br/>(AES-256 • Bucket Lifecycle TTL = 30m)")]
+flowchart TD
+    subgraph SourceCode ["Mã Nguồn Dự Án (Cargo Workspace)"]
+        Shared["📐 Shared Types<br/>(shared/)"]
+        UI["🎨 Frontend Leptos 0.8<br/>(src/ & index.html)"]
+        Core["⚙️ Backend Tauri Core<br/>(src-tauri/)"]
     end
 
-    %% Cụm Máy chủ Ứng dụng & Hàng đợi
-    subgraph VPSCluster ["Cụm Máy chủ Xử lý Trung tâm (Docker Host / Linux Server)"]
-        direction TB
-
-        subgraph PublicNet ["🌐 Mạng Giao tiếp Ngoài (frontend-egress-net)"]
-            Gateway["🛡️ Reverse Proxy / API Gateway<br/>(TLS 1.3 • Rate Limiting • CORS)"]
-            API["🚀 nestjs-api (FastifyAdapter)<br/>(REST API • SSE Stream • Socket.io Signaling)"]
-        end
-
-        subgraph InternalNet ["🔒 Mạng Nội bộ Cô lập - Chặn Internet Ngoài (isolated-worker-net • internal: true)"]
-            Redis[("🧠 Redis 8 (AOF)<br/>(BullMQ 5 Queues • Rate Limit • Ephemeral Secrets)")]
-            Postgres[("🐘 PostgreSQL 18<br/>(Relational + JSONB + Partial Index)")]
-            
-            WorkerFast["⚙️ worker-fast-light<br/>(Sharp • QPDF • SheetJS)<br/>[RAM Disk /tmp: 2GB]"]
-            WorkerOffice["📄 worker-office-ai<br/>(Ghostscript • FFmpeg • PaddleOCR • Pandoc)<br/>[RAM Disk /tmp: 4GB]"]
-            Gotenberg["🖨️ Gotenberg Sidecar<br/>(LibreOffice Headless + Bộ Font VN)<br/>[RAM Disk /tmp: 2GB]"]
-            Docling["🤖 Docling AI Sidecar<br/>(IBM Docling • PyTorch • OCR)<br/>[RAM Disk /tmp: 3GB]"]
-        end
+    subgraph BuildPipeline ["Quy trình Biên dịch Nội bộ"]
+        Trunk["📦 Trunk Build --release<br/>(Target: wasm32-unknown-unknown)<br/>Tạo dist/ (HTML, JS glue, optimized WASM)"]
+        Cargo["🦀 Cargo Tauri Build<br/>(Biên dịch nhị phân Rust Native + LTO)"]
     end
 
-    %% Luồng kết nối
-    Client <-->|"1. Tải UI & WASM (HTTPS)"| CDN
-    Client <-->|"2. PUT/GET Tệp Trực tiếp (Presigned URL - Zero Proxy)"| R2
-    Client <-->|"3. JSON API (<80ms) & Luồng SSE Tiến độ"| Gateway
-    Mobile <-->|"4. WebRTC P2P DataChannel"| Client
-    Mobile <-->|"Signaling Room"| Gateway
+    subgraph PackagingMatrix ["Ma trận Đóng gói Đa nền tảng (3 OS)"]
+        Win["🪟 Windows (x86_64)<br/>• Bộ cài đặt NSIS: .exe<br/>• Gói doanh nghiệp: .msi<br/>• Gói cập nhật: .nsis.zip + .sig"]
+        Mac["🍎 macOS Universal Binary<br/>(Apple Silicon aarch64 + Intel x86_64)<br/>• Gói kéo thả: .dmg<br/>• Gói cập nhật: .app.tar.gz + .sig"]
+        Linux["🐧 Linux (x86_64)<br/>• Gói Debian/Ubuntu: .deb<br/>• Gói di động: .AppImage + .sig"]
+    end
 
-    Gateway --> API
-    API <--> Redis
-    API <--> Postgres
-    API -.->|"Ký & Cấp link Presigned / Lệnh Purge"| R2
-
-    Redis <-->|"BullMQ Dispatch & Progress Events (5 Queues)"| WorkerFast
-    Redis <-->|"BullMQ Dispatch & Progress Events (5 Queues)"| WorkerOffice
-    WorkerOffice <-->|"HTTP Nội bộ (Port 3000)"| Gotenberg
-    WorkerOffice <-->|"HTTP Nội bộ + X-Internal-Token (Port 5001)"| Docling
-
-    WorkerFast <-->|"Tải Input / Đẩy Output qua VPC Endpoint"| R2
-    WorkerOffice <-->|"Tải Input / Đẩy Output qua VPC Endpoint"| R2
-
+    Shared --> UI
+    Shared --> Core
+    UI -->|Biên dịch qua Trunk| Trunk
+    Trunk -->|Nhúng tài sản tĩnh| Cargo
+    Core --> Cargo
+    Cargo --> Win
+    Cargo --> Mac
+    Cargo --> Linux
 ```
 
-### Đặc điểm Kỹ thuật của Tô-pô Triển khai
+### Chi tiết các Định dạng Bộ cài đặt:
 
-1. Tầng Edge CDN (Chịu tải 70–80% lưu lượng với chi phí Server = 0đ):
-
-* Toàn bộ khung ứng dụng (App Shell dưới **180 KB**) và các gói nhị phân `.wasm` (`pdf-lib`, `PDF.js`, `FFmpeg.wasm`, `ONNX`) được phân phối qua mạng lưới CDN biên.
-
-* Ngay cả khi cụm máy chủ Backend đang bảo trì, người dùng vẫn truy cập và sử dụng bình thường hơn 45 công cụ Client-side trong tổng số hơn 60 công cụ (`NFR-REL-02`).
-
-2. Luồng Truyền tải Nhị phân Zero-Proxy (`Client` $\leftrightarrow$ `Cloudflare R2`):
-
-* Băng thông tải tệp lên và tải tệp về đi trực tiếp giữa trình duyệt và Cloudflare R2 thông qua `presignedPutUrl` và `presignedDownloadUrl`.
-
-* Container `nestjs-api` chỉ xử lý các bản tin điều phối JSON nhẹ vài KB, giúp duy trì độ trễ API **p95 < 80ms** ngay cả trên cấu hình máy chủ khiêm tốn (`NFR-PERF-03`).
-
-3. Cách ly Mạng Nội bộ Chống SSRF (`isolated-worker-net`):
-
-* Các container xử lý tệp (`worker-fast-light`, `worker-office-ai`, `gotenberg`) được đặt trong mạng nội bộ có cờ `internal: true` (hoặc chặn toàn bộ Outbound Internet trừ dải IP của R2/MinIO).
-
-* Nếu kẻ tấn công cài mã độc SSRF (Server-Side Request Forgery) vào tài liệu Word, SVG hay PDF để ép máy chủ gọi ra mạng ngoài, kết nối sẽ bị từ chối ngay ở tầng nhân mạng Linux (`NFR-SEC-06`).
+1. **Windows (`x86_64-pc-windows-msvc`):**
+   * **NSIS Installer (`.exe`):** Cung cấp trình cài đặt giao diện tiếng Việt trực quan, hỗ trợ cài đặt không cần quyền Admin (`perUser`) hoặc cài cho toàn máy (`perMachine`), kích thước cốt lõi $< 15\text{ MB}$.
+   * **WiX Installer (`.msi`):** Định dạng chuẩn phục vụ triển khai hàng loạt trong mạng nội bộ doanh nghiệp qua Active Directory Group Policy (GPO).
+2. **macOS (`universal-apple-darwin`):**
+   * **Universal Binary:** Hợp nhất mã nhị phân của cả 2 kiến trúc **Apple Silicon (`aarch64`)** (M1/M2/M3/M4) và **Intel (`x86_64`)** vào một gói ứng dụng duy nhất.
+   * **Apple Disk Image (`.dmg`):** Giao diện kéo-thả vào thư mục `/Applications`, đã được ký số và công chứng (Notarized) bởi Apple.
+3. **Linux (`x86_64-unknown-linux-gnu`):**
+   * **Debian Package (`.deb`):** Cài đặt qua `dpkg`/`apt` với đầy đủ khai báo phụ thuộc hệ điều hành (`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`).
+   * **AppImage (`.AppImage`):** Định dạng chạy ngay không cần cài đặt (portable), hỗ trợ tự động cập nhật trực tiếp qua `tauri-plugin-updater`.
 
 ---
 
-## 7.2. Đặc tả Cấu hình `docker-compose.prod.yml` Chuẩn Sản xuất
+## 7.2. Đặc tả Cấu hình Tauri v2, Phân quyền Capabilities & Tối ưu Hóa Nhị phân
 
-Tệp cấu hình dưới đây hiện thực hóa đầy đủ các yêu cầu phi chức năng ở Mục 3: gắn ổ đĩa **RAM Disk (`tmpfs`)** cho `/tmp` để đạt tốc độ đọc/ghi **5–10 GB/s** (`NFR-PERF-04`), chạy dưới quyền **`non-root user`**, khóa hệ thống tệp gốc ở chế độ **chỉ đọc (`read_only: true`)** (`NFR-SEC-06`), và giới hạn cứng tài nguyên CPU/RAM để chống lỗi **OOM Killer** (`NFR-SCA-02`).
+### 7.2.1. Cấu hình Cửa sổ Không Viền & Updater Artifacts trong `src-tauri/tauri.conf.json`
+
+Để đồng bộ với thiết kế **Custom Window Titlebar** ở Mục 5.2 (tránh lỗi hệ điều hành vẽ đè thanh tiêu đề mặc định) và tự động sinh tệp chữ ký `.sig` cho trình cập nhật ở Mục 7.5, cấu hình `tauri.conf.json` được thiết lập chuẩn xác như sau:
+
+```json
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Office Utility VN",
+  "version": "0.1.0",
+  "identifier": "vn.officeutility.desktop",
+  "build": {
+    "beforeDevCommand": "trunk serve",
+    "devUrl": "http://127.0.0.1:8080",
+    "beforeBuildCommand": "trunk build --release",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Office Utility VN",
+        "width": 1120,
+        "height": 740,
+        "minWidth": 380,
+        "minHeight": 520,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": false,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkKRldSUi91... [PUBLIC_KEY]",
+      "endpoints": [
+        "https://github.com/office-utility-vn/office-utility-vn/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
+```
+
+### 7.2.2. Phân quyền Đầy đủ (Tauri v2 Capabilities) tại `src-tauri/capabilities/default.json`
+
+Đảm bảo cấp đủ quyền cho thanh tiêu đề tùy biến (kéo cửa sổ, thu nhỏ, phóng to, đóng), chế độ ghim nổi Always-on-Top (đổi kích thước về $380 \times 520\text{ px}$), phím tắt toàn cục `Ctrl + Shift + K`, Clipboard và Auto-Updater:
+
+```json
+{
+  "$schema": "https://schema.tauri.app/capability/2",
+  "identifier": "default-capability",
+  "description": "Cấp quyền chuẩn Production cho cửa sổ tùy biến, phím tắt toàn cục và các plugin bản địa",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-size",
+    "core:window:allow-set-min-size",
+    "opener:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "notification:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-image",
+    "clipboard-manager:allow-write-image",
+    "updater:default"
+  ]
+}
+```
+
+### 7.2.3. Tối ưu hóa Kích thước & Tốc độ Nhị phân trong `Cargo.toml`
+
+Để đạt kích thước file cài đặt cốt lõi dưới 15 MB và RAM lúc nghỉ dưới 80 MB, cấu hình biên dịch Release ở thư mục gốc Cargo Workspace được thiết lập tối đa:
+
+```toml
+[profile.release]
+opt-level = 3            # Tối ưu hóa tốc độ thực thi tối đa cho các thuật toán xử lý ảnh/PDF
+lto = "fat"              # Link-Time Optimization toàn cục loại bỏ dead-code xuyên suốt mọi crate
+codegen-units = 1        # Gom về 1 đơn vị sinh mã để trình biên dịch LLVM tối ưu hóa triệt để
+panic = "abort"          # Loại bỏ bảng tháo gỡ stack unwinding giúp giảm 20-30% kích thước nhị phân
+strip = "symbols"        # Tước bỏ toàn bộ debug symbols khỏi tệp thực thi cuối cùng
+```
+
+---
+
+## 7.3. Đường ống CI/CD Tự động Đa nền tảng (Windows, macOS, Linux) qua GitHub Actions
+
+Dự án sử dụng GitHub Actions workflow hoàn chỉnh tại `.github/workflows/release.yml` để tự động hóa kiểm thử và biên dịch đồng thời trên cả 3 hệ điều hành (**Windows, macOS Universal và Ubuntu Linux**), có cài đặt đầy đủ trình biên dịch hợp ngữ `nasm` và `cmake` cho `turbojpeg`:
 
 ```yaml
-version: "3.9"
+name: Release & Cross-Platform Build Matrix
 
-services:
-  # ============================================================================
-  # 1. API SERVER (NestJS + FastifyAdapter - Zero-Proxy Binary)
-  # ============================================================================
-  nestjs-api:
-    image: registry.office-utility.vn/nestjs-api:latest
-    container_name: office-utility-api
-    restart: unless-stopped
-    user: "1001:1001" # Chạy dưới quyền non-root user (NFR-SEC-06)
-    read_only: true   # Hệ thống tệp gốc chỉ đọc
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - R2_ENDPOINT=${R2_ENDPOINT}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-      - R2_BUCKET_NAME=office-utility-zero-trace
-    ports:
-      - "127.0.0.1:3000:3000"
-    networks:
-      - frontend-egress-net
-      - isolated-worker-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "1.50"
-          memory: 1024M
-        reservations:
-          cpus: "0.50"
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
-  # ============================================================================
-  # 2. WORKER NHÓM NHANH (Sharp, QPDF, CSV - SLA hoàn tất < 2 giây)
-  # ============================================================================
-  worker-fast-light:
-    image: registry.office-utility.vn/nestjs-worker:latest
-    restart: unless-stopped
-    user: "1001:1001"
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    environment:
-      - NODE_ENV=production
-      - WORKER_QUEUES=fast-light
-      - WORKER_CONCURRENCY=8
-      - JOB_HARD_TIMEOUT_MS=60000 # Hard Timeout 60s (NFR-REL-03)
-      - WORK_DIR=/tmp/jobs
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - R2_ENDPOINT=${R2_ENDPOINT}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-    # Gắn phân vùng RAM Disk (tmpfs) tốc độ 5-10 GB/s, tự xóa sạch trên RAM (NFR-PERF-04 & NFR-SEC-02)
-    tmpfs:
-      - /tmp:size=2G,mode=1770,noexec,nosuid,nodev
-    networks:
-      - isolated-worker-net
-    deploy:
-      replicas: 2 # Mở rộng ngang Stateless (NFR-SCA-01)
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 2560M # Ngăn chặn OOM Killer khi gặp Image/Zip Bomb (NFR-SCA-02)
+permissions:
+  contents: write
 
-  # ============================================================================
-  # 3. WORKER NHÓM NẶNG (Office Convert, Ghostscript, FFmpeg, AI OCR, Docling)
-  # ============================================================================
-  worker-heavy-office:
-    image: registry.office-utility.vn/nestjs-worker-heavy:latest
-    restart: unless-stopped
-    user: "1001:1001"
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    environment:
-      - NODE_ENV=production
-      - WORKER_QUEUES=office-convert,heavy-media,ai-ocr,ai-docling
-      - WORKER_CONCURRENCY=2
-      - JOB_HARD_TIMEOUT_MS=180000 # Hard Timeout 180s cho OCR/Video/Docling (NFR-REL-03)
-      - GOTENBERG_URL=http://gotenberg:3000
-      - DOCLING_URL=http://docling:5001
-      - DOCLING_SECRET_TOKEN=${DOCLING_SECRET_TOKEN}
-      - WORK_DIR=/tmp/jobs
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - R2_ENDPOINT=${R2_ENDPOINT}
-    tmpfs:
-      - /tmp:size=4G,mode=1770,noexec,nosuid,nodev
-    networks:
-      - isolated-worker-net
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          cpus: "4.00"
-          memory: 4096M
+jobs:
+  quality-gates:
+    name: Quality Gates (Fmt, Clippy, Unit Tests)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf nasm cmake
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: swatinem/rust-cache@v2
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+      - name: Run Clippy Linter
+        run: cargo clippy --workspace -- -D warnings
+      - name: Run Workspace Unit & IPC Tests
+        run: cargo test --workspace
 
-  # ============================================================================
-  # 4. GOTENBERG SIDECAR (LibreOffice Headless + Bộ Font Tiếng Việt Chuẩn)
-  # ============================================================================
-  gotenberg:
-    image: gotenberg/gotenberg:8
-    container_name: office-utility-gotenberg
-    restart: unless-stopped
-    user: "1001:1001"
-    read_only: true
-    command:
-      - "gotenberg"
-      - "--libreoffice-disable-routes=false"
-      - "--chromium-disable-javascript=true" # Chặn thực thi JS độc hại trong tài liệu
-      - "--chromium-deny-list=^https?://.*"  # Chặn 100% kết nối SSRF ra ngoài (NFR-SEC-06)
-    volumes:
-      # Nạp bộ phông chữ tiếng Việt (Times New Roman, Arial, Roboto, TCVN3, VNI) theo FR-DOC-03
-      - ./docker/fonts/vietnamese:/usr/local/share/fonts/vietnamese:ro
-    tmpfs:
-      - /tmp:size=2G,mode=1770,noexec,nosuid
-    networks:
-      - isolated-worker-net
-    deploy:
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 2048M
+  build-tauri:
+    needs: quality-gates
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+            args: ''
+          - platform: 'macos-latest'
+            target: 'universal-apple-darwin'
+            args: '--target universal-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            target: 'x86_64-unknown-linux-gnu'
+            args: ''
 
-  # ============================================================================
-  # 5. DOCLING AI SIDECAR (IBM Docling + PyTorch + Pandoc DOCX/Markdown)
-  # ============================================================================
-  docling:
-    image: registry.office-utility.vn/docling-sidecar:latest
-    container_name: office-utility-docling
-    restart: unless-stopped
-    user: "1000:1000"
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    environment:
-      - PORT=5001
-      - WORK_DIR=/tmp/jobs
-      - TMPDIR=/tmp
-      - DOCLING_SECRET_TOKEN=${DOCLING_SECRET_TOKEN}
-      - HF_HUB_OFFLINE=1
-      - TORCH_NUM_THREADS=4
-      - LOG_LEVEL=WARNING
-    volumes:
-      - /tmp/jobs:/tmp/jobs
-    tmpfs:
-      - /tmp:size=512M,uid=1000,gid=1000,mode=1777
-    networks:
-      - isolated-worker-net
-    deploy:
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 3072M
-    healthcheck:
-      test: ["CMD", "python3", "/app/scripts/healthcheck.py"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 45s
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  # ============================================================================
-  # 6. POSTGRESQL 18 (Relational + JSONB + Partial Indexing)
-  # ============================================================================
-  postgres:
-    image: postgres:18-alpine
-    container_name: office-utility-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    networks:
-      - isolated-worker-net
-    deploy:
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 2048M
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - name: Install Native Build Dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf nasm cmake libheif-dev
 
-  # ============================================================================
-  # 6. REDIS 8.10 (BullMQ Broker, SSE Pub/Sub & Sliding Window Rate Limiter)
-  # ============================================================================
-  redis:
-    image: redis:8.10
-    container_name: office-utility-redis
-    restart: unless-stopped
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --maxmemory 1024mb
-      --maxmemory-policy noeviction
-      --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - isolated-worker-net
-    deploy:
-      resources:
-        limits:
-          cpus: "1.00"
-          memory: 1200M
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+      - name: Install NASM & CMake for TurboJPEG (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: choco install nasm cmake -y
 
-networks:
-  frontend-egress-net:
-    driver: bridge
-  isolated-worker-net:
-    driver: bridge
-    internal: true # Chặn kết nối Internet trực tiếp từ cụm Database/Gotenberg (NFR-SEC-06)
+      - name: Install NASM & CMake for TurboJPEG (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: brew install nasm cmake
 
-volumes:
-  pg_data:
-  redis_data:
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            wasm32-unknown-unknown,
+            ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin,aarch64-apple-darwin' || matrix.target }}
 
+      - name: Install Trunk & wasm-bindgen-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk,wasm-bindgen-cli
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target; ./src-tauri -> target'
+
+      - name: Build Tauri Application
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Office Utility VN v__VERSION__'
+          releaseBody: 'Bản phát hành chính thức đa nền tảng (Windows, macOS Universal, Linux).'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Upload Build Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: office-utility-vn-${{ matrix.platform }}
+          path: |
+            src-tauri/target/**/bundle/nsis/*.exe
+            src-tauri/target/**/bundle/msi/*.msi
+            src-tauri/target/**/bundle/dmg/*.dmg
+            src-tauri/target/**/bundle/macos/*.app.tar.gz
+            src-tauri/target/**/bundle/deb/*.deb
+            src-tauri/target/**/bundle/appimage/*.AppImage
+          if-no-files-found: warn
 ```
 
-> **Lưu ý về Cờ Bảo mật `tmpfs` (`noexec,nosuid,nodev`):**
-> Phân vùng `/tmp` trên RAM Disk được gắn cờ `noexec` ở cấp nhân hệ điều hành Linux. Ngay cả trong trường hợp xấu nhất khi một tệp thực thi nhị phân lọt vào thư mục `/tmp/jobs/{uuid}`, hệ điều hành sẽ từ chối cấp quyền thực thi (`Permission Denied`) cho bất kỳ tệp nào nằm trong phân vùng này.
+---
+
+## 7.4. Ký số Mã nguồn & Công chứng Ứng dụng (Code Signing & Notarization)
+
+Để ứng dụng không bị hệ điều hành cảnh báo tệp không an toàn (*SmartScreen* trên Windows, *Gatekeeper* trên macOS):
+
+### 7.4.1. Ký số Windows (Authenticode)
+* Sử dụng công cụ `signtool.exe` (hoặc Azure Trusted Signing) kết hợp chứng chỉ số **EV Code Signing Certificate**.
+* Tích hợp vào workflow CI/CD thông qua các biến môi trường bảo mật trong GitHub Secrets:
+  * `TAURI_WINDOWS_CERTIFICATE`: Chuỗi Base64 của chứng chỉ `.pfx` hoặc cấu hình Hardware HSM.
+  * `TAURI_WINDOWS_CERTIFICATE_PASSWORD`: Mật khẩu mở khóa chứng chỉ.
+
+### 7.4.2. Công chứng macOS (Apple Notarization)
+* Tích hợp tự động với `tauri-action` thông qua các biến môi trường của tài khoản **Apple Developer Program**:
+  * `APPLE_CERTIFICATE` & `APPLE_CERTIFICATE_PASSWORD`: Chứng chỉ `Developer ID Application`.
+  * `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_KEY_PATH`: Khóa App Store Connect API để `xcrun notarytool` tự động gửi gói `.dmg`/`.app` lên máy chủ Apple Notary Service và đóng dấu công chứng (`stapler`).
 
 ---
 
-## 7.3. Cơ chế Thực thi Cam kết "Zero-Trace" Đa tầng (3-Layer Zero-Trace Defense)
+## 7.5. Cơ chế Tự động Cập nhật Ứng dụng & Gói Mở rộng với Chữ ký Minisign (`tauri-plugin-updater`)
 
-Để đảm bảo không một tệp nhạy cảm nào của người dùng tồn tại quá **30 phút** ngay cả khi một tiến trình gặp sự cố (`NFR-SEC-02`), hệ thống vận hành **3 lớp dọn dẹp độc lập**:
+Ứng dụng tích hợp plugin chính thức **`tauri-plugin-updater`** để kiểm tra và tải các bản cập nhật ứng dụng cũng như các gói quy tắc pháp lý/gói mở rộng (`addons/`) một cách an toàn tuyệt đối:
 
-| Lớp Bảo vệ | Thời điểm Kích hoạt | Cơ chế Kỹ thuật Thực thi | Mục tiêu Đảm bảo |
-| --- | --- | --- | --- |
-| **Lớp 1: Xóa Tức thì theo Yêu cầu (`User-Triggered Purge`)** | Ngay khi người dùng nhấn nút *"Xóa ngay khỏi máy chủ"* trên UI. | Gọi `DELETE /api/v1/jobs/:jobId/purge` $\rightarrow$ Thực thi lệnh `DeleteObjectsCommand` xóa đồng thời tệp gốc và tệp kết quả trên R2/MinIO, cập nhật `status = 'DELETED'` và ghi dấu thời gian `deleted_at` trong vòng **< 1 giây**. | Trao quyền kiểm soát chủ động tuyệt đối cho chủ thể dữ liệu theo Nghị định 13/2023/NĐ-CP. |
-| **Lớp 2: Tiến trình Quét Dọn Định kỳ (`BullMQ Delayed Job & Cron`)** | Đúng **30 phút** sau khi tệp được tạo (`expires_at <= NOW()`). | • Mỗi khi tạo bản ghi `file_artifacts`, hệ thống đẩy kèm 1 Delayed Job (`delay: 1800000ms`) vào BullMQ.<br>• Đồng thời, một Cron Worker chạy mỗi **2 phút/lần** truy vấn vào **Partial Index** `idx_artifacts_pending_cleanup` (tốc độ `< 1ms`) để gom xóa hàng loạt (`DeleteObjects` tối đa 1.000 keys/lần) các tệp quá hạn và ghi nhận `deleted_at`. | Đảm bảo đồng bộ trạng thái kiểm toán (Audit Log) trong PostgreSQL và xóa tệp đúng hạn 30 phút. |
-| **Lớp 3: Chính sách Tự hủy Tầng Lưu trữ (`R2 / S3 Bucket Lifecycle Policy`)** | Cấp độ hạ tầng Cloudflare R2 / MinIO (Chốt chặn cuối cùng). | Thiết lập quy tắc `Object Lifecycle Rule` trực tiếp trên Bucket cho tiền tố `temp/`: Tự động xóa cứng mọi đối tượng ở tầng phần cứng lưu trữ sau khi hết hạn ngay cả khi toàn bộ máy chủ Backend bị sập. | Cam kết **100% Zero-Trace** không phụ thuộc vào trạng thái của ứng dụng. |
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Người dùng
+    participant App as Ứng dụng Desktop
+    participant GitHub as GitHub Releases CDN
 
----
+    App->>GitHub: 1. Kiểm tra file `latest.json` (chỉ đọc metadata tĩnh)
+    GitHub-->>App: 2. Trả về phiên bản mới, link tải gói cập nhật & chữ ký `.sig`
+    alt Có phiên bản mới
+        App->>User: 3. Hiển thị thông báo "Đã có bản cập nhật vX.Y.Z"
+        User->>App: 4. Xác nhận cập nhật
+        App->>GitHub: 5. Tải gói nhị phân cập nhật (.nsis.zip / .app.tar.gz / .AppImage)
+        App->>App: 6. Xác thực chữ ký số bằng Public Key nhúng sẵn (Minisign Ed25519)
+        alt Chữ ký hợp lệ 100%
+            App->>App: 7. Áp dụng bản cập nhật và khởi động lại ứng dụng
+            App->>User: 8. Thông báo cập nhật thành công!
+        else Chữ ký không khớp hoặc bị can thiệp
+            App->>App: 9. Xóa ngay gói tải về trong bộ nhớ tạm
+            App->>User: 10. Cảnh báo lỗi xác thực chữ ký và hủy cập nhật
+        end
+    end
+```
 
-## 7.4. Chiến lược Tự động Mở rộng & Phục hồi Sự cố (Auto-Scaling & Circuit Breaker)
-
-### 7.4.1. Quy tắc Mở rộng Ngang theo Độ sâu Hàng đợi (Queue-Depth Scaling Rules)
-
-Đáp ứng yêu cầu `NFR-SCA-01` (lưu lượng tăng vọt vào giờ hành chính 8h30–11h30 và 13h30–17h00), bộ giám sát hàng đợi đọc chỉ số từ Redis BullMQ mỗi **15 giây** để điều phối số lượng bản sao (`replicas`) của Worker:
-
-1. **Điều kiện Mở rộng (Scale-Out Trigger):**
-* Khi tổng số Job đang ở trạng thái `waiting` (`Queue Depth`) của hàng đợi `fast-light` hoặc `office-convert` vượt ngưỡng **`> 50 Jobs`** trong 30 giây liên tiếp (`NFR-SCA-01`), hoặc thời gian chờ trung bình (`Estimated Wait Time`) vượt quá **5 giây** (`NFR-PERF-04`).
-
-* Hệ thống tự động khởi chạy thêm các node `nestjs-worker` mới kết nối thẳng vào `REDIS_URL` và `R2_ENDPOINT` mà không cần cấu hình lại Load Balancer.
-
-2. **Điều kiện Thu hẹp An toàn (Graceful Scale-In):**
-* Sau 18h00 tối hoặc cuối tuần khi `Queue Depth == 0` trong 15 phút, hệ thống gửi tín hiệu `SIGTERM` cho các Worker dư thừa.
-
-* Worker nhận tín hiệu `SIGTERM` sẽ ngừng nhận Job mới (`worker.close()`), chờ hoàn tất nốt Job đang xử lý dở (tối đa 60–180s), dọn sạch thư mục `/tmp/jobs/{uuid}` trên RAM Disk rồi mới tắt container.
-
-### 7.4.2. Cơ chế Tự ngắt Bảo vệ & Suy giảm Mềm dẻo (Per-Tool Circuit Breaker)
-
-Đáp ứng yêu cầu `NFR-REL-02`:
-
-* Nếu một công cụ phụ thuộc vào tiến trình bên ngoài gặp sự cố (ví dụ: dịch vụ `Gotenberg` dùng cho công cụ `office-to-pdf` có tỷ lệ lỗi vượt quá **20%** trong 2 phút hoặc thời gian phản hồi vượt ngưỡng Timeout **60 giây**):
-
-1. Hệ thống tự động chuyển cột `status` của riêng công cụ `office-to-pdf` trong bảng `tool_definitions` từ `'ACTIVE'` sang `'DEGRADED'` hoặc `'MAINTENANCE'`.
-
-2. Giao diện người dùng ngay lập tức hiển thị nhãn cảnh báo bảo trì ngắn hạn cho công cụ đó (`HTTP 503 TOOL_UNDER_MAINTENANCE`), trong khi **toàn bộ hơn 59 công cụ còn lại trên hệ thống vẫn hoạt động bình thường 100%**.
-
----
-
-## 7.5. Hệ thống Giám sát, Đo lường & Cảnh báo (Observability & Alerting Stack)
-
-Để vận hành hệ thống tuân thủ nguyên tắc **Privacy-by-Design (Không lưu nhật ký chứa dữ liệu người dùng)** nhưng vẫn nắm bắt tức thì sức khỏe hạ tầng, hệ thống triển khai bộ công cụ **Prometheus + Grafana + Pino Structured Logger**.
-
-### 7.5.1. Bảng Chỉ số Giám sát Cốt lõi (Key Prometheus Metrics & Alert Rules)
-
-| Tên Metric (Prometheus) | Loại | Ý nghĩa Kỹ thuật | Ngưỡng Cảnh báo (Alerting Threshold) |
-| --- | --- | --- | --- |
-| `http_request_duration_ms` | `Histogram` | Độ trễ phản hồi của các endpoint API (`/presigned-upload`, `/dispatch`, `/secrets`). | Cảnh báo **Warning** khi `p95 > 80ms` hoặc **Critical** khi `p99 > 150ms` trong 5 phút (`NFR-PERF-03`). |
-| `bullmq_queue_waiting_total` | `Gauge` | Số lượng Job đang xếp hàng chờ xử lý theo 5 phân lớp (`fast-light`, `office-convert`, `heavy-media`, `ai-ocr`, `ai-docling`). | Kích hoạt Auto-Scale hoặc báo động khi `waiting > 50` (`NFR-SCA-01`). |
-| `bullmq_job_processing_duration_ms` | `Histogram` | Thời gian thực thi thực tế của Worker (`jobs.processing_time_ms`). | Cảnh báo khi `p95` của `fast-light > 2.000ms` hoặc `office-convert > 8.000ms` (`NFR-PERF-04`). |
-| `docling_task_duration_seconds` | `Histogram` | Thời gian bóc tách tài liệu và tổng hợp Word/Markdown của vi dịch vụ Docling Sidecar. | Cảnh báo khi `p95 > 15.000ms` cho tài liệu dưới 20 trang. |
-| `docling_active_tasks_count` | `Gauge` | Số lượng tác vụ mô hình AI đang chiếm giữ Semaphore trong Docling container (giới hạn 1). | Báo động khi xếp hàng chờ Docling vượt quá **10 tác vụ**. |
-| `zero_trace_overdue_artifacts_count` | `Gauge` | Số lượng bản ghi trong `file_artifacts` có `status != 'DELETED'` nhưng đã quá hạn `expires_at` quá 5 phút. | **Cảnh báo Đỏ (Critical Alert)** nếu giá trị **`> 0`** (Đảm bảo cam kết xóa tệp 30 phút không bao giờ bị trễ). |
-| `security_rejected_files_total` | `Counter` | Tổng số tệp bị chặn bởi bộ lọc **Magic Bytes (`415`)**, **Zip Bomb** hoặc **Pixel Flood**. | Cảnh báo tấn công rà quét nếu tăng đột biến **`> 30 lần/phút`** từ cùng một dải IP / Fingerprint. |
-| `worker_tmpfs_usage_bytes` | `Gauge` | Mức dung lượng đang chiếm dụng trên ổ đĩa RAM Disk (`/tmp`) của từng Worker. | Cảnh báo khi đạt **`> 80%`** dung lượng `tmpfs` (phát hiện sớm trường hợp rò rỉ tệp tạm chưa xóa trong khối `finally`). |
-
-### 7.5.2. Quy tắc Ghi Nhật ký Bảo mật Không Lưu Vết (Zero-PII Structured Logging)
-
-Toàn bộ nhật ký hệ thống (Application Logs) được xuất theo định dạng JSON qua thư viện `Pino` và tuân thủ quy tắc **Zero-PII Redaction**:
-
-* **Được phép ghi:** `jobId`, `toolSlug`, `queueName`, `status`, `processingTimeMs`, `sizeBytes`, `mimeType`, `errorCode`.
-
-* **Cấm tuyệt đối ghi vào Log:** Nội dung văn bản trích xuất từ OCR, dữ liệu các ô bảng tính Excel, mật khẩu mở khóa PDF của người dùng, đường dẫn đầy đủ có chứa chữ ký `X-Amz-Signature` của Presigned URL, hoặc họ tên/số tài khoản ngân hàng trong công cụ tạo VietQR và tính lương.
+* **Xác thực Mật mã học Chống Tấn công (Ed25519 Signature Verification):** Bản cập nhật ứng dụng cũng như các gói mở rộng ngoại tuyến (`vietocr-onnx-pack`, `pdfium-native-pack`) chỉ được giải nén và nạp vào hệ thống nếu chữ ký số `.sig` khớp chính xác với khóa công khai `pubkey` đã nhúng cứng trong mã nhị phân của ứng dụng. Kẻ tấn công dù chiếm được đường truyền mạng (Man-in-the-Middle) hay thay đổi tệp trên CDN cũng không thể phát tán mã độc vào máy tính người dùng.

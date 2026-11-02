@@ -1,0 +1,9 @@
+# SPINE ARCHITECTURE LOCK FILE
+# Khóa bảo vệ kiến trúc khung xương sống (Phase 0 / Spine Layer)
+# Các Subagent / Pod Agent chỉ được phép thêm module công cụ qua trait OfficeTool trong crates/office-engine.
+# TUYỆT ĐỐI CẤM SỬA ĐỔI tệp này hoặc các tệp trong crates/office-shared.
+
+LOCKED_AT="2026-11-02T08:39:15Z"
+STATUS="LOCKED_READ_ONLY"
+SHA256_OFFICE_SHARED_LIB="30e34a51e3acc5b244b1f260d37f4052812189309b6b7d3194afaaaf9a5aa8cb"
+POLICY="POD_AGENTS_READ_ONLY"
