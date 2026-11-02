@@ -684,27 +684,6 @@ pub fn App() -> impl IntoView {
                 </div>
             </header>
 
-            <nav class="pinned-bar">
-                <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; margin-right: 4px;">"📌 Ghim nhanh:"</span>
-                {
-                    ALL_TOOLS.iter().filter(|t| t.is_pinned).map(|t| {
-                        let slug_copy = t.slug.to_string();
-                        let slug_for_active = slug_copy.clone();
-                        view! {
-                            <button
-                                class=move || if current_slug.get() == slug_for_active { "pinned-tab active" } else { "pinned-tab" }
-                                on:click=move |_| {
-                                    set_current_slug.set(slug_copy.clone());
-                                    set_output_result.set(String::new());
-                                }
-                            >
-                                {t.name}
-                            </button>
-                        }
-                    }).collect::<Vec<_>>()
-                }
-            </nav>
-
             <main class="workspace">
                 <section class="zone-1">
                     <div class="tool-info">
