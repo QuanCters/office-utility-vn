@@ -480,6 +480,78 @@ input, textarea, .selectable-text {
   color: #FFF;
 }
 
+.palette-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94A3B8;
+  padding: 8px 12px 4px 12px;
+  letter-spacing: 0.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+  margin-bottom: 4px;
+}
+
+.palette-item-badge.recent {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  font-weight: 600;
+}
+
+/* Dashboard Recent Tools Quick Chips Bar */
+.dashboard-recent-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(30, 41, 59, 0.6);
+  border-bottom: 1px solid #334155;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.dashboard-recent-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dashboard-recent-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.recent-tool-chip {
+  background: #1E293B;
+  border: 1px solid #334155;
+  color: #CBD5E1;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.recent-tool-chip:hover {
+  background: #334155;
+  color: #F8FAFC;
+  border-color: #64748B;
+}
+
+.recent-tool-chip.active {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38BDF8;
+  border-color: #38BDF8;
+  font-weight: 600;
+}
+
 /* Toast for Clipboard detection */
 .clipboard-toast {
   position: fixed;

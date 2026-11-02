@@ -688,6 +688,46 @@ pub fn App() -> impl IntoView {
         });
     };
 
+    // Trạng thái công cụ vừa chọn gần đây (MRU - Most Recently Used)
+    let (recent_tool_slugs, set_recent_tool_slugs) = signal(crate::recent_tools::load_recent_from_storage());
+
+    // Hàm chọn công cụ dùng chung: cập nhật slug, lưu vết MRU vào storage, đóng palette
+    let select_tool = move |slug: String| {
+        set_current_slug.set(slug.clone());
+        let updated = crate::recent_tools::update_recent_list(
+            &recent_tool_slugs.get(),
+            &slug,
+            crate::recent_tools::DEFAULT_MAX_RECENT_TOOLS,
+        );
+        crate::recent_tools::save_recent_to_storage(&updated);
+        set_recent_tool_slugs.set(updated);
+        set_palette_open.set(false);
+        set_active_view.set(WorkspaceView::Tools);
+        load_presets_for_current_tool();
+    };
+
+    // Danh sách ToolItem của các công cụ gần đây theo thứ tự MRU
+    let recent_tool_items = move || {
+        let slugs = recent_tool_slugs.get();
+        let mut items = Vec::new();
+        for s in &slugs {
+            if let Some(tool) = ALL_TOOLS.iter().find(|t| t.slug == s) {
+                items.push(tool.clone());
+            }
+        }
+        items
+    };
+
+    // Danh sách các công cụ còn lại (chưa nằm trong danh sách gần đây)
+    let non_recent_tools = move || {
+        let slugs = recent_tool_slugs.get();
+        ALL_TOOLS
+            .iter()
+            .filter(|t| !slugs.iter().any(|s| s == t.slug))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
     // Tải lịch sử tác vụ từ SQLite
     let load_history = move || {
         set_is_loading_history.set(true);
@@ -935,7 +975,11 @@ pub fn App() -> impl IntoView {
         if ctrl_or_meta && (key == "k" || key == "K") {
             ev.prevent_default();
             ev.stop_propagation();
-            set_palette_open.update(|v| *v = !*v);
+            let opening = !palette_open.get();
+            if opening {
+                set_search_query.set(String::new());
+            }
+            set_palette_open.set(opening);
         } else if ctrl_or_meta && (key == "p" || key == "P") {
             ev.prevent_default();
             toggle_pin();
@@ -971,6 +1015,7 @@ pub fn App() -> impl IntoView {
                     t.name.to_lowercase().contains(&q)
                         || t.slug.to_lowercase().contains(&q)
                         || t.domain.to_lowercase().contains(&q)
+                        || t.description.to_lowercase().contains(&q)
                 })
                 .cloned()
                 .collect()
@@ -995,7 +1040,10 @@ pub fn App() -> impl IntoView {
                 </div>
 
                 <div class="titlebar-center">
-                    <button class="quick-search-btn" on:click=move |_| set_palette_open.set(true)>
+                    <button class="quick-search-btn" on:click=move |_| {
+                        set_search_query.set(String::new());
+                        set_palette_open.set(true);
+                    }>
                         <span>"🔍 Tìm nhanh công cụ hoặc mẫu Preset... (Ctrl + K)"</span>
                     </button>
                 </div>
@@ -1052,6 +1100,41 @@ pub fn App() -> impl IntoView {
             { move || match active_view.get() {
                 WorkspaceView::Tools => view! {
                     <main class="workspace">
+                        { move || {
+                            let recents = recent_tool_items();
+                            if recents.is_empty() {
+                                view! { <div></div> }.into_any()
+                            } else {
+                                view! {
+                                    <div class="dashboard-recent-bar">
+                                        <span class="dashboard-recent-label">"🕒 Gần đây:"</span>
+                                        <div class="dashboard-recent-chips">
+                                            {
+                                                recents.into_iter().take(5).map(|tool| {
+                                                    let slug_copy = tool.slug.to_string();
+                                                    let is_active = current_slug.get() == tool.slug;
+                                                    let chip_class = if is_active {
+                                                        "recent-tool-chip active"
+                                                    } else {
+                                                        "recent-tool-chip"
+                                                    };
+                                                    view! {
+                                                        <button
+                                                            class=chip_class
+                                                            title=format!("{}: {}", tool.name, tool.description)
+                                                            on:click=move |_| select_tool(slug_copy.clone())
+                                                        >
+                                                            <span>{tool.name}</span>
+                                                        </button>
+                                                    }
+                                                }).collect::<Vec<_>>()
+                                            }
+                                        </div>
+                                    </div>
+                                }.into_any()
+                            }
+                        }}
+
                         <section class="zone-1">
                             <div class="tool-info">
                                 <span style="font-size: 20px;">"🛠️"</span>
@@ -1931,28 +2014,138 @@ pub fn App() -> impl IntoView {
                             </div>
 
                             <div class="palette-list">
-                                {
-                                    filtered_tools().into_iter().map(|tool| {
-                                        let slug_copy = tool.slug.to_string();
-                                        view! {
-                                            <div
-                                                class="palette-item"
-                                                on:click=move |_| {
-                                                    set_current_slug.set(slug_copy.clone());
-                                                    set_palette_open.set(false);
-                                                    set_active_view.set(WorkspaceView::Tools);
-                                                    load_presets_for_current_tool();
-                                                }
-                                            >
+                                { move || {
+                                    let q = search_query.get().trim().to_string();
+                                    let recents = recent_tool_items();
+                                    let recent_slugs = recent_tool_slugs.get();
+
+                                    if q.is_empty() {
+                                        if recents.is_empty() {
+                                            view! {
                                                 <div>
-                                                    <div style="font-weight: 600;">{tool.name}</div>
-                                                    <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
+                                                    <div class="palette-section-header">
+                                                        <span>"📌 TẤT CẢ CÔNG CỤ"</span>
+                                                        <span style="font-size: 10px; opacity: 0.7;">{format!("{} công cụ", ALL_TOOLS.len())}</span>
+                                                    </div>
+                                                    {
+                                                        ALL_TOOLS.iter().map(|tool| {
+                                                            let slug_copy = tool.slug.to_string();
+                                                            view! {
+                                                                <div
+                                                                    class="palette-item"
+                                                                    on:click=move |_| select_tool(slug_copy.clone())
+                                                                >
+                                                                    <div>
+                                                                        <div style="font-weight: 600;">{tool.name}</div>
+                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
+                                                                    </div>
+                                                                    <span class="palette-item-badge">{tool.domain}</span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()
+                                                    }
                                                 </div>
-                                                <span class="palette-item-badge">{tool.domain}</span>
-                                            </div>
+                                            }.into_any()
+                                        } else {
+                                            let remaining = non_recent_tools();
+                                            view! {
+                                                <div>
+                                                    <div class="palette-section-header">
+                                                        <span>"🕒 CÔNG CỤ VỪA CHỌN GẦN ĐÂY"</span>
+                                                        <span style="font-size: 10px; opacity: 0.7;">"Ưu tiên gợi ý"</span>
+                                                    </div>
+                                                    {
+                                                        recents.into_iter().map(|tool| {
+                                                            let slug_copy = tool.slug.to_string();
+                                                            view! {
+                                                                <div
+                                                                    class="palette-item"
+                                                                    on:click=move |_| select_tool(slug_copy.clone())
+                                                                >
+                                                                    <div>
+                                                                        <div style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                                                                            <span>{tool.name}</span>
+                                                                            <span class="palette-item-badge recent">"🕒 Gần đây"</span>
+                                                                        </div>
+                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
+                                                                    </div>
+                                                                    <span class="palette-item-badge">{tool.domain}</span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()
+                                                    }
+
+                                                    <div class="palette-section-header" style="margin-top: 10px;">
+                                                        <span>"📌 TẤT CẢ CÔNG CỤ KHÁC"</span>
+                                                        <span style="font-size: 10px; opacity: 0.7;">{format!("{} công cụ", remaining.len())}</span>
+                                                    </div>
+                                                    {
+                                                        remaining.into_iter().map(|tool| {
+                                                            let slug_copy = tool.slug.to_string();
+                                                            view! {
+                                                                <div
+                                                                    class="palette-item"
+                                                                    on:click=move |_| select_tool(slug_copy.clone())
+                                                                >
+                                                                    <div>
+                                                                        <div style="font-weight: 600;">{tool.name}</div>
+                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
+                                                                    </div>
+                                                                    <span class="palette-item-badge">{tool.domain}</span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()
+                                                    }
+                                                </div>
+                                            }.into_any()
                                         }
-                                    }).collect::<Vec<_>>()
-                                }
+                                    } else {
+                                        let filtered = filtered_tools();
+                                        if filtered.is_empty() {
+                                            view! {
+                                                <div style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+                                                    <div style="font-size: 24px; margin-bottom: 6px;">"🔍"</div>
+                                                    <div style="font-weight: 600;">"Không tìm thấy công cụ phù hợp"</div>
+                                                    <div style="font-size: 12px; margin-top: 4px;">"Hãy thử gõ từ khóa khác (ví dụ: pdf, vietqr, excel, lương...)"</div>
+                                                </div>
+                                            }.into_any()
+                                        } else {
+                                            view! {
+                                                <div>
+                                                    <div class="palette-section-header">
+                                                        <span>"KẾT QUẢ TÌM KIẾM"</span>
+                                                        <span style="font-size: 10px; opacity: 0.7;">{format!("{} kết quả", filtered.len())}</span>
+                                                    </div>
+                                                    {
+                                                        filtered.into_iter().map(|tool| {
+                                                            let slug_copy = tool.slug.to_string();
+                                                            let is_recent = recent_slugs.contains(&slug_copy);
+                                                            view! {
+                                                                <div
+                                                                    class="palette-item"
+                                                                    on:click=move |_| select_tool(slug_copy.clone())
+                                                                >
+                                                                    <div>
+                                                                        <div style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                                                                            <span>{tool.name}</span>
+                                                                            {if is_recent {
+                                                                                view! { <span class="palette-item-badge recent">"🕒 Gần đây"</span> }.into_any()
+                                                                            } else {
+                                                                                view! { <span></span> }.into_any()
+                                                                            }}
+                                                                        </div>
+                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
+                                                                    </div>
+                                                                    <span class="palette-item-badge">{tool.domain}</span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()
+                                                    }
+                                                </div>
+                                            }.into_any()
+                                        }
+                                    }
+                                }}
                             </div>
                         </div>
                     </div>
