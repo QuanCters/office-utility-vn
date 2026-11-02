@@ -4,4 +4,5 @@ pub mod vietqr_napas247_generator_view;
 pub mod vn_address_normalizer_view;
 pub mod vn_cccd_mst_validator_view;
 pub mod vn_einvoice_xml_reader_view;
+pub mod vn_loan_amortization_view;
 pub mod vn_working_days_calc_view;
