@@ -63,6 +63,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-compress",
+        name: "Nén giảm Dung lượng PDF",
+        domain: "doc-suite",
+        description: "Nén lại các luồng FlateDecode và tái lấy mẫu ảnh nhúng giảm dung lượng file.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
