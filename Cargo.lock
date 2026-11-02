@@ -2897,6 +2897,7 @@ dependencies = [
 name = "office-engine"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "flate2",
  "infer 0.16.0",
  "office-shared",

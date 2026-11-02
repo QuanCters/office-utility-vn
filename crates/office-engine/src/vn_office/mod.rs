@@ -5,6 +5,7 @@ pub mod vietqr_napas247_generator;
 pub mod vn_address_normalizer;
 pub mod vn_cccd_mst_validator;
 pub mod vn_einvoice_xml_reader;
+pub mod vn_working_days_calc;
 
 pub use gross_net_salary_calculator::{
     calculate_gross_to_net, calculate_pit, GrossNetSalaryCalculatorTool, SalaryBreakdown,
@@ -28,5 +29,9 @@ pub use vn_cccd_mst_validator::{
 pub use vn_einvoice_xml_reader::{
     parse_einvoice_xml, EinvoiceXmlReaderOptions, InvoiceItem, InvoiceParty, InvoiceSummary,
     VnEinvoiceXmlReaderTool,
+};
+pub use vn_working_days_calc::{
+    calculate_working_days, check_holiday, parse_date_flexible, HolidayDetail, VnWorkingDaysCalcTool,
+    WorkingDaysOptions, WorkingDaysResult,
 };
 

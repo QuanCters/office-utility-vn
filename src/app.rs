@@ -63,6 +63,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "vn-working-days-calc",
+        name: "Tính Ngày Làm việc Trừ Ngày lễ VN",
+        domain: "vn-office",
+        description: "Tính số ngày làm việc trừ ngày nghỉ lễ theo Bộ luật Lao động và xuất tệp .ics.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "pdf-merge-split",
         name: "Ghép, Tách & Xoay trang PDF",
         domain: "doc-suite",
