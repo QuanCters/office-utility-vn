@@ -483,10 +483,13 @@ pub fn App() -> impl IntoView {
 
             let resp = invoke("dispatch_tool_task", args).await;
             if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp) {
-                if let Some(outputs) = res_obj.get("output_paths").and_then(|v| v.as_array()) {
-                    if let Some(first) = outputs.first().and_then(|v| v.as_str()) {
-                        set_output_result.set(first.to_string());
-                    }
+                if let Some(first) = res_obj
+                    .get("output_paths")
+                    .and_then(|v| v.as_array())
+                    .and_then(|outputs| outputs.first())
+                    .and_then(|v| v.as_str())
+                {
+                    set_output_result.set(first.to_string());
                 }
                 set_progress_percent.set(100.0);
                 set_progress_message.set("Đã hoàn thành xuất sắc".to_string());
@@ -520,9 +523,7 @@ pub fn App() -> impl IntoView {
         } else if ctrl_or_meta && (key == "p" || key == "P") {
             ev.prevent_default();
             toggle_pin();
-        } else if ctrl_or_meta && (key == "w" || key == "W") {
-            ev.prevent_default();
-        } else if ctrl_or_meta && (key == "o" || key == "O") {
+        } else if ctrl_or_meta && (key == "w" || key == "W" || key == "o" || key == "O") {
             ev.prevent_default();
         } else if key == "Escape" {
             if palette_open.get() {
