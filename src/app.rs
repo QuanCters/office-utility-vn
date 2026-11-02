@@ -23,8 +23,9 @@ pub struct ToolItem {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum WorkspaceView {
-    Tools,
+pub enum AppView {
+    Home,
+    Tool,
     WorkflowDag,
     History,
 }
@@ -516,8 +517,8 @@ struct ExecuteWorkflowArgs {
 
 #[component]
 pub fn App() -> impl IntoView {
-    // Điều hướng không gian làm việc (Multi-View Workspace)
-    let (active_view, set_active_view) = signal(WorkspaceView::Tools);
+    // Điều hướng không gian làm việc (Sidebar-Driven Workspace Navigation)
+    let (active_view, set_active_view) = signal(AppView::Home);
 
     // Trạng thái cập nhật ứng dụng (Updater Lifecycle)
     let (update_modal_open, set_update_modal_open) = signal(false);
@@ -691,6 +692,19 @@ pub fn App() -> impl IntoView {
     // Trạng thái công cụ vừa chọn gần đây (MRU - Most Recently Used)
     let (recent_tool_slugs, set_recent_tool_slugs) = signal(crate::recent_tools::load_recent_from_storage());
 
+    // Trạng thái công cụ yêu thích (Favorites)
+    let (favorite_slugs, set_favorite_slugs) = signal(crate::favorite_tools::load_favorites_from_storage());
+
+    let toggle_favorite = move |slug: String| {
+        let updated = crate::favorite_tools::toggle_favorite(&favorite_slugs.get(), &slug);
+        crate::favorite_tools::save_favorites_to_storage(&updated);
+        set_favorite_slugs.set(updated);
+    };
+
+    let is_home_active = Signal::derive(move || active_view.get() == AppView::Home);
+    let is_workflow_active = Signal::derive(move || active_view.get() == AppView::WorkflowDag);
+    let is_history_active = Signal::derive(move || active_view.get() == AppView::History);
+
     // Hàm chọn công cụ dùng chung: cập nhật slug, lưu vết MRU vào storage, đóng palette
     let select_tool = move |slug: String| {
         set_current_slug.set(slug.clone());
@@ -702,7 +716,7 @@ pub fn App() -> impl IntoView {
         crate::recent_tools::save_recent_to_storage(&updated);
         set_recent_tool_slugs.set(updated);
         set_palette_open.set(false);
-        set_active_view.set(WorkspaceView::Tools);
+        set_active_view.set(AppView::Tool);
         load_presets_for_current_tool();
     };
 
@@ -740,6 +754,21 @@ pub fn App() -> impl IntoView {
             }
             set_is_loading_history.set(false);
         });
+    };
+
+    let on_sidebar_navigate = move |dest: crate::sidebar::SidebarDestination| {
+        match dest {
+            crate::sidebar::SidebarDestination::Home => {
+                set_active_view.set(AppView::Home);
+            }
+            crate::sidebar::SidebarDestination::WorkflowDag => {
+                set_active_view.set(AppView::WorkflowDag);
+            }
+            crate::sidebar::SidebarDestination::History => {
+                set_active_view.set(AppView::History);
+                load_history();
+            }
+        }
     };
 
     // Xóa sạch lịch sử tác vụ trong SQLite
@@ -1063,80 +1092,32 @@ pub fn App() -> impl IntoView {
                 </div>
             </header>
 
-            <nav class="sub-header-nav">
-                <div class="nav-tabs">
-                    <button
-                        class=move || if active_view.get() == WorkspaceView::Tools { "nav-tab-btn active" } else { "nav-tab-btn" }
-                        on:click=move |_| set_active_view.set(WorkspaceView::Tools)
-                    >
-                        <span>"🛠️"</span>
-                        <span>"Công cụ Đơn lẻ"</span>
-                    </button>
-                    <button
-                        class=move || if active_view.get() == WorkspaceView::WorkflowDag { "nav-tab-btn active" } else { "nav-tab-btn" }
-                        on:click=move |_| set_active_view.set(WorkspaceView::WorkflowDag)
-                    >
-                        <span>"⚡"</span>
-                        <span>"Chuỗi Tự động hóa (Workflow DAG)"</span>
-                    </button>
-                    <button
-                        class=move || if active_view.get() == WorkspaceView::History { "nav-tab-btn active" } else { "nav-tab-btn" }
-                        on:click=move |_| {
-                            set_active_view.set(WorkspaceView::History);
-                            load_history();
-                        }
-                    >
-                        <span>"⏱️"</span>
-                        <span>"Lịch sử Tác vụ"</span>
-                    </button>
-                </div>
+            <div class="app-body">
+                <crate::sidebar::Sidebar
+                    current_slug=current_slug
+                    is_home_active=is_home_active
+                    is_workflow_active=is_workflow_active
+                    is_history_active=is_history_active
+                    favorite_slugs=favorite_slugs
+                    recent_slugs=recent_tool_slugs
+                    on_select_tool=move |s| select_tool(s)
+                    on_navigate=on_sidebar_navigate
+                    on_toggle_favorite=toggle_favorite
+                />
 
-                <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-                    <span>"🔒 Zero-Cloud Security"</span>
-                    <span style="opacity: 0.5;">"|"</span>
-                    <span>"Offline 100%"</span>
-                </div>
-            </nav>
+                <div class="main-area">
+                    { move || match active_view.get() {
+                        AppView::Home => view! {
+                            <crate::home_view::HomeView
+                                recent_slugs=recent_tool_slugs
+                                favorite_slugs=favorite_slugs
+                                on_select_tool=move |s| select_tool(s)
+                            />
+                        }.into_any(),
 
-            { move || match active_view.get() {
-                WorkspaceView::Tools => view! {
-                    <main class="workspace">
-                        { move || {
-                            let recents = recent_tool_items();
-                            if recents.is_empty() {
-                                view! { <div></div> }.into_any()
-                            } else {
-                                view! {
-                                    <div class="dashboard-recent-bar">
-                                        <span class="dashboard-recent-label">"🕒 Gần đây:"</span>
-                                        <div class="dashboard-recent-chips">
-                                            {
-                                                recents.into_iter().take(5).map(|tool| {
-                                                    let slug_copy = tool.slug.to_string();
-                                                    let is_active = current_slug.get() == tool.slug;
-                                                    let chip_class = if is_active {
-                                                        "recent-tool-chip active"
-                                                    } else {
-                                                        "recent-tool-chip"
-                                                    };
-                                                    view! {
-                                                        <button
-                                                            class=chip_class
-                                                            title=format!("{}: {}", tool.name, tool.description)
-                                                            on:click=move |_| select_tool(slug_copy.clone())
-                                                        >
-                                                            <span>{tool.name}</span>
-                                                        </button>
-                                                    }
-                                                }).collect::<Vec<_>>()
-                                            }
-                                        </div>
-                                    </div>
-                                }.into_any()
-                            }
-                        }}
-
-                        <section class="zone-1">
+                        AppView::Tool => view! {
+                            <main class="workspace">
+                                <section class="zone-1">
                             <div class="tool-info">
                                 <span style="font-size: 20px;">"🛠️"</span>
                                 <div>
@@ -1834,7 +1815,7 @@ pub fn App() -> impl IntoView {
                     </main>
                 }.into_any(),
 
-                WorkspaceView::WorkflowDag => view! {
+                AppView::WorkflowDag => view! {
                     <div class="workflow-workspace">
                         <div class="workflow-header">
                             <div>
@@ -1919,7 +1900,7 @@ pub fn App() -> impl IntoView {
                     </div>
                 }.into_any(),
 
-                WorkspaceView::History => view! {
+                AppView::History => view! {
                     <div class="history-workspace">
                         <div class="history-header">
                             <div>
@@ -1996,6 +1977,8 @@ pub fn App() -> impl IntoView {
                     </div>
                 }.into_any(),
             }}
+                </div>
+            </div>
 
             { move || if palette_open.get() {
                 view! {
