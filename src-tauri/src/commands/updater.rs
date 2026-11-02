@@ -36,7 +36,7 @@ pub fn evaluate_should_prompt(
 }
 
 /// 1. Kiểm tra bản cập nhật mới (Tự động ngầm hoặc Thủ công)
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn check_app_update(
     app_handle: AppHandle,
     state: State<'_, AppState>,
@@ -145,7 +145,7 @@ pub async fn install_app_update(_app_handle: AppHandle) -> Result<(), CommandErr
 }
 
 /// 3. Thiết lập lựa chọn của người dùng (NOW, LATER, SKIP)
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn set_update_action(
     state: State<'_, AppState>,
     action: String,
