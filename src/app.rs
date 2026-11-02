@@ -125,6 +125,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Thực hiện phép toán tập hợp giao, hợp, hiệu và hiệu đối xứng cho các danh sách dòng.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "encoding-mojibake-fixer",
+        name: "Sửa Lỗi Hiển thị Chữ Mojibake",
+        domain: "data-lab",
+        description: "Khôi phục chuỗi văn bản tiếng Việt bị lỗi hiển thị bảng mã UTF-8 và Windows-1252 / ISO-8859-1.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]
