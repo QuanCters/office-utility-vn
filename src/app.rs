@@ -105,6 +105,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-crop-margin",
+        name: "Cắt Viền Trắng Thừa (Auto-Crop)",
+        domain: "doc-suite",
+        description: "Tìm hộp giới hạn Bounding Box nội dung và cập nhật lại CropBox cắt lề chính xác.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
