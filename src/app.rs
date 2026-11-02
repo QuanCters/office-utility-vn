@@ -83,6 +83,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Thuật toán Myers Diff tính toán và tô màu trực quan từng từ, dòng, ô bảng tính bị sai lệch.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "data-structure-converter",
+        name: "Chuyển đổi Cấu trúc Dữ liệu",
+        domain: "data-lab",
+        description: "Chuyển đổi hai chiều tốc độ cao giữa bảng tính với JSON, SQL INSERT INTO hoặc Markdown.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]

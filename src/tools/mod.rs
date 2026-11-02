@@ -1,7 +1,9 @@
+pub mod data_structure_converter_view;
 pub mod diff_checker_text_sheets_view;
 pub mod excel_cleaner_normalizer_view;
 pub mod vietnamese_font_converter_view;
 
+pub use data_structure_converter_view::DataStructureConverterView;
 pub use diff_checker_text_sheets_view::DiffCheckerTextSheetsView;
 pub use excel_cleaner_normalizer_view::ExcelCleanerNormalizerView;
 pub use vietnamese_font_converter_view::VietnameseFontConverterView;
