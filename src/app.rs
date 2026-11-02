@@ -68,7 +68,7 @@ pub struct WorkflowNodeUi {
     pub out_mime: String,
 }
 
-const ALL_TOOLS: &[ToolItem] = &[
+pub const ALL_TOOLS: &[ToolItem] = &[
     ToolItem {
         slug: "vietnamese-number-to-words",
         name: "Đọc Số Tiền Thành Chữ Chuẩn",

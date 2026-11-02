@@ -1,6 +1,7 @@
 mod app;
 pub mod favorite_tools;
 pub mod recent_tools;
+pub mod sidebar;
 pub mod tools;
 
 use app::*;
