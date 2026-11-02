@@ -111,6 +111,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Thực hiện Hash Join (INNER, LEFT, FULL, ANTI) giữa hai bảng tính theo cột khóa.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "excel-sheet-unlocker",
+        name: "Gỡ Khóa Bảo vệ Chỉnh sửa Sheet Excel",
+        domain: "data-lab",
+        description: "Loại bỏ thẻ khóa bảo vệ sheetProtection trong OpenXML để cho phép chỉnh sửa toàn diện.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]

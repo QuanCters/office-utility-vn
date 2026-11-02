@@ -15,5 +15,6 @@ flate2 = "1.0"
 base64 = "0.22"
 regex = "1.10"
 aho-corasick = "1.1"
+crc32fast = "1.4"
 
 [dev-dependencies]
