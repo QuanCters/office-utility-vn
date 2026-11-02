@@ -11,6 +11,8 @@ pub mod pdf_crop_margin_view;
 pub mod pdf_booklet_imposition_view;
 pub mod pdf_visual_diff_view;
 pub mod docx_template_mailmerge_view;
+pub mod pdf_bookmark_toc_view;
+
 
 
 

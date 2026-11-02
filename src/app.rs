@@ -132,6 +132,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Giải nén luồng XML, hợp nhất thẻ <w:r> bị cắt vụn và trộn hàng loạt file Word tốc độ cao.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "pdf-bookmark-toc",
+        name: "Tạo Cây Mục lục PDF (Bookmark TOC)",
+        domain: "doc-suite",
+        description: "Khởi tạo và liên kết cấu trúc cây từ điển /Outlines đa cấp trong PDF Catalog trỏ trực tiếp đến Page Object ID.",
+        is_pinned: false,
+    },
+
 
 
 
