@@ -49,6 +49,7 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+<<<<<<< HEAD
         slug: "pdf-protect-sign",
         name: "Bảo mật & Mở khóa PDF",
         domain: "doc-suite",
@@ -184,10 +185,66 @@ const ALL_TOOLS: &[ToolItem] = &[
 
 
     ToolItem {
-        slug: "image-batch-convert",
+        slug: "image-batch",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
         description: "Tối ưu hóa ảnh WebP, AVIF, JPEG đa luồng với Rayon.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "photo-id-crop",
+        name: "Cắt Ảnh Thẻ Chuẩn 300 DPI",
+        domain: "media-studio",
+        description: "Cắt ảnh thẻ theo tỷ lệ chuẩn và dàn trang khổ in 10x15 cm ở 300 DPI.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "image-bg-redact",
+        name: "Làm mờ Dữ liệu Nhạy cảm Giấy tờ",
+        domain: "media-studio",
+        description: "Che mờ hoặc tô đen vĩnh viễn vùng thông tin nhạy cảm (CCCD, mã QR) trên giấy tờ.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "image-exif-inspector",
+        name: "Kiểm tra & Xóa Exif/GPS Ảnh",
+        domain: "media-studio",
+        description: "Đọc thông số máy ảnh, tọa độ GPS và tước bỏ siêu dữ liệu bảo vệ riêng tư.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "watermark-batch-studio",
+        name: "Đóng dấu Bản quyền Ảnh Hàng loạt",
+        domain: "media-studio",
+        description: "Chèn logo hoặc chữ bản quyền dạng lưới lặp lại (Tiled) hoặc ở góc cố định.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "screenshot-beautifier",
+        name: "Làm đẹp Ảnh Chụp Màn hình",
+        domain: "media-studio",
+        description: "Kết xuất khung viền macOS/Windows sắc nét và hiệu ứng đổ bóng mềm trên nền Gradient.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "doc-scanner-perspective",
+        name: "Phẳng hóa Tài liệu Chụp Nghiêng",
+        domain: "media-studio",
+        description: "Nắn phẳng góc nghiêng 4 điểm phối cảnh và tăng tương phản chữ đen trên nền trắng.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "audio-silence-trimmer",
+        name: "Cắt Bỏ Khoảng lặng Ghi âm",
+        domain: "media-studio",
+        description: "Phân tích RMS năng lượng âm thanh và loại bỏ các đoạn im lặng kéo dài.",
+        is_pinned: true,
+    },
+    ToolItem {
+        slug: "video-to-gif-webp",
+        name: "Chuyển Đổi Video Ngắn sang GIF / WebP",
+        domain: "media-studio",
+        description: "Chuyển đổi video clip, cắt trích xuất khung hình và lượng tử hóa bảng màu GIF động mượt mà.",
         is_pinned: true,
     },
     ToolItem {
