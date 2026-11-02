@@ -98,6 +98,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-flatten-forms",
+        name: "Làm phẳng PDF (Flatten Forms)",
+        domain: "doc-suite",
+        description: "Làm phẳng biểu mẫu AcroForm, hợp nhất dữ liệu nhập liệu thành văn bản tĩnh.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
