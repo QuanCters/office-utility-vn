@@ -77,6 +77,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-watermark-stamp",
+        name: "Đóng dấu Watermark & Con dấu đỏ",
+        domain: "doc-suite",
+        description: "Chèn luồng đồ họa ExtGState chứa watermark bản quyền hoặc nhúng con dấu đỏ PNG.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
