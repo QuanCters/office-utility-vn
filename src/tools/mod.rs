@@ -1,23 +1,25 @@
-pub mod pdf_merge_split_view;
-pub mod pdf_protect_sign_view;
-pub mod pdf_to_markdown_view;
-pub mod pdf_compress_view;
-pub mod vietnamese_ocr_view;
-pub mod pdf_watermark_stamp_view;
-pub mod pdf_page_number_header_view;
-pub mod pdf_metadata_scrubber_view;
-pub mod pdf_flatten_forms_view;
-pub mod pdf_crop_margin_view;
-pub mod pdf_booklet_imposition_view;
-pub mod pdf_visual_diff_view;
+// Document Suite (19 tools)
 pub mod docx_template_mailmerge_view;
-pub mod pdf_bookmark_toc_view;
-pub mod pdf_to_long_image_view;
-pub mod pdf_grayscale_print_view;
-pub mod pdf_repair_corrupt_view;
 pub mod markdown_to_styled_pdf_view;
+pub mod pdf_booklet_imposition_view;
+pub mod pdf_bookmark_toc_view;
+pub mod pdf_compress_view;
+pub mod pdf_crop_margin_view;
+pub mod pdf_flatten_forms_view;
+pub mod pdf_grayscale_print_view;
+pub mod pdf_merge_split_view;
+pub mod pdf_metadata_scrubber_view;
+pub mod pdf_page_number_header_view;
+pub mod pdf_protect_sign_view;
+pub mod pdf_repair_corrupt_view;
 pub mod pdf_table_extractor_view;
+pub mod pdf_to_long_image_view;
+pub mod pdf_to_markdown_view;
+pub mod pdf_visual_diff_view;
+pub mod pdf_watermark_stamp_view;
+pub mod vietnamese_ocr_view;
 
+// Media Studio (9 tools)
 pub mod audio_silence_trimmer_view;
 pub mod doc_scanner_perspective_view;
 pub mod image_batch_view;
@@ -25,5 +27,34 @@ pub mod image_bg_redact_view;
 pub mod image_exif_inspector_view;
 pub mod photo_id_crop_view;
 pub mod screenshot_beautifier_view;
-pub mod watermark_batch_studio_view;
 pub mod video_to_gif_webp_view;
+pub mod watermark_batch_studio_view;
+
+// Data Lab (13 tools)
+pub mod base64_file_codec_view;
+pub mod data_structure_converter_view;
+pub mod diff_checker_text_sheets_view;
+pub mod encoding_mojibake_fixer_view;
+pub mod excel_cleaner_normalizer_view;
+pub mod excel_multi_merger_view;
+pub mod excel_sheet_unlocker_view;
+pub mod excel_split_by_column_view;
+pub mod excel_visual_joiner_view;
+pub mod list_set_operations_view;
+pub mod sql_formatter_linter_view;
+pub mod text_pii_anonymizer_view;
+pub mod vietnamese_font_converter_view;
+
+pub use base64_file_codec_view::Base64FileCodecView;
+pub use data_structure_converter_view::DataStructureConverterView;
+pub use diff_checker_text_sheets_view::DiffCheckerTextSheetsView;
+pub use encoding_mojibake_fixer_view::EncodingMojibakeFixerView;
+pub use excel_cleaner_normalizer_view::ExcelCleanerNormalizerView;
+pub use excel_multi_merger_view::ExcelMultiMergerView;
+pub use excel_sheet_unlocker_view::ExcelSheetUnlockerView;
+pub use excel_split_by_column_view::ExcelSplitByColumnView;
+pub use excel_visual_joiner_view::ExcelVisualJoinerView;
+pub use list_set_operations_view::ListSetOperationsView;
+pub use sql_formatter_linter_view::SqlFormatterLinterView;
+pub use text_pii_anonymizer_view::TextPiiAnonymizerView;
+pub use vietnamese_font_converter_view::VietnameseFontConverterView;

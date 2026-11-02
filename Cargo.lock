@@ -2897,12 +2897,15 @@ dependencies = [
 name = "office-engine"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
+ "base64 0.22.1",
  "crc32fast",
  "flate2",
  "infer 0.16.0",
  "office-shared",
  "quick-xml",
  "rayon",
+ "regex",
  "serde",
  "serde_json",
  "sha2",

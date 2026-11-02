@@ -13,6 +13,9 @@ infer = "0.16"
 quick-xml = "0.42"
 flate2 = "1.0"
 sha2 = "0.10"
-crc32fast = "1.5"
+base64 = "0.22"
+regex = "1.10"
+aho-corasick = "1.1"
+crc32fast = "1.4"
 
 [dev-dependencies]
