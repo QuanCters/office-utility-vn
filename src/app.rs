@@ -76,6 +76,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Chuẩn hóa định dạng ngày tháng, viết hoa tên riêng, tách họ tên và loại bỏ dòng trùng lặp.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "diff-checker-text-sheets",
+        name: "Đối chiếu Văn bản & Bảng tính",
+        domain: "data-lab",
+        description: "Thuật toán Myers Diff tính toán và tô màu trực quan từng từ, dòng, ô bảng tính bị sai lệch.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]
