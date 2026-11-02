@@ -1002,9 +1002,9 @@ input, textarea, .selectable-text {
 
 /* Workflow DAG Builder */
 .workflow-workspace {
-  padding: 20px;
+  padding: 20px 28px;
   overflow-y: auto;
-  height: calc(100vh - 100px);
+  height: 100%;
 }
 
 .workflow-header {
@@ -1110,9 +1110,9 @@ input, textarea, .selectable-text {
 
 /* Task History View */
 .history-workspace {
-  padding: 20px;
+  padding: 20px 28px;
   overflow-y: auto;
-  height: calc(100vh - 100px);
+  height: 100%;
 }
 
 .history-header {
@@ -1872,6 +1872,22 @@ input, textarea, .selectable-text {
   color: #94A3B8;
   margin-left: 2px;
 }
+
+/* Responsive adjustments for compact screens */
+@media (max-width: 960px) {
+  .app-sidebar:not(.collapsed) {
+    width: 220px;
+    min-width: 220px;
+  }
+  .home-view-container {
+    padding: 20px 24px;
+    gap: 20px;
+  }
+  .home-suite-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 
 
