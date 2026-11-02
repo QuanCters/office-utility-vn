@@ -105,6 +105,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "video-to-gif-webp",
+        name: "Chuyển Đổi Video Ngắn sang GIF / WebP",
+        domain: "media-studio",
+        description: "Chuyển đổi video clip, cắt trích xuất khung hình và lượng tử hóa bảng màu GIF động mượt mà.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "universal-file-converter-hub",
         name: "Trạm Chuyển đổi Tệp Vạn năng",
         domain: "sys-hub",
