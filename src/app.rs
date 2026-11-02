@@ -706,11 +706,11 @@ pub fn App() -> impl IntoView {
         load_presets_for_current_tool();
     };
 
-    // Danh sách ToolItem của các công cụ gần đây theo thứ tự MRU
+    // Danh sách ToolItem của các công cụ gần đây theo thứ tự MRU (tối đa 5 công cụ)
     let recent_tool_items = move || {
         let slugs = recent_tool_slugs.get();
         let mut items = Vec::new();
-        for s in &slugs {
+        for s in slugs.iter().take(crate::recent_tools::DEFAULT_MAX_RECENT_TOOLS) {
             if let Some(tool) = ALL_TOOLS.iter().find(|t| t.slug == s) {
                 items.push(tool.clone());
             }
@@ -720,10 +720,11 @@ pub fn App() -> impl IntoView {
 
     // Danh sách các công cụ còn lại (chưa nằm trong danh sách gần đây)
     let non_recent_tools = move || {
-        let slugs = recent_tool_slugs.get();
+        let recent_items = recent_tool_items();
+        let recent_slugs: Vec<&'static str> = recent_items.iter().map(|t| t.slug).collect();
         ALL_TOOLS
             .iter()
-            .filter(|t| !slugs.iter().any(|s| s == t.slug))
+            .filter(|t| !recent_slugs.contains(&t.slug))
             .cloned()
             .collect::<Vec<_>>()
     };

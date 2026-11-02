@@ -1,5 +1,5 @@
 pub const RECENT_TOOLS_STORAGE_KEY: &str = "office_utility_recent_tools_v1";
-pub const DEFAULT_MAX_RECENT_TOOLS: usize = 6;
+pub const DEFAULT_MAX_RECENT_TOOLS: usize = 5;
 
 /// Cập nhật danh sách công cụ gần nhất theo giải thuật MRU (Most Recently Used).
 /// - Nếu `new_slug` đã tồn tại trong danh sách, đẩy lên vị trí đầu (index 0).
@@ -61,7 +61,11 @@ pub fn load_recent_from_storage() -> Vec<String> {
         if let Some(win) = web_sys::window() {
             if let Ok(Some(storage)) = win.local_storage() {
                 if let Ok(Some(val)) = storage.get_item(RECENT_TOOLS_STORAGE_KEY) {
-                    return deserialize_recent_tools(&val);
+                    let mut list = deserialize_recent_tools(&val);
+                    if list.len() > DEFAULT_MAX_RECENT_TOOLS {
+                        list.truncate(DEFAULT_MAX_RECENT_TOOLS);
+                    }
+                    return list;
                 }
             }
         }
@@ -76,14 +80,14 @@ mod tests {
     #[test]
     fn test_update_recent_list_insert_and_ordering() {
         let existing = vec!["tool-b".to_string(), "tool-c".to_string()];
-        let updated = update_recent_list(&existing, "tool-a", 6);
+        let updated = update_recent_list(&existing, "tool-a", DEFAULT_MAX_RECENT_TOOLS);
         assert_eq!(updated, vec!["tool-a", "tool-b", "tool-c"]);
     }
 
     #[test]
     fn test_update_recent_list_dedup_and_promote() {
         let existing = vec!["tool-a".to_string(), "tool-b".to_string(), "tool-c".to_string()];
-        let updated = update_recent_list(&existing, "tool-c", 6);
+        let updated = update_recent_list(&existing, "tool-c", DEFAULT_MAX_RECENT_TOOLS);
         assert_eq!(updated, vec!["tool-c", "tool-a", "tool-b"]);
     }
 
@@ -97,10 +101,10 @@ mod tests {
             "t5".to_string(),
             "t6".to_string(),
         ];
-        let updated = update_recent_list(&existing, "t-new", 6);
-        assert_eq!(updated.len(), 6);
+        let updated = update_recent_list(&existing, "t-new", DEFAULT_MAX_RECENT_TOOLS);
+        assert_eq!(updated.len(), 5);
         assert_eq!(updated[0], "t-new");
-        assert_eq!(updated[5], "t5"); // t6 must be dropped
+        assert_eq!(updated[4], "t4"); // t5, t6 must be dropped
     }
 
     #[test]
