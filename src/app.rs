@@ -42,6 +42,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "vn-einvoice-xml-reader",
+        name: "Đọc Hóa đơn Điện tử XML VN",
+        domain: "vn-office",
+        description: "Đọc, bóc tách và đối soát dữ liệu hóa đơn điện tử VAT chuẩn Tổng cục Thuế.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "pdf-merge-split",
         name: "Ghép, Tách & Xoay trang PDF",
         domain: "doc-suite",
