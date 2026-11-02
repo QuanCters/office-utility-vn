@@ -3,6 +3,7 @@ pub mod number_to_words;
 pub mod vietnamese_number_to_words;
 pub mod vietqr_napas247_generator;
 pub mod vn_address_normalizer;
+pub mod vn_bank_bin_mapper;
 pub mod vn_cccd_mst_validator;
 pub mod vn_einvoice_xml_reader;
 pub mod vn_loan_amortization;
@@ -22,6 +23,9 @@ pub use vietqr_napas247_generator::{
 pub use vn_address_normalizer::{
     jaro_winkler_similarity, normalize_vietnamese_address, AddressNormalizerOptions, AdminModel,
     NormalizedAddress, VnAddressNormalizerTool,
+};
+pub use vn_bank_bin_mapper::{
+    get_vietnam_banks_catalog, lookup_banks, BankBinLookupOptions, BankInfo, VnBankBinMapperTool,
 };
 pub use vn_cccd_mst_validator::{
     process_cccd_or_mst, validate_and_decode_cccd, validate_mst, CccdDecoded,

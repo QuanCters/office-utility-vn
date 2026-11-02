@@ -77,6 +77,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "vn-bank-bin-mapper",
+        name: "Tra cứu Mã Định danh Ngân hàng",
+        domain: "vn-office",
+        description: "Tra cứu mã BIN Napas, CITAD và SWIFT code hơn 60 ngân hàng Việt Nam.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "pdf-merge-split",
         name: "Ghép, Tách & Xoay trang PDF",
         domain: "doc-suite",
