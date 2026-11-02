@@ -12,9 +12,10 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::OfficeTool;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtectAction {
+    #[default]
     Protect,
     Unlock,
 }
@@ -43,13 +44,18 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PdfProtectOptions {
+    #[serde(default)]
     pub action: ProtectAction,
-    #[serde(default, deserialize_with = "deserialize_zeroizing", serialize_with = "serialize_zeroizing")]
+    #[serde(default, alias = "password", deserialize_with = "deserialize_zeroizing", serialize_with = "serialize_zeroizing")]
     pub user_password: Option<Zeroizing<String>>,
     #[serde(default, deserialize_with = "deserialize_zeroizing", serialize_with = "serialize_zeroizing")]
     pub owner_password: Option<Zeroizing<String>>,
-    #[serde(default = "default_encryption")]
+    #[serde(default = "default_encryption", alias = "algorithm")]
     pub encryption: String,
+    #[serde(default)]
+    pub allow_printing: bool,
+    #[serde(default)]
+    pub allow_copy: bool,
 }
 
 pub struct PdfProtectSignTool;

@@ -16,7 +16,7 @@ use crate::OfficeTool;
 pub struct VideoToGifOptions {
     #[serde(default = "default_fps")]
     pub fps: u32,
-    #[serde(default)]
+    #[serde(default, alias = "width")]
     pub max_width: Option<u32>,
     #[serde(default = "default_output_format")]
     pub output_format: String, // "gif" hoặc "webp"

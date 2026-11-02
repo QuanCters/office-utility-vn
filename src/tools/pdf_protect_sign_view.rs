@@ -4,7 +4,7 @@ use leptos::prelude::*;
 pub fn PdfProtectSignView() -> impl IntoView {
     let (action, set_action) = signal("protect".to_string());
     let (password, set_password) = signal(String::new());
-    let (encryption, set_encryption) = signal("AES-256".to_string());
+    let (_encryption, set_encryption) = signal("AES-256".to_string());
     let (_is_composing, set_is_composing) = signal(false);
 
     view! {

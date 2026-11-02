@@ -3,7 +3,7 @@ use leptos::prelude::*;
 #[component]
 pub fn PdfPageNumberHeaderView() -> impl IntoView {
     let (pattern, set_pattern) = signal("Trang {page}/{total}".to_string());
-    let (position, set_position) = signal("bottom_center".to_string());
+    let (_position, set_position) = signal("bottom_center".to_string());
     let (skip_cover, set_skip_cover) = signal(false);
     let (_is_composing, set_is_composing) = signal(false);
 

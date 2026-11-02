@@ -11,11 +11,30 @@ macro_rules! define_doc_suite_tier1_tests {
             #[test]
             fn [<test_ $slug _happy_path>]() {
                 let harness = TestHarness::new();
-                let pdf = harness.create_valid_pdf(concat!($slug_str, "_happy.pdf"), 3);
+                let input_paths = match $slug_str {
+                    "docx-template-mailmerge" => {
+                        vec![harness.create_valid_docx(concat!($slug_str, "_happy.docx")).to_string_lossy().to_string()]
+                    }
+                    "markdown-to-styled-pdf" => {
+                        vec![harness.create_valid_text_file(
+                            concat!($slug_str, "_happy.md"),
+                            "# Tiêu đề\n\nNội dung văn bản Markdown theo thể thức.",
+                        ).to_string_lossy().to_string()]
+                    }
+                    "pdf-visual-diff" => {
+                        let p1 = harness.create_valid_pdf(concat!($slug_str, "_1.pdf"), 2);
+                        let p2 = harness.create_valid_pdf(concat!($slug_str, "_2.pdf"), 2);
+                        vec![p1.to_string_lossy().to_string(), p2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let pdf = harness.create_valid_pdf(concat!($slug_str, "_happy.pdf"), 3);
+                        vec![pdf.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-happy", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![pdf.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -29,11 +48,30 @@ macro_rules! define_doc_suite_tier1_tests {
             #[test]
             fn [<test_ $slug _secondary_mode>]() {
                 let harness = TestHarness::new();
-                let pdf = harness.create_valid_pdf(concat!($slug_str, "_second.pdf"), 2);
+                let input_paths = match $slug_str {
+                    "docx-template-mailmerge" => {
+                        vec![harness.create_valid_docx(concat!($slug_str, "_second.docx")).to_string_lossy().to_string()]
+                    }
+                    "markdown-to-styled-pdf" => {
+                        vec![harness.create_valid_text_file(
+                            concat!($slug_str, "_second.md"),
+                            "# Tiêu đề chế độ 2\n\nNội dung văn bản Markdown.",
+                        ).to_string_lossy().to_string()]
+                    }
+                    "pdf-visual-diff" => {
+                        let p1 = harness.create_valid_pdf(concat!($slug_str, "_s1.pdf"), 2);
+                        let p2 = harness.create_valid_pdf(concat!($slug_str, "_s2.pdf"), 2);
+                        vec![p1.to_string_lossy().to_string(), p2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let pdf = harness.create_valid_pdf(concat!($slug_str, "_second.pdf"), 2);
+                        vec![pdf.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-second", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![pdf.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $second_opts,
                 };
@@ -47,15 +85,27 @@ macro_rules! define_doc_suite_tier1_tests {
             #[test]
             fn [<test_ $slug _batch_processing>]() {
                 let harness = TestHarness::new();
-                let p1 = harness.create_valid_pdf(concat!($slug_str, "_b1.pdf"), 1);
-                let p2 = harness.create_valid_pdf(concat!($slug_str, "_b2.pdf"), 2);
+                let input_paths = match $slug_str {
+                    "docx-template-mailmerge" => {
+                        let d1 = harness.create_valid_docx(concat!($slug_str, "_b1.docx"));
+                        let d2 = harness.create_valid_docx(concat!($slug_str, "_b2.docx"));
+                        vec![d1.to_string_lossy().to_string(), d2.to_string_lossy().to_string()]
+                    }
+                    "markdown-to-styled-pdf" => {
+                        let m1 = harness.create_valid_text_file(concat!($slug_str, "_b1.md"), "# Tiêu đề 1\nNội dung 1");
+                        let m2 = harness.create_valid_text_file(concat!($slug_str, "_b2.md"), "# Tiêu đề 2\nNội dung 2");
+                        vec![m1.to_string_lossy().to_string(), m2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let p1 = harness.create_valid_pdf(concat!($slug_str, "_b1.pdf"), 1);
+                        let p2 = harness.create_valid_pdf(concat!($slug_str, "_b2.pdf"), 2);
+                        vec![p1.to_string_lossy().to_string(), p2.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-batch", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![
-                        p1.to_string_lossy().to_string(),
-                        p2.to_string_lossy().to_string(),
-                    ],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -69,11 +119,30 @@ macro_rules! define_doc_suite_tier1_tests {
             #[test]
             fn [<test_ $slug _options_matrix>]() {
                 let harness = TestHarness::new();
-                let pdf = harness.create_valid_pdf(concat!($slug_str, "_opt.pdf"), 2);
+                let input_paths = match $slug_str {
+                    "docx-template-mailmerge" => {
+                        vec![harness.create_valid_docx(concat!($slug_str, "_opt.docx")).to_string_lossy().to_string()]
+                    }
+                    "markdown-to-styled-pdf" => {
+                        vec![harness.create_valid_text_file(
+                            concat!($slug_str, "_opt.md"),
+                            "# Tiêu đề ma trận\n\nNội dung văn bản Markdown.",
+                        ).to_string_lossy().to_string()]
+                    }
+                    "pdf-visual-diff" => {
+                        let p1 = harness.create_valid_pdf(concat!($slug_str, "_o1.pdf"), 2);
+                        let p2 = harness.create_valid_pdf(concat!($slug_str, "_o2.pdf"), 2);
+                        vec![p1.to_string_lossy().to_string(), p2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let pdf = harness.create_valid_pdf(concat!($slug_str, "_opt.pdf"), 2);
+                        vec![pdf.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-opt", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![pdf.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $matrix_opts,
                 };
@@ -87,11 +156,30 @@ macro_rules! define_doc_suite_tier1_tests {
             #[test]
             fn [<test_ $slug _progress_callback>]() {
                 let harness = TestHarness::new();
-                let pdf = harness.create_valid_pdf(concat!($slug_str, "_prog.pdf"), 2);
+                let input_paths = match $slug_str {
+                    "docx-template-mailmerge" => {
+                        vec![harness.create_valid_docx(concat!($slug_str, "_prog.docx")).to_string_lossy().to_string()]
+                    }
+                    "markdown-to-styled-pdf" => {
+                        vec![harness.create_valid_text_file(
+                            concat!($slug_str, "_prog.md"),
+                            "# Tiêu đề tiến trình\n\nNội dung văn bản Markdown.",
+                        ).to_string_lossy().to_string()]
+                    }
+                    "pdf-visual-diff" => {
+                        let p1 = harness.create_valid_pdf(concat!($slug_str, "_p1.pdf"), 2);
+                        let p2 = harness.create_valid_pdf(concat!($slug_str, "_p2.pdf"), 2);
+                        vec![p1.to_string_lossy().to_string(), p2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let pdf = harness.create_valid_pdf(concat!($slug_str, "_prog.pdf"), 2);
+                        vec![pdf.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-prog", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![pdf.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };

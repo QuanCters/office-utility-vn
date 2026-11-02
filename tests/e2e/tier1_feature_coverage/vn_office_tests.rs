@@ -11,10 +11,15 @@ macro_rules! define_vn_office_tier1_tests {
             fn [<test_ $slug _happy_path>]() {
                 let harness = TestHarness::new();
                 let invoice = harness.create_valid_xml_invoice(concat!($slug_str, "_happy.xml"));
+                let input_paths = if $slug_str == "vn-einvoice-xml-reader" {
+                    vec![invoice.to_string_lossy().to_string()]
+                } else {
+                    vec![]
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-happy", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![invoice.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -29,10 +34,15 @@ macro_rules! define_vn_office_tier1_tests {
             fn [<test_ $slug _secondary_mode>]() {
                 let harness = TestHarness::new();
                 let invoice = harness.create_valid_xml_invoice(concat!($slug_str, "_second.xml"));
+                let input_paths = if $slug_str == "vn-einvoice-xml-reader" {
+                    vec![invoice.to_string_lossy().to_string()]
+                } else {
+                    vec![]
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-second", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![invoice.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $second_opts,
                 };
@@ -48,13 +58,18 @@ macro_rules! define_vn_office_tier1_tests {
                 let harness = TestHarness::new();
                 let inv1 = harness.create_valid_xml_invoice(concat!($slug_str, "_b1.xml"));
                 let inv2 = harness.create_valid_xml_invoice(concat!($slug_str, "_b2.xml"));
+                let input_paths = if $slug_str == "vn-einvoice-xml-reader" {
+                    vec![
+                        inv1.to_string_lossy().to_string(),
+                        inv2.to_string_lossy().to_string(),
+                    ]
+                } else {
+                    vec![]
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-batch", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![
-                        inv1.to_string_lossy().to_string(),
-                        inv2.to_string_lossy().to_string(),
-                    ],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -69,10 +84,15 @@ macro_rules! define_vn_office_tier1_tests {
             fn [<test_ $slug _options_matrix>]() {
                 let harness = TestHarness::new();
                 let invoice = harness.create_valid_xml_invoice(concat!($slug_str, "_opt.xml"));
+                let input_paths = if $slug_str == "vn-einvoice-xml-reader" {
+                    vec![invoice.to_string_lossy().to_string()]
+                } else {
+                    vec![]
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-opt", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![invoice.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $matrix_opts,
                 };
@@ -87,10 +107,15 @@ macro_rules! define_vn_office_tier1_tests {
             fn [<test_ $slug _progress_callback>]() {
                 let harness = TestHarness::new();
                 let invoice = harness.create_valid_xml_invoice(concat!($slug_str, "_prog.xml"));
+                let input_paths = if $slug_str == "vn-einvoice-xml-reader" {
+                    vec![invoice.to_string_lossy().to_string()]
+                } else {
+                    vec![]
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-prog", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![invoice.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };

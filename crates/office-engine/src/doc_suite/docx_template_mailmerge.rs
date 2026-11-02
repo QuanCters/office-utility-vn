@@ -26,7 +26,7 @@ pub struct MailmergeOptions {
     pub template_path: String,
     #[serde(default)]
     pub data_excel_path: String,
-    #[serde(default = "default_output_pattern")]
+    #[serde(default = "default_output_pattern", alias = "output_pattern")]
     pub output_filename_pattern: String,
 }
 

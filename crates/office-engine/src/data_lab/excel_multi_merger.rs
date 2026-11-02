@@ -11,16 +11,19 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 /// Chế độ gộp bảng tính
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum MergeMode {
+    #[default]
     AppendRows,
+    #[serde(alias = "combine_sheets")]
     MultiSheet,
 }
 
 /// Cấu hình tùy chọn gộp nhiều file bảng tính
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExcelMergeOptions {
+    #[serde(default, alias = "merge_mode")]
     pub mode: MergeMode,
     #[serde(default)]
     pub add_source_column: bool,

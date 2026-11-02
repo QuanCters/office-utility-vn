@@ -3,7 +3,7 @@ use leptos::prelude::*;
 #[component]
 pub fn VietnameseOcrView() -> impl IntoView {
     let (engine, set_engine) = signal("fast_os_native".to_string());
-    let (format, set_format) = signal("txt".to_string());
+    let (_format, set_format) = signal("txt".to_string());
 
     view! {
         <div class="tool-config-panel">

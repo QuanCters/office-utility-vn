@@ -288,6 +288,10 @@ impl OfficeTool for ExcelCleanerNormalizerTool {
                     failed_items: vec![],
                     elapsed_ms: start_time.elapsed().as_millis() as u64,
                 });
+            } else {
+                return Err(CommandError::ValidationFailed {
+                    reason: "Không có tệp đầu vào hoặc nội dung bảng tính cần xử lý".to_string(),
+                });
             }
         }
 

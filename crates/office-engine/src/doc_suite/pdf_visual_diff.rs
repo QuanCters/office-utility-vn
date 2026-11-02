@@ -12,9 +12,9 @@ use crate::OfficeTool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DiffMode {
-    #[serde(rename = "text_diff")]
+    #[serde(rename = "text_diff", alias = "text-diff")]
     TextDiff,
-    #[serde(rename = "visual_pixel_diff")]
+    #[serde(rename = "visual_pixel_diff", alias = "pixel-diff", alias = "side-by-side")]
     VisualPixelDiff,
 }
 

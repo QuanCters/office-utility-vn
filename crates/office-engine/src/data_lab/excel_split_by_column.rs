@@ -12,9 +12,12 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 /// Cấu hình tùy chọn tách file bảng tính theo cột
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExcelSplitOptions {
+    #[serde(default, alias = "split_column")]
     pub split_column_name: String,
+    #[serde(default)]
+    pub split_column_index: Option<usize>,
 }
 
 pub struct ExcelSplitByColumnTool;
@@ -180,7 +183,32 @@ impl OfficeTool for ExcelSplitByColumnTool {
             });
         }
 
-        let (header, groups) = split_table_by_column(&content, &options.split_column_name, cancel_flag)?;
+        let mut column_to_split = options.split_column_name.clone();
+        if column_to_split.trim().is_empty() {
+            if let Some(idx) = options.split_column_index {
+                let mut lines = content.lines().filter(|l| !l.trim().is_empty());
+                if let Some(header_line) = lines.next() {
+                    let delimiter = if header_line.contains('\t') {
+                        '\t'
+                    } else if header_line.contains(';') {
+                        ';'
+                    } else {
+                        ','
+                    };
+                    let headers: Vec<&str> = header_line
+                        .split(delimiter)
+                        .map(|s| s.trim().trim_matches('"'))
+                        .collect();
+                    if idx < headers.len() {
+                        column_to_split = headers[idx].to_string();
+                    } else if !headers.is_empty() {
+                        column_to_split = headers[0].to_string();
+                    }
+                }
+            }
+        }
+
+        let (header, groups) = split_table_by_column(&content, &column_to_split, cancel_flag)?;
 
         let out_dir = match &request.output_directory {
             Some(d) => PathBuf::from(d),

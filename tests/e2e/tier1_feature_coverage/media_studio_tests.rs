@@ -10,11 +10,25 @@ macro_rules! define_media_studio_tier1_tests {
             #[test]
             fn [<test_ $slug _happy_path>]() {
                 let harness = TestHarness::new();
-                let img = harness.create_valid_bmp(concat!($slug_str, "_happy.bmp"), 64, 64);
+                let input_paths = match $slug_str {
+                    "audio-silence-trimmer" => {
+                        vec![harness.create_valid_wav(concat!($slug_str, "_happy.wav")).to_string_lossy().to_string()]
+                    }
+                    "video-to-gif-webp" => {
+                        vec![harness.create_valid_mp4(concat!($slug_str, "_happy.mp4")).to_string_lossy().to_string()]
+                    }
+                    "image-exif-inspector" => {
+                        vec![harness.create_valid_png(concat!($slug_str, "_happy.png")).to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let img = harness.create_valid_bmp(concat!($slug_str, "_happy.bmp"), 64, 64);
+                        vec![img.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-happy", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![img.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -28,11 +42,25 @@ macro_rules! define_media_studio_tier1_tests {
             #[test]
             fn [<test_ $slug _secondary_mode>]() {
                 let harness = TestHarness::new();
-                let img = harness.create_valid_bmp(concat!($slug_str, "_second.bmp"), 48, 48);
+                let input_paths = match $slug_str {
+                    "audio-silence-trimmer" => {
+                        vec![harness.create_valid_wav(concat!($slug_str, "_second.wav")).to_string_lossy().to_string()]
+                    }
+                    "video-to-gif-webp" => {
+                        vec![harness.create_valid_mp4(concat!($slug_str, "_second.mp4")).to_string_lossy().to_string()]
+                    }
+                    "image-exif-inspector" => {
+                        vec![harness.create_valid_png(concat!($slug_str, "_second.png")).to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let img = harness.create_valid_bmp(concat!($slug_str, "_second.bmp"), 48, 48);
+                        vec![img.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-second", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![img.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $second_opts,
                 };
@@ -46,15 +74,32 @@ macro_rules! define_media_studio_tier1_tests {
             #[test]
             fn [<test_ $slug _batch_processing>]() {
                 let harness = TestHarness::new();
-                let img1 = harness.create_valid_bmp(concat!($slug_str, "_b1.bmp"), 32, 32);
-                let img2 = harness.create_valid_bmp(concat!($slug_str, "_b2.bmp"), 32, 32);
+                let input_paths = match $slug_str {
+                    "audio-silence-trimmer" => {
+                        let w1 = harness.create_valid_wav(concat!($slug_str, "_b1.wav"));
+                        let w2 = harness.create_valid_wav(concat!($slug_str, "_b2.wav"));
+                        vec![w1.to_string_lossy().to_string(), w2.to_string_lossy().to_string()]
+                    }
+                    "video-to-gif-webp" => {
+                        let v1 = harness.create_valid_mp4(concat!($slug_str, "_b1.mp4"));
+                        let v2 = harness.create_valid_mp4(concat!($slug_str, "_b2.mp4"));
+                        vec![v1.to_string_lossy().to_string(), v2.to_string_lossy().to_string()]
+                    }
+                    "image-exif-inspector" => {
+                        let p1 = harness.create_valid_png(concat!($slug_str, "_b1.png"));
+                        let p2 = harness.create_valid_png(concat!($slug_str, "_b2.png"));
+                        vec![p1.to_string_lossy().to_string(), p2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let img1 = harness.create_valid_bmp(concat!($slug_str, "_b1.bmp"), 32, 32);
+                        let img2 = harness.create_valid_bmp(concat!($slug_str, "_b2.bmp"), 32, 32);
+                        vec![img1.to_string_lossy().to_string(), img2.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-batch", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![
-                        img1.to_string_lossy().to_string(),
-                        img2.to_string_lossy().to_string(),
-                    ],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -68,11 +113,25 @@ macro_rules! define_media_studio_tier1_tests {
             #[test]
             fn [<test_ $slug _options_matrix>]() {
                 let harness = TestHarness::new();
-                let img = harness.create_valid_bmp(concat!($slug_str, "_opt.bmp"), 32, 32);
+                let input_paths = match $slug_str {
+                    "audio-silence-trimmer" => {
+                        vec![harness.create_valid_wav(concat!($slug_str, "_opt.wav")).to_string_lossy().to_string()]
+                    }
+                    "video-to-gif-webp" => {
+                        vec![harness.create_valid_mp4(concat!($slug_str, "_opt.mp4")).to_string_lossy().to_string()]
+                    }
+                    "image-exif-inspector" => {
+                        vec![harness.create_valid_png(concat!($slug_str, "_opt.png")).to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let img = harness.create_valid_bmp(concat!($slug_str, "_opt.bmp"), 32, 32);
+                        vec![img.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-opt", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![img.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $matrix_opts,
                 };
@@ -86,11 +145,25 @@ macro_rules! define_media_studio_tier1_tests {
             #[test]
             fn [<test_ $slug _progress_callback>]() {
                 let harness = TestHarness::new();
-                let img = harness.create_valid_bmp(concat!($slug_str, "_prog.bmp"), 32, 32);
+                let input_paths = match $slug_str {
+                    "audio-silence-trimmer" => {
+                        vec![harness.create_valid_wav(concat!($slug_str, "_prog.wav")).to_string_lossy().to_string()]
+                    }
+                    "video-to-gif-webp" => {
+                        vec![harness.create_valid_mp4(concat!($slug_str, "_prog.mp4")).to_string_lossy().to_string()]
+                    }
+                    "image-exif-inspector" => {
+                        vec![harness.create_valid_png(concat!($slug_str, "_prog.png")).to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let img = harness.create_valid_bmp(concat!($slug_str, "_prog.bmp"), 32, 32);
+                        vec![img.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-prog", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![img.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };

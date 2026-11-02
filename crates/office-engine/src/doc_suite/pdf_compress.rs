@@ -250,10 +250,31 @@ impl OfficeTool for PdfCompressTool {
             return Err(CommandError::TaskCancelled);
         }
 
-        let options: PdfCompressOptions = serde_json::from_value(request.options.clone())
-            .map_err(|e| CommandError::ValidationFailed {
-                reason: format!("Cấu hình nén PDF không hợp lệ: {e}"),
-            })?;
+        let options: PdfCompressOptions = if let Ok(opts) = serde_json::from_value::<PdfCompressOptions>(request.options.clone()) {
+            opts
+        } else {
+            let mut opts = PdfCompressOptions::default();
+            if let Some(dpi) = request.options.get("dpi").and_then(|v| v.as_u64()) {
+                opts.target_dpi = dpi as u32;
+            } else if let Some(dpi) = request.options.get("target_dpi").and_then(|v| v.as_u64()) {
+                opts.target_dpi = dpi as u32;
+            }
+            if let Some(lvl) = request.options.get("compression_level") {
+                if let Some(n) = lvl.as_u64() {
+                    opts.compression_level = n as u32;
+                } else if let Some(s) = lvl.as_str() {
+                    opts.compression_level = match s {
+                        "minimal" | "low" => 3,
+                        "maximum" | "high" => 9,
+                        _ => 6, // medium
+                    };
+                }
+            }
+            if let Some(strip) = request.options.get("strip_unreferenced").and_then(|v| v.as_bool()) {
+                opts.strip_unreferenced = strip;
+            }
+            opts
+        };
 
         if request.input_paths.is_empty() {
             return Err(CommandError::ValidationFailed {

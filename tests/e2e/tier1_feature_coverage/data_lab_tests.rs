@@ -10,14 +10,50 @@ macro_rules! define_data_lab_tier1_tests {
             #[test]
             fn [<test_ $slug _happy_path>]() {
                 let harness = TestHarness::new();
-                let f = harness.create_valid_text_file(
-                    concat!($slug_str, "_happy.txt"),
-                    "Họ và tên, Mã số thuế, Địa chỉ\nNguyễn Văn An, 0101234567, Hà Nội\nTrần Thị Bình, 8001234567, TP.HCM\n"
-                );
+                let input_paths = match $slug_str {
+                    "diff-checker-text-sheets" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_h1.txt"), "Dòng 1: ABC\nDòng 2: XYZ\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_h2.txt"), "Dòng 1: ABC\nDòng 2: 123\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "list-set-operations" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_h1.txt"), "Mục 1\nMục 2\nMục 3\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_h2.txt"), "Mục 2\nMục 3\nMục 4\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-visual-joiner" => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_h1.csv"),
+                            "MaNV,EmployeeID,MST,Ten\nNV01,E01,0101234567,An\nNV02,E02,8001234567,Binh\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_h2.csv"),
+                            "MaNV,ID,MST,PhongBan\nNV01,E01,0101234567,IT\nNV02,E02,8001234567,HR\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-sheet-unlocker" => {
+                        vec![harness.create_valid_xlsx(concat!($slug_str, "_happy.xlsx")).to_string_lossy().to_string()]
+                    }
+                    "excel-split-by-column" => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_happy.csv"),
+                            "MaNV,Ten,MaPhongBan,KhuVuc\nNV1,An,IT,MienBac\nNV2,Binh,HR,MienNam\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_happy.txt"),
+                            "Họ và tên,Mã số thuế,Địa chỉ\nNguyễn Văn An,0101234567,Hà Nội\nTrần Thị Bình,8001234567,TP.HCM\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-happy", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![f.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -31,14 +67,57 @@ macro_rules! define_data_lab_tier1_tests {
             #[test]
             fn [<test_ $slug _secondary_mode>]() {
                 let harness = TestHarness::new();
-                let f = harness.create_valid_text_file(
-                    concat!($slug_str, "_second.txt"),
-                    "Dòng 1: Thử nghiệm tính năng\nDòng 2: Tiện ích văn phòng Việt Nam\n"
-                );
+                let input_paths = match $slug_str {
+                    "base64-file-codec" => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_second.txt"),
+                            "RMOybmcgMTogVGjhu60gbmdoaeG7h20gdMOtbmggbsSDbmc=",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                    "diff-checker-text-sheets" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_s1.txt"), "Dòng 1: Hello\nDòng 2: World\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_s2.txt"), "Dòng 1: Hello\nDòng 2: Rust\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "list-set-operations" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_s1.txt"), "Tập hợp A: 1\n2\n3\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_s2.txt"), "Tập hợp B: 2\n3\n4\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-visual-joiner" => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_s1.csv"),
+                            "MaNV,EmployeeID,MST,Ten\nNV01,E01,0101234567,An\nNV02,E02,8001234567,Binh\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_s2.csv"),
+                            "MaNV,ID,MST,PhongBan\nNV01,E01,0101234567,IT\nNV02,E02,8001234567,HR\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-sheet-unlocker" => {
+                        vec![harness.create_valid_xlsx(concat!($slug_str, "_second.xlsx")).to_string_lossy().to_string()]
+                    }
+                    "excel-split-by-column" => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_second.csv"),
+                            "MaNV,Ten,MaPhongBan,KhuVuc\nNV1,An,IT,MienBac\nNV2,Binh,HR,MienNam\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_second.txt"),
+                            "Họ và tên,Mã số thuế,Địa chỉ\nNguyễn Văn An,0101234567,Hà Nội\nTrần Thị Bình,8001234567,TP.HCM\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-second", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![f.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $second_opts,
                 };
@@ -52,15 +131,60 @@ macro_rules! define_data_lab_tier1_tests {
             #[test]
             fn [<test_ $slug _batch_processing>]() {
                 let harness = TestHarness::new();
-                let f1 = harness.create_valid_text_file(concat!($slug_str, "_b1.txt"), "Dữ liệu tập tin 1");
-                let f2 = harness.create_valid_text_file(concat!($slug_str, "_b2.txt"), "Dữ liệu tập tin 2");
+                let input_paths = match $slug_str {
+                    "diff-checker-text-sheets" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_b1.txt"), "A1,B1\n1,2\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_b2.txt"), "A1,B1\n1,3\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "list-set-operations" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_b1.txt"), "a\nb\nc\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_b2.txt"), "b\nc\nd\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-visual-joiner" => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_b1.csv"),
+                            "MaNV,EmployeeID,MST,Ten\nNV01,E01,0101234567,An\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_b2.csv"),
+                            "MaNV,ID,MST,PhongBan\nNV01,E01,0101234567,IT\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-sheet-unlocker" => {
+                        let x1 = harness.create_valid_xlsx(concat!($slug_str, "_b1.xlsx"));
+                        let x2 = harness.create_valid_xlsx(concat!($slug_str, "_b2.xlsx"));
+                        vec![x1.to_string_lossy().to_string(), x2.to_string_lossy().to_string()]
+                    }
+                    "excel-split-by-column" => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_b1.csv"),
+                            "MaNV,Ten,MaPhongBan,KhuVuc\nNV1,An,IT,MienBac\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_b2.csv"),
+                            "MaNV,Ten,MaPhongBan,KhuVuc\nNV2,Binh,HR,MienNam\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_b1.txt"),
+                            "Họ và tên,Mã số thuế,Địa chỉ\nNguyễn Văn An,0101234567,Hà Nội\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_b2.txt"),
+                            "Họ và tên,Mã số thuế,Địa chỉ\nTrần Thị Bình,8001234567,TP.HCM\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-batch", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![
-                        f1.to_string_lossy().to_string(),
-                        f2.to_string_lossy().to_string(),
-                    ],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };
@@ -74,11 +198,50 @@ macro_rules! define_data_lab_tier1_tests {
             #[test]
             fn [<test_ $slug _options_matrix>]() {
                 let harness = TestHarness::new();
-                let f = harness.create_valid_text_file(concat!($slug_str, "_opt.txt"), "Dữ liệu ma trận tùy chọn");
+                let input_paths = match $slug_str {
+                    "diff-checker-text-sheets" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_o1.txt"), "A\nB\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_o2.txt"), "A\nC\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "list-set-operations" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_o1.txt"), "X\nY\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_o2.txt"), "Y\nZ\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-visual-joiner" => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_o1.csv"),
+                            "MaNV,EmployeeID,MST,Ten\nNV01,E01,0101234567,An\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_o2.csv"),
+                            "MaNV,ID,MST,PhongBan\nNV01,E01,0101234567,IT\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-sheet-unlocker" => {
+                        vec![harness.create_valid_xlsx(concat!($slug_str, "_opt.xlsx")).to_string_lossy().to_string()]
+                    }
+                    "excel-split-by-column" => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_opt.csv"),
+                            "MaNV,Ten,MaPhongBan,KhuVuc\nNV1,An,IT,MienBac\nNV2,Binh,HR,MienNam\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_opt.txt"),
+                            "Họ và tên,Mã số thuế,Địa chỉ\nNguyễn Văn An,0101234567,Hà Nội\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-opt", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![f.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $matrix_opts,
                 };
@@ -92,11 +255,50 @@ macro_rules! define_data_lab_tier1_tests {
             #[test]
             fn [<test_ $slug _progress_callback>]() {
                 let harness = TestHarness::new();
-                let f = harness.create_valid_text_file(concat!($slug_str, "_prog.txt"), "Dữ liệu kiểm tra tiến độ");
+                let input_paths = match $slug_str {
+                    "diff-checker-text-sheets" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_p1.txt"), "P1\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_p2.txt"), "P2\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "list-set-operations" => {
+                        let f1 = harness.create_valid_text_file(concat!($slug_str, "_p1.txt"), "P1\n");
+                        let f2 = harness.create_valid_text_file(concat!($slug_str, "_p2.txt"), "P2\n");
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-visual-joiner" => {
+                        let f1 = harness.create_valid_text_file(
+                            concat!($slug_str, "_p1.csv"),
+                            "MaNV,EmployeeID,MST,Ten\nNV01,E01,0101234567,An\n",
+                        );
+                        let f2 = harness.create_valid_text_file(
+                            concat!($slug_str, "_p2.csv"),
+                            "MaNV,ID,MST,PhongBan\nNV01,E01,0101234567,IT\n",
+                        );
+                        vec![f1.to_string_lossy().to_string(), f2.to_string_lossy().to_string()]
+                    }
+                    "excel-sheet-unlocker" => {
+                        vec![harness.create_valid_xlsx(concat!($slug_str, "_prog.xlsx")).to_string_lossy().to_string()]
+                    }
+                    "excel-split-by-column" => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_prog.csv"),
+                            "MaNV,Ten,MaPhongBan,KhuVuc\nNV1,An,IT,MienBac\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                    _ => {
+                        let f = harness.create_valid_text_file(
+                            concat!($slug_str, "_prog.txt"),
+                            "Họ và tên,Mã số thuế,Địa chỉ\nNguyễn Văn An,0101234567,Hà Nội\n",
+                        );
+                        vec![f.to_string_lossy().to_string()]
+                    }
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-prog", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![f.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $happy_opts,
                 };

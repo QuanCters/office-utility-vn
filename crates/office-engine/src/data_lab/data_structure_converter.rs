@@ -11,9 +11,14 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 /// Tùy chọn chuyển đổi cấu trúc dữ liệu
+fn default_target_format() -> String {
+    "json".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataConverterOptions {
     /// Định dạng đích: "json", "sql", "markdown"
+    #[serde(default = "default_target_format")]
     pub target_format: String,
     /// Tên bảng (nếu chọn xuất SQL)
     #[serde(default)]
@@ -251,9 +256,9 @@ impl OfficeTool for DataStructureConverterTool {
         let table_name = options.table_name.as_deref().unwrap_or("data_records");
 
         let converted = match target.as_str() {
-            "json" => table_to_json(&headers, &rows, cancel_flag)?,
-            "sql" => table_to_sql(&headers, &rows, table_name, cancel_flag)?,
-            "markdown" | "md" => table_to_markdown(&headers, &rows, cancel_flag)?,
+            "json" | "json_array" => table_to_json(&headers, &rows, cancel_flag)?,
+            "sql" | "sql_insert" => table_to_sql(&headers, &rows, table_name, cancel_flag)?,
+            "markdown" | "md" | "markdown_table" => table_to_markdown(&headers, &rows, cancel_flag)?,
             other => {
                 return Err(CommandError::ValidationFailed {
                     reason: format!("Định dạng đích '{}' không được hỗ trợ (chỉ chấp nhận: json, sql, markdown)", other),

@@ -11,10 +11,12 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 /// Tùy chọn cấu hình kiểm tra & tước bỏ EXIF
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExifInspectorOptions {
     #[serde(default)]
     pub strip_all: bool,
+    #[serde(default)]
+    pub action: Option<String>,
 }
 
 /// Dữ liệu tổng hợp metadata EXIF
@@ -423,10 +425,13 @@ impl OfficeTool for ImageExifInspectorTool {
             return Err(CommandError::TaskCancelled);
         }
 
-        let options: ExifInspectorOptions = serde_json::from_value(request.options.clone())
+        let mut options: ExifInspectorOptions = serde_json::from_value(request.options.clone())
             .map_err(|e| CommandError::ValidationFailed {
                 reason: format!("Cấu hình tùy chọn ExifInspector không hợp lệ: {e}"),
             })?;
+        if options.action.as_deref() == Some("strip_all") {
+            options.strip_all = true;
+        }
 
         if request.input_paths.is_empty() {
             return Err(CommandError::ValidationFailed {

@@ -261,20 +261,41 @@ impl OfficeTool for DiffCheckerTextSheetsTool {
 
         let options: DataDiffOptions = serde_json::from_value(request.options.clone()).unwrap_or_default();
 
+        if request.input_paths.is_empty() {
+            let t_a = request.options.get("text_a").and_then(|v| v.as_str());
+            let t_b = request.options.get("text_b").and_then(|v| v.as_str());
+            if t_a.is_none() && t_b.is_none() {
+                return Err(CommandError::ValidationFailed {
+                    reason: "Yêu cầu cung cấp ít nhất 2 tệp cần so sánh hoặc nội dung văn bản trực tiếp".to_string(),
+                });
+            }
+        }
+
+        for path_str in &request.input_paths {
+            let p = Path::new(path_str);
+            if !p.exists() {
+                return Err(CommandError::FileNotFound {
+                    path: path_str.clone(),
+                });
+            }
+            let bytes = fs::read(p).map_err(|e| CommandError::IoError {
+                details: e.to_string(),
+            })?;
+            if bytes.starts_with(b"\x7fELF")
+                || bytes.starts_with(b"MZ")
+                || bytes.starts_with(b"\x00\xFF")
+                || bytes.iter().take(256).any(|&b| b == 0)
+            {
+                return Err(CommandError::InvalidFileSignature {
+                    expected: "Văn bản hoặc Bảng tính hợp lệ".to_string(),
+                    actual: "Tệp nhị phân hoặc dữ liệu bị hỏng".to_string(),
+                });
+            }
+        }
+
         let (text_a, text_b) = if request.input_paths.len() >= 2 {
             let p_a = Path::new(&request.input_paths[0]);
             let p_b = Path::new(&request.input_paths[1]);
-
-            if !p_a.exists() {
-                return Err(CommandError::FileNotFound {
-                    path: request.input_paths[0].clone(),
-                });
-            }
-            if !p_b.exists() {
-                return Err(CommandError::FileNotFound {
-                    path: request.input_paths[1].clone(),
-                });
-            }
 
             let bytes_a = fs::read(p_a).map_err(|e| CommandError::IoError {
                 details: e.to_string(),
@@ -283,16 +304,11 @@ impl OfficeTool for DiffCheckerTextSheetsTool {
                 details: e.to_string(),
             })?;
 
-            if bytes_a.starts_with(b"\x7fELF") || bytes_a.starts_with(b"MZ")
-                || bytes_b.starts_with(b"\x7fELF") || bytes_b.starts_with(b"MZ")
-            {
-                return Err(CommandError::InvalidFileSignature {
-                    expected: "Văn bản hoặc Bảng tính hợp lệ".to_string(),
-                    actual: "Tệp nhị phân thực thi bị chặn".to_string(),
-                });
-            }
-
             (String::from_utf8_lossy(&bytes_a).to_string(), String::from_utf8_lossy(&bytes_b).to_string())
+        } else if request.input_paths.len() == 1 {
+            return Err(CommandError::ValidationFailed {
+                reason: "Cần ít nhất 2 tệp để thực hiện đối chiếu sai khác".to_string(),
+            });
         } else {
             let t_a = request.options.get("text_a").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let t_b = request.options.get("text_b").and_then(|v| v.as_str()).unwrap_or("").to_string();

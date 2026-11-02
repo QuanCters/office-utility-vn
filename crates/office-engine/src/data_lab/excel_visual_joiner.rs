@@ -16,16 +16,25 @@ use crate::OfficeTool;
 #[serde(rename_all = "snake_case")]
 pub enum JoinType {
     Inner,
+    #[serde(alias = "left_outer")]
     Left,
     FullOuter,
+    #[serde(alias = "anti_join")]
     Anti,
+}
+
+fn default_join_type() -> JoinType {
+    JoinType::Inner
 }
 
 /// Cấu hình tùy chọn kết hợp 2 bảng tính
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExcelJoinOptions {
+    #[serde(default = "default_join_type")]
     pub join_type: JoinType,
+    #[serde(default, alias = "left_key")]
     pub key_a: String,
+    #[serde(default, alias = "right_key")]
     pub key_b: String,
 }
 

@@ -5,7 +5,7 @@ pub fn PdfWatermarkStampView() -> impl IntoView {
     let (text, set_text) = signal("BẢN QUYỀN - KHÔNG SAO CHÉP".to_string());
     let (opacity, set_opacity) = signal(0.3f32);
     let (angle, set_angle) = signal(45.0f32);
-    let (position, set_position) = signal("center".to_string());
+    let (_position, set_position) = signal("center".to_string());
     let (_is_composing, set_is_composing) = signal(false);
 
     view! {

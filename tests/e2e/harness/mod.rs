@@ -211,6 +211,120 @@ impl TestHarness {
         path
     }
 
+    /// Tạo tệp WAV hợp lệ với âm thanh mẫu 16-bit PCM 16kHz
+    pub fn create_valid_wav(&self, filename: &str) -> PathBuf {
+        let path = self.temp_dir.path().join(filename);
+        let sample_rate = 16000u32;
+        let tone_samples = 1600; // 100ms
+        let silence_samples = 8000; // 500ms
+        let mut samples = Vec::with_capacity(tone_samples * 2 + silence_samples);
+
+        for i in 0..tone_samples {
+            let t = i as f32 / sample_rate as f32;
+            let val = (t * 440.0 * 2.0 * std::f32::consts::PI).sin();
+            samples.push((val * 16000.0) as i16);
+        }
+        for _ in 0..silence_samples {
+            samples.push(0i16);
+        }
+        for i in 0..tone_samples {
+            let t = i as f32 / sample_rate as f32;
+            let val = (t * 880.0 * 2.0 * std::f32::consts::PI).sin();
+            samples.push((val * 16000.0) as i16);
+        }
+
+        let data_len = samples.len() * 2;
+        let mut wav = Vec::with_capacity(44 + data_len);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&((36 + data_len) as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        wav.extend_from_slice(&1u16.to_le_bytes()); // mono
+        wav.extend_from_slice(&sample_rate.to_le_bytes());
+        wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(data_len as u32).to_le_bytes());
+        for s in samples {
+            wav.extend_from_slice(&s.to_le_bytes());
+        }
+
+        fs::write(&path, wav).expect("write valid wav");
+        path
+    }
+
+    /// Tạo tệp MP4 hợp lệ với container `ftyp`
+    pub fn create_valid_mp4(&self, filename: &str) -> PathBuf {
+        let path = self.temp_dir.path().join(filename);
+        let mut mp4 = Vec::new();
+        mp4.extend_from_slice(&20u32.to_be_bytes());
+        mp4.extend_from_slice(b"ftyp");
+        mp4.extend_from_slice(b"isom");
+        mp4.extend_from_slice(&[0, 0, 2, 0]);
+        mp4.extend_from_slice(b"isom");
+        mp4.extend_from_slice(b"\x00\x00\x00\x08free");
+        fs::write(&path, mp4).expect("write valid mp4");
+        path
+    }
+
+    /// Tạo tệp Word .docx hợp lệ
+    pub fn create_valid_docx(&self, filename: &str) -> PathBuf {
+        let path = self.temp_dir.path().join(filename);
+        let doc_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+    <w:body><w:p><w:r><w:t>Kính gửi {{ho_ten}}, Mã: {{ma_nv}}</w:t></w:r></w:p></w:body>
+</w:document>"#;
+        let name = "word/document.xml";
+        let mut zip = Vec::new();
+        zip.extend_from_slice(b"PK\x03\x04");
+        zip.extend_from_slice(&20u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes()); // method 0 (stored)
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u32.to_le_bytes());
+        zip.extend_from_slice(&(doc_xml.len() as u32).to_le_bytes());
+        zip.extend_from_slice(&(doc_xml.len() as u32).to_le_bytes());
+        zip.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(name.as_bytes());
+        zip.extend_from_slice(doc_xml.as_bytes());
+
+        fs::write(&path, zip).expect("write valid docx");
+        path
+    }
+
+    /// Tạo tệp Excel .xlsx hợp lệ
+    pub fn create_valid_xlsx(&self, filename: &str) -> PathBuf {
+        let path = self.temp_dir.path().join(filename);
+        let sheet_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    <sheetProtection sheet="1" password="123"/>
+    <sheetData/>
+</worksheet>"#;
+        let name = "xl/worksheets/sheet1.xml";
+        let mut zip = Vec::new();
+        zip.extend_from_slice(b"PK\x03\x04");
+        zip.extend_from_slice(&20u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(&0u32.to_le_bytes());
+        zip.extend_from_slice(&(sheet_xml.len() as u32).to_le_bytes());
+        zip.extend_from_slice(&(sheet_xml.len() as u32).to_le_bytes());
+        zip.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+        zip.extend_from_slice(name.as_bytes());
+        zip.extend_from_slice(sheet_xml.as_bytes());
+
+        fs::write(&path, zip).expect("write valid xlsx");
+        path
+    }
+
     /// Thực thi công cụ qua `OfficeTool::execute`
     pub fn execute(
         &self,
