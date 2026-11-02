@@ -3,6 +3,7 @@ pub mod diff_checker_text_sheets;
 pub mod excel_cleaner_normalizer;
 pub mod excel_multi_merger;
 pub mod excel_split_by_column;
+pub mod excel_visual_joiner;
 pub mod vietnamese_font_converter;
 
 pub use data_structure_converter::{
@@ -19,5 +20,8 @@ pub use excel_multi_merger::{
 };
 pub use excel_split_by_column::{
     split_table_by_column, ExcelSplitByColumnTool, ExcelSplitOptions,
+};
+pub use excel_visual_joiner::{
+    perform_hash_join, ExcelJoinOptions, ExcelVisualJoinerTool, JoinType,
 };
 pub use vietnamese_font_converter::{FontConvertOptions, VietnameseFontConverterTool};

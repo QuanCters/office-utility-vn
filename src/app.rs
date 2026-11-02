@@ -104,6 +104,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Gộp nối tiếp dòng hoặc gộp thành nhiều Sheet trong một Workbook kèm truy vết nguồn.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "excel-visual-joiner",
+        name: "Nối Trực quan Bảng tính (Join)",
+        domain: "data-lab",
+        description: "Thực hiện Hash Join (INNER, LEFT, FULL, ANTI) giữa hai bảng tính theo cột khóa.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]
