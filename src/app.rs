@@ -28,7 +28,7 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
-        slug: "salary-gross-net-tax-calc",
+        slug: "gross-net-salary-calculator",
         name: "Tính Lương Gross - Net & Thuế",
         domain: "vn-office",
         description: "Tính lương Gross sang Net và đối soát thuế TNCN, BHXH theo luật mới.",
