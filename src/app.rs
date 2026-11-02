@@ -118,6 +118,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Tính toán ma trận biến đổi cm và sắp xếp lại thứ tự trang theo thuật toán đóng sách lồng Saddle-Stitch khổ A4/A5 hoặc ghép 2-up, 4-up trên một mặt giấy.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "pdf-visual-diff",
+        name: "So sánh Đối soát 2 Bản PDF",
+        domain: "doc-suite",
+        description: "Hỗ trợ 2 chế độ: Text Diff (so sánh câu chữ) và Visual Pixel Diff (so sánh hình ảnh và tô đỏ vùng sai khác).",
+        is_pinned: false,
+    },
+
 
     ToolItem {
         slug: "image-batch-convert",
