@@ -66,26 +66,9 @@ input, textarea, .selectable-text {
 .titlebar-center {
   flex: 1;
   display: flex;
-  justify-content: center;
-}
-
-.quick-search-btn {
-  background: #1E293B;
-  border: 1px solid var(--border-color);
-  color: var(--text-muted);
-  border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.15s ease;
-}
-
-.quick-search-btn:hover {
-  background: #334155;
-  color: #FFFFFF;
+  justify-content: center;
+  height: 100%;
 }
 
 .titlebar-right {

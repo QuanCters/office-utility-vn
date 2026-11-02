@@ -1005,11 +1005,7 @@ pub fn App() -> impl IntoView {
         if ctrl_or_meta && (key == "k" || key == "K") {
             ev.prevent_default();
             ev.stop_propagation();
-            let opening = !palette_open.get();
-            if opening {
-                set_search_query.set(String::new());
-            }
-            set_palette_open.set(opening);
+            let _ = js_sys::eval("const el = document.querySelector('.sidebar-search-input'); if (el) { el.focus(); el.select(); }");
         } else if ctrl_or_meta && (key == "p" || key == "P") {
             ev.prevent_default();
             toggle_pin();
@@ -1069,14 +1065,7 @@ pub fn App() -> impl IntoView {
                     </button>
                 </div>
 
-                <div class="titlebar-center">
-                    <button class="quick-search-btn" on:click=move |_| {
-                        set_search_query.set(String::new());
-                        set_palette_open.set(true);
-                    }>
-                        <span>"🔍 Tìm nhanh công cụ hoặc mẫu Preset... (Ctrl + K)"</span>
-                    </button>
-                </div>
+                <div class="titlebar-center" data-tauri-drag-region="true"></div>
 
                 <div class="titlebar-right">
                     <button
