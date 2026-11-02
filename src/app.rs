@@ -84,6 +84,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "screenshot-beautifier",
+        name: "Làm đẹp Ảnh Chụp Màn hình",
+        domain: "media-studio",
+        description: "Kết xuất khung viền macOS/Windows sắc nét và hiệu ứng đổ bóng mềm trên nền Gradient.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "universal-file-converter-hub",
         name: "Trạm Chuyển đổi Tệp Vạn năng",
         domain: "sys-hub",
