@@ -70,10 +70,10 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
-        slug: "spreadsheet-cleanse-normalize",
+        slug: "excel-cleaner-normalizer",
         name: "Làm sạch & Chuẩn hóa Bảng tính",
         domain: "data-lab",
-        description: "Xử lý ô trống, trùng lặp và định dạng dữ liệu bảng tính.",
+        description: "Chuẩn hóa định dạng ngày tháng, viết hoa tên riêng, tách họ tên và loại bỏ dòng trùng lặp.",
         is_pinned: false,
     },
 ];

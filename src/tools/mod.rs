@@ -1,3 +1,5 @@
+pub mod excel_cleaner_normalizer_view;
 pub mod vietnamese_font_converter_view;
 
+pub use excel_cleaner_normalizer_view::ExcelCleanerNormalizerView;
 pub use vietnamese_font_converter_view::VietnameseFontConverterView;
