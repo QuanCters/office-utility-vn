@@ -704,4 +704,402 @@ input, textarea, .selectable-text {
   padding: 4px 0;
 }
 
+/* Sub-header Navigation Tabs */
+.sub-header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 18px;
+  background: #0F172A;
+  border-bottom: 1px solid #1E293B;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94A3B8;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.nav-tab-btn:hover {
+  background: #1E293B;
+  color: #E2E8F0;
+}
+
+.nav-tab-btn.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #818CF8;
+  font-weight: 600;
+}
+
+/* File Chips in Dropzone */
+.file-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #E2E8F0;
+}
+
+.file-chip-remove {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+}
+
+.file-chip-remove:hover {
+  color: #EF4444;
+}
+
+/* Archetype Form Grid */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.slider-group input[type="range"] {
+  flex: 1;
+  accent-color: #6366F1;
+}
+
+.slider-value {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #818CF8;
+  min-width: 45px;
+}
+
+/* Dual-Pane Editor for Archetype 4 */
+.dual-pane-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.pane-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pane-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94A3B8;
+  display: flex;
+  justify-content: space-between;
+}
+
+.pane-textarea {
+  width: 100%;
+  height: 160px;
+  background: #0B1120;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #F8FAFC;
+  padding: 10px 12px;
+  font-family: monospace;
+  font-size: 13px;
+  resize: vertical;
+  line-height: 1.5;
+  user-select: text !important;
+}
+
+.pane-textarea:focus {
+  outline: none;
+  border-color: #6366F1;
+}
+
+/* Financial Breakdown Table for Archetype 2 */
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.breakdown-table th {
+  text-align: left;
+  padding: 8px 12px;
+  background: #1E293B;
+  color: #94A3B8;
+  font-weight: 600;
+  border-bottom: 1px solid #334155;
+}
+
+.breakdown-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  color: #E2E8F0;
+}
+
+.breakdown-table tr.total-row td {
+  font-weight: 700;
+  color: #34D399;
+  background: rgba(16, 185, 129, 0.08);
+  border-top: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Identity Card Preview for Archetype 3 */
+.identity-preview-card {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.id-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.id-field-label {
+  font-size: 11px;
+  color: #94A3B8;
+  text-transform: uppercase;
+}
+
+.id-field-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #F8FAFC;
+}
+
+.qr-preview-box {
+  background: white;
+  padding: 14px;
+  border-radius: 8px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #0F172A;
+  margin-top: 12px;
+}
+
+/* Workflow DAG Builder */
+.workflow-workspace {
+  padding: 20px;
+  overflow-y: auto;
+  height: calc(100vh - 100px);
+}
+
+.workflow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #334155;
+}
+
+.dag-pipeline-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 16px 8px;
+}
+
+.dag-node-card {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 240px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.dag-node-card:hover {
+  border-color: #6366F1;
+  transform: translateY(-2px);
+}
+
+.dag-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.dag-node-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #F8FAFC;
+}
+
+.dag-node-ports {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.dag-port-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.dag-port-badge.in {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38BDF8;
+}
+
+.dag-port-badge.out {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+}
+
+.dag-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10B981;
+  font-size: 20px;
+  padding: 0 4px;
+}
+
+.dag-connector.invalid {
+  color: #EF4444;
+}
+
+.add-node-btn {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px dashed rgba(99, 102, 241, 0.4);
+  color: #818CF8;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.add-node-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #818CF8;
+}
+
+/* Task History View */
+.history-workspace {
+  padding: 20px;
+  overflow-y: auto;
+  height: calc(100vh - 100px);
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1E293B;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  font-size: 13px;
+}
+
+.history-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: #0F172A;
+  color: #94A3B8;
+  font-weight: 600;
+  border-bottom: 1px solid #334155;
+}
+
+.history-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+  color: #E2E8F0;
+}
+
+.history-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.history-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+}
+
+.history-badge.failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+}
+
+/* Save Preset Dialog */
+.preset-modal {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  width: 420px;
+  padding: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
 
