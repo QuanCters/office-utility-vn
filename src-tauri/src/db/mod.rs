@@ -2,7 +2,7 @@ use std::path::Path;
 use rusqlite::{params, Connection};
 use office_shared::{
     AppPreferenceRecord, CommandError, TaskHistoryRecord, ToolPreset, ToolSettingRecord,
-    WorkflowDag,
+    UpdaterPreference, WorkflowDag,
 };
 
 pub const SCHEMA_SQL: &str = r#"
@@ -558,6 +558,28 @@ pub fn set_app_preference(
     Ok(())
 }
 
+pub fn get_updater_preference(conn: &Connection) -> Result<UpdaterPreference, CommandError> {
+    if let Some(record) = get_app_preference(conn, "updater_preference")? {
+        serde_json::from_str::<UpdaterPreference>(&record.value_json).map_err(|e| {
+            CommandError::DatabaseError {
+                details: format!("Không thể phân giải JSON cấu hình updater: {e}"),
+            }
+        })
+    } else {
+        Ok(UpdaterPreference::default())
+    }
+}
+
+pub fn save_updater_preference(
+    conn: &Connection,
+    pref: &UpdaterPreference,
+) -> Result<(), CommandError> {
+    let json_str = serde_json::to_string(pref).map_err(|e| CommandError::DatabaseError {
+        details: format!("Không thể tuần tự hóa UpdaterPreference: {e}"),
+    })?;
+    set_app_preference(conn, "updater_preference", &json_str)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,5 +691,24 @@ mod tests {
         let workflows = get_all_workflows(&conn).unwrap();
         assert_eq!(workflows.len(), 1);
         assert_eq!(workflows[0].name, "Chuỗi xử lý văn phòng");
+    }
+
+    #[test]
+    fn test_updater_preference_persistence() {
+        let conn = init_in_memory().unwrap();
+        let pref = get_updater_preference(&conn).unwrap();
+        assert_eq!(pref.skipped_version, None);
+
+        let updated = UpdaterPreference {
+            skipped_version: Some("v0.2.0".to_string()),
+            remind_later_until: Some("2026-11-03T15:00:00Z".to_string()),
+            last_checked_at: Some("2026-11-02T15:00:00Z".to_string()),
+        };
+        save_updater_preference(&conn, &updated).unwrap();
+
+        let loaded = get_updater_preference(&conn).unwrap();
+        assert_eq!(loaded.skipped_version.as_deref(), Some("v0.2.0"));
+        assert_eq!(loaded.remind_later_until.as_deref(), Some("2026-11-03T15:00:00Z"));
+        assert_eq!(loaded.last_checked_at.as_deref(), Some("2026-11-02T15:00:00Z"));
     }
 }

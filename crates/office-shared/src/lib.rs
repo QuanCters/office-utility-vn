@@ -165,3 +165,21 @@ pub struct AddonStatusResponse {
     pub local_path: Option<String>,
     pub size_mb: f32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct UpdaterPreference {
+    pub skipped_version: Option<String>,
+    pub remind_later_until: Option<String>,
+    pub last_checked_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateCheckResponse {
+    pub has_update: bool,
+    pub current_version: String,
+    pub latest_version: String,
+    pub release_notes: Option<String>,
+    pub release_date: Option<String>,
+    pub should_prompt: bool,
+}
+
