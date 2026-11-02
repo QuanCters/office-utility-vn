@@ -35,7 +35,7 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
-        slug: "vietqr-napas-generator",
+        slug: "vietqr-napas247-generator",
         name: "Tạo Mã VietQR Napas247",
         domain: "vn-office",
         description: "Tạo mã QR thanh toán Napas247 chuẩn EMVCo kèm logo ngân hàng.",
