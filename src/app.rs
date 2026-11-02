@@ -91,6 +91,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "doc-scanner-perspective",
+        name: "Phẳng hóa Tài liệu Chụp Nghiêng",
+        domain: "media-studio",
+        description: "Nắn phẳng góc nghiêng 4 điểm phối cảnh và tăng tương phản chữ đen trên nền trắng.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "universal-file-converter-hub",
         name: "Trạm Chuyển đổi Tệp Vạn năng",
         domain: "sys-hub",
