@@ -477,10 +477,11 @@ input, textarea, .selectable-text {
   margin-bottom: 4px;
 }
 
-.palette-item-badge.recent {
-  background: rgba(56, 189, 248, 0.2);
-  color: #38BDF8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+.palette-item-badge.recent,
+.palette-item-badge.pinned {
+  background: rgba(168, 85, 247, 0.2);
+  color: #C084FC;
+  border: 1px solid rgba(168, 85, 247, 0.4);
   font-weight: 600;
 }
 

@@ -23,21 +23,20 @@ pub const DOMAIN_GROUPS: &[DomainMeta] = &[
 ];
 
 #[component]
-pub fn Sidebar<FSelect, FNav, FToggleFav>(
+pub fn Sidebar<FSelect, FNav, FTogglePin>(
     current_slug: ReadSignal<String>,
     is_home_active: Signal<bool>,
     is_workflow_active: Signal<bool>,
     is_history_active: Signal<bool>,
-    favorite_slugs: ReadSignal<Vec<String>>,
-    recent_slugs: ReadSignal<Vec<String>>,
+    pinned_slugs: ReadSignal<Vec<String>>,
     on_select_tool: FSelect,
     on_navigate: FNav,
-    on_toggle_favorite: FToggleFav,
+    on_toggle_pin: FTogglePin,
 ) -> impl IntoView
 where
     FSelect: Fn(String) + Send + Sync + Copy + 'static,
     FNav: Fn(SidebarDestination) + Send + Sync + Copy + 'static,
-    FToggleFav: Fn(String) + Send + Sync + Copy + 'static,
+    FTogglePin: Fn(String) + Send + Sync + Copy + 'static,
 {
     let (is_collapsed, set_is_collapsed) = signal(false);
     let (search_query, set_search_query) = signal(String::new());
@@ -163,9 +162,9 @@ where
                                                 <div>
                                                     { results.into_iter().map(|tool| {
                                                         let s = tool.slug.to_string();
-                                                        let s_fav = tool.slug.to_string();
+                                                        let s_pin = tool.slug.to_string();
                                                         let is_cur = current_slug.get() == tool.slug;
-                                                        let is_fav = favorite_slugs.get().contains(&s_fav);
+                                                        let is_pin = pinned_slugs.get().contains(&s_pin);
                                                         view! {
                                                             <div class=if is_cur { "sidebar-tool-item active" } else { "sidebar-tool-item" }>
                                                                 <button
@@ -177,11 +176,11 @@ where
                                                                     <span class="sidebar-tool-label">{tool.name}</span>
                                                                 </button>
                                                                 <button
-                                                                    class=if is_fav { "sidebar-fav-btn active" } else { "sidebar-fav-btn" }
-                                                                    title=if is_fav { "Bỏ yêu thích" } else { "Thêm vào yêu thích" }
-                                                                    on:click=move |_| on_toggle_favorite(s_fav.clone())
+                                                                    class=if is_pin { "sidebar-fav-btn active" } else { "sidebar-fav-btn" }
+                                                                    title=if is_pin { "Bỏ ghim" } else { "Ghim công cụ" }
+                                                                    on:click=move |_| on_toggle_pin(s_pin.clone())
                                                                 >
-                                                                    "★"
+                                                                    "📌"
                                                                 </button>
                                                             </div>
                                                         }
@@ -194,25 +193,25 @@ where
                             </div>
                         }.into_any()
                     } else {
-                        // Chế độ phân cấp tiêu chuẩn: Yêu thích, Gần đây, 5 Domain
+                        // Chế độ phân cấp tiêu chuẩn: Đã ghim, 5 Domain
                         view! {
                             <div>
-                                // 1. Section: Yêu thích (Favorites)
+                                // 1. Section: Đã ghim (Pinned)
                                 { move || {
-                                    let favs = favorite_slugs.get();
-                                    if favs.is_empty() {
+                                    let pinned = pinned_slugs.get();
+                                    if pinned.is_empty() {
                                         view! { <div></div> }.into_any()
                                     } else {
                                         view! {
                                             <div class="sidebar-section">
                                                 <div class="sidebar-section-header">
-                                                    <span>"★ YÊU THÍCH"</span>
-                                                    <span class="sidebar-badge">{favs.len()}</span>
+                                                    <span>"📌 ĐÃ GHIM"</span>
+                                                    <span class="sidebar-badge">{pinned.len()}</span>
                                                 </div>
                                                 <div class="sidebar-items-list">
-                                                    { favs.into_iter().filter_map(|s| find_tool(&s)).map(|tool| {
+                                                    { pinned.into_iter().filter_map(|s| find_tool(&s)).map(|tool| {
                                                         let s_tool = tool.slug.to_string();
-                                                        let s_fav = tool.slug.to_string();
+                                                        let s_pin = tool.slug.to_string();
                                                         let is_cur = current_slug.get() == tool.slug;
                                                         view! {
                                                             <div class=if is_cur { "sidebar-tool-item active" } else { "sidebar-tool-item" }>
@@ -221,50 +220,15 @@ where
                                                                     title=tool.description
                                                                     on:click=move |_| on_select_tool(s_tool.clone())
                                                                 >
-                                                                    <span class="tool-bullet" style="color: #F59E0B;">"★"</span>
+                                                                    <span class="tool-bullet" style="color: #A855F7;">"📌"</span>
                                                                     <span class="sidebar-tool-label">{tool.name}</span>
                                                                 </button>
                                                                 <button
                                                                     class="sidebar-fav-btn active"
-                                                                    title="Bỏ yêu thích"
-                                                                    on:click=move |_| on_toggle_favorite(s_fav.clone())
+                                                                    title="Bỏ ghim"
+                                                                    on:click=move |_| on_toggle_pin(s_pin.clone())
                                                                 >
                                                                     "✕"
-                                                                </button>
-                                                            </div>
-                                                        }
-                                                    }).collect_view() }
-                                                </div>
-                                            </div>
-                                        }.into_any()
-                                    }
-                                }}
-
-                                // 2. Section: Vừa dùng gần đây (Recents)
-                                { move || {
-                                    let recents = recent_slugs.get();
-                                    if recents.is_empty() {
-                                        view! { <div></div> }.into_any()
-                                    } else {
-                                        view! {
-                                            <div class="sidebar-section">
-                                                <div class="sidebar-section-header">
-                                                    <span>"🕒 GẦN ĐÂY"</span>
-                                                    <span class="sidebar-badge">{recents.len().min(5)}</span>
-                                                </div>
-                                                <div class="sidebar-items-list">
-                                                    { recents.into_iter().take(5).filter_map(|s| find_tool(&s)).map(|tool| {
-                                                        let s_tool = tool.slug.to_string();
-                                                        let is_cur = current_slug.get() == tool.slug;
-                                                        view! {
-                                                            <div class=if is_cur { "sidebar-tool-item active" } else { "sidebar-tool-item" }>
-                                                                <button
-                                                                    class="sidebar-tool-name-btn"
-                                                                    title=tool.description
-                                                                    on:click=move |_| on_select_tool(s_tool.clone())
-                                                                >
-                                                                    <span class="tool-bullet" style="color: #38BDF8;">"•"</span>
-                                                                    <span class="sidebar-tool-label">{tool.name}</span>
                                                                 </button>
                                                             </div>
                                                         }
@@ -312,9 +276,9 @@ where
                                                                 <div class="sidebar-domain-items">
                                                                     { tools_copy.into_iter().map(|tool| {
                                                                         let s_tool = tool.slug.to_string();
-                                                                        let s_fav = tool.slug.to_string();
+                                                                        let s_pin = tool.slug.to_string();
                                                                         let is_cur = current_slug.get() == tool.slug;
-                                                                        let is_fav = favorite_slugs.get().contains(&s_fav);
+                                                                        let is_pin = pinned_slugs.get().contains(&s_pin);
                                                                         view! {
                                                                             <div class=if is_cur { "sidebar-tool-item active" } else { "sidebar-tool-item" }>
                                                                                 <button
@@ -326,11 +290,11 @@ where
                                                                                     <span class="sidebar-tool-label">{tool.name}</span>
                                                                                 </button>
                                                                                 <button
-                                                                                    class=if is_fav { "sidebar-fav-btn active" } else { "sidebar-fav-btn" }
-                                                                                    title=if is_fav { "Bỏ yêu thích" } else { "Thêm vào yêu thích" }
-                                                                                    on:click=move |_| on_toggle_favorite(s_fav.clone())
+                                                                                    class=if is_pin { "sidebar-fav-btn active" } else { "sidebar-fav-btn" }
+                                                                                    title=if is_pin { "Bỏ ghim" } else { "Ghim công cụ" }
+                                                                                    on:click=move |_| on_toggle_pin(s_pin.clone())
                                                                                 >
-                                                                                    "★"
+                                                                                    "📌"
                                                                                 </button>
                                                                             </div>
                                                                         }

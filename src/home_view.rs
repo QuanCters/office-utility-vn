@@ -3,8 +3,7 @@ use crate::app::{ToolItem, ALL_TOOLS};
 
 #[component]
 pub fn HomeView<FSelect>(
-    recent_slugs: ReadSignal<Vec<String>>,
-    favorite_slugs: ReadSignal<Vec<String>>,
+    pinned_slugs: ReadSignal<Vec<String>>,
     on_select_tool: FSelect,
 ) -> impl IntoView
 where
@@ -14,25 +13,21 @@ where
         ALL_TOOLS.iter().find(|t| t.slug == slug).cloned()
     };
 
-    let resume_tools = move || {
-        let recents = recent_slugs.get();
-        if !recents.is_empty() {
-            recents
+    let pinned_tools = move || {
+        let pinned = pinned_slugs.get();
+        if !pinned.is_empty() {
+            pinned
                 .into_iter()
                 .take(4)
                 .filter_map(|s| find_tool(&s))
                 .collect::<Vec<ToolItem>>()
         } else {
-            let favs = favorite_slugs.get();
-            if !favs.is_empty() {
-                favs
-                    .into_iter()
-                    .take(4)
-                    .filter_map(|s| find_tool(&s))
-                    .collect::<Vec<ToolItem>>()
-            } else {
-                ALL_TOOLS.iter().take(4).cloned().collect::<Vec<ToolItem>>()
-            }
+            ALL_TOOLS
+                .iter()
+                .filter(|t| t.is_pinned)
+                .take(4)
+                .cloned()
+                .collect::<Vec<ToolItem>>()
         }
     };
 
@@ -51,21 +46,21 @@ where
                 </p>
             </div>
 
-            // Section 1: Tiếp tục công việc (Resume Cards)
+            // Section 1: Công cụ đã ghim (Pinned Cards)
             <div class="home-section">
                 <div class="home-section-header">
-                    <span class="home-section-title">"⚡ TIẾP TỤC CÔNG VIỆC NHANH"</span>
-                    <span class="home-section-sub">"Công cụ bạn vừa sử dụng gần đây"</span>
+                    <span class="home-section-title">"📌 CÔNG CỤ ĐÃ GHIM"</span>
+                    <span class="home-section-sub">"Truy cập nhanh các tiện ích bạn đã đánh dấu ưu tiên"</span>
                 </div>
                 <div class="home-cards-grid">
                     { move || {
-                        let tools = resume_tools();
+                        let tools = pinned_tools();
                         tools.into_iter().map(|tool| {
                             let slug = tool.slug.to_string();
                             view! {
                                 <div class="home-tool-card" on:click=move |_| on_select_tool(slug.clone())>
                                     <div class="home-card-top">
-                                        <span class="home-card-icon">"🛠️"</span>
+                                        <span class="home-card-icon">"📌"</span>
                                         <span class="home-card-domain-badge">{tool.domain}</span>
                                     </div>
                                     <div class="home-card-name">{tool.name}</div>

@@ -689,56 +689,45 @@ pub fn App() -> impl IntoView {
         });
     };
 
-    // Trạng thái công cụ vừa chọn gần đây (MRU - Most Recently Used)
-    let (recent_tool_slugs, set_recent_tool_slugs) = signal(crate::recent_tools::load_recent_from_storage());
+    // Trạng thái công cụ đã ghim (Pinned Tools)
+    let (pinned_slugs, set_pinned_slugs) = signal(crate::favorite_tools::load_favorites_from_storage());
 
-    // Trạng thái công cụ yêu thích (Favorites)
-    let (favorite_slugs, set_favorite_slugs) = signal(crate::favorite_tools::load_favorites_from_storage());
-
-    let toggle_favorite = move |slug: String| {
-        let updated = crate::favorite_tools::toggle_favorite(&favorite_slugs.get(), &slug);
+    let toggle_pin_tool = move |slug: String| {
+        let updated = crate::favorite_tools::toggle_favorite(&pinned_slugs.get(), &slug);
         crate::favorite_tools::save_favorites_to_storage(&updated);
-        set_favorite_slugs.set(updated);
+        set_pinned_slugs.set(updated);
     };
 
     let is_home_active = Signal::derive(move || active_view.get() == AppView::Home);
     let is_workflow_active = Signal::derive(move || active_view.get() == AppView::WorkflowDag);
     let is_history_active = Signal::derive(move || active_view.get() == AppView::History);
 
-    // Hàm chọn công cụ dùng chung: cập nhật slug, lưu vết MRU vào storage, đóng palette
+    // Hàm chọn công cụ dùng chung: cập nhật slug, đóng palette, chuyển sang Tool view
     let select_tool = move |slug: String| {
         set_current_slug.set(slug.clone());
-        let updated = crate::recent_tools::update_recent_list(
-            &recent_tool_slugs.get(),
-            &slug,
-            crate::recent_tools::DEFAULT_MAX_RECENT_TOOLS,
-        );
-        crate::recent_tools::save_recent_to_storage(&updated);
-        set_recent_tool_slugs.set(updated);
         set_palette_open.set(false);
         set_active_view.set(AppView::Tool);
         load_presets_for_current_tool();
     };
 
-    // Danh sách ToolItem của các công cụ gần đây theo thứ tự MRU (tối đa 5 công cụ)
-    let recent_tool_items = move || {
-        let slugs = recent_tool_slugs.get();
+    // Danh sách ToolItem của các công cụ đã ghim
+    let pinned_tool_items = move || {
+        let slugs = pinned_slugs.get();
         let mut items = Vec::new();
-        for s in slugs.iter().take(crate::recent_tools::DEFAULT_MAX_RECENT_TOOLS) {
-            if let Some(tool) = ALL_TOOLS.iter().find(|t| t.slug == s) {
+        for s in slugs.iter() {
+            if let Some(tool) = ALL_TOOLS.iter().find(|t| t.slug == s.as_str()) {
                 items.push(tool.clone());
             }
         }
         items
     };
 
-    // Danh sách các công cụ còn lại (chưa nằm trong danh sách gần đây)
-    let non_recent_tools = move || {
-        let recent_items = recent_tool_items();
-        let recent_slugs: Vec<&'static str> = recent_items.iter().map(|t| t.slug).collect();
+    // Danh sách các công cụ còn lại (chưa nằm trong danh sách đã ghim)
+    let non_pinned_tools = move || {
+        let slugs = pinned_slugs.get();
         ALL_TOOLS
             .iter()
-            .filter(|t| !recent_slugs.contains(&t.slug))
+            .filter(|t| !slugs.contains(&t.slug.to_string()))
             .cloned()
             .collect::<Vec<_>>()
     };
@@ -1068,13 +1057,6 @@ pub fn App() -> impl IntoView {
                 <div class="titlebar-center" data-tauri-drag-region="true"></div>
 
                 <div class="titlebar-right">
-                    <button
-                        class=move || if is_always_on_top.get() { "pin-btn pinned" } else { "pin-btn" }
-                        on:click=move |_| toggle_pin()
-                        title="Ghim cửa sổ nổi Always-on-Top (Ctrl + P)"
-                    >
-                        { move || if is_always_on_top.get() { "📌 Đã ghim" } else { "📌 Ghim" } }
-                    </button>
                     <button class="window-control-btn" title="Thu nhỏ (Minimize)" on:click=move |_| minimize_win()>"🗕"</button>
                     <button class="window-control-btn" title="Phóng to (Maximize)" on:click=move |_| toggle_maximize_win()>"🗖"</button>
                     <button class="window-control-btn close" title="Đóng (Close)" on:click=move |_| close_win()>"✕"</button>
@@ -1087,19 +1069,17 @@ pub fn App() -> impl IntoView {
                     is_home_active=is_home_active
                     is_workflow_active=is_workflow_active
                     is_history_active=is_history_active
-                    favorite_slugs=favorite_slugs
-                    recent_slugs=recent_tool_slugs
+                    pinned_slugs=pinned_slugs
                     on_select_tool=move |s| select_tool(s)
                     on_navigate=on_sidebar_navigate
-                    on_toggle_favorite=toggle_favorite
+                    on_toggle_pin=toggle_pin_tool
                 />
 
                 <div class="main-area">
                     { move || match active_view.get() {
                         AppView::Home => view! {
                             <crate::home_view::HomeView
-                                recent_slugs=recent_tool_slugs
-                                favorite_slugs=favorite_slugs
+                                pinned_slugs=pinned_slugs
                                 on_select_tool=move |s| select_tool(s)
                             />
                         }.into_any(),
@@ -1989,11 +1969,11 @@ pub fn App() -> impl IntoView {
                             <div class="palette-list">
                                 { move || {
                                     let q = search_query.get().trim().to_string();
-                                    let recents = recent_tool_items();
-                                    let recent_slugs = recent_tool_slugs.get();
+                                    let pinned = pinned_tool_items();
+                                    let pinned_list = pinned_slugs.get();
 
                                     if q.is_empty() {
-                                        if recents.is_empty() {
+                                        if pinned.is_empty() {
                                             view! {
                                                 <div>
                                                     <div class="palette-section-header">
@@ -2020,15 +2000,15 @@ pub fn App() -> impl IntoView {
                                                 </div>
                                             }.into_any()
                                         } else {
-                                            let remaining = non_recent_tools();
+                                            let remaining = non_pinned_tools();
                                             view! {
                                                 <div>
                                                     <div class="palette-section-header">
-                                                        <span>"🕒 CÔNG CỤ VỪA CHỌN GẦN ĐÂY"</span>
+                                                        <span>"📌 CÔNG CỤ ĐÃ GHIM"</span>
                                                         <span style="font-size: 10px; opacity: 0.7;">"Ưu tiên gợi ý"</span>
                                                     </div>
                                                     {
-                                                        recents.into_iter().map(|tool| {
+                                                        pinned.into_iter().map(|tool| {
                                                             let slug_copy = tool.slug.to_string();
                                                             view! {
                                                                 <div
@@ -2038,7 +2018,7 @@ pub fn App() -> impl IntoView {
                                                                     <div>
                                                                         <div style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
                                                                             <span>{tool.name}</span>
-                                                                            <span class="palette-item-badge recent">"🕒 Gần đây"</span>
+                                                                            <span class="palette-item-badge pinned">"📌 Đã ghim"</span>
                                                                         </div>
                                                                         <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
                                                                     </div>
@@ -2049,7 +2029,7 @@ pub fn App() -> impl IntoView {
                                                     }
 
                                                     <div class="palette-section-header" style="margin-top: 10px;">
-                                                        <span>"📌 TẤT CẢ CÔNG CỤ KHÁC"</span>
+                                                        <span>"🛠️ CÁC CÔNG CỤ KHÁC"</span>
                                                         <span style="font-size: 10px; opacity: 0.7;">{format!("{} công cụ", remaining.len())}</span>
                                                     </div>
                                                     {
@@ -2092,7 +2072,7 @@ pub fn App() -> impl IntoView {
                                                     {
                                                         filtered.into_iter().map(|tool| {
                                                             let slug_copy = tool.slug.to_string();
-                                                            let is_recent = recent_slugs.contains(&slug_copy);
+                                                            let is_pinned = pinned_list.contains(&slug_copy);
                                                             view! {
                                                                 <div
                                                                     class="palette-item"
@@ -2101,8 +2081,8 @@ pub fn App() -> impl IntoView {
                                                                     <div>
                                                                         <div style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
                                                                             <span>{tool.name}</span>
-                                                                            {if is_recent {
-                                                                                view! { <span class="palette-item-badge recent">"🕒 Gần đây"</span> }.into_any()
+                                                                            {if is_pinned {
+                                                                                view! { <span class="palette-item-badge pinned">"📌 Đã ghim"</span> }.into_any()
                                                                             } else {
                                                                                 view! { <span></span> }.into_any()
                                                                             }}
