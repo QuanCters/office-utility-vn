@@ -5,6 +5,7 @@ pub mod excel_multi_merger;
 pub mod excel_sheet_unlocker;
 pub mod excel_split_by_column;
 pub mod excel_visual_joiner;
+pub mod list_set_operations;
 pub mod vietnamese_font_converter;
 
 pub use data_structure_converter::{
@@ -27,5 +28,8 @@ pub use excel_split_by_column::{
 };
 pub use excel_visual_joiner::{
     perform_hash_join, ExcelJoinOptions, ExcelVisualJoinerTool, JoinType,
+};
+pub use list_set_operations::{
+    compute_set_operation, ListSetOperationsTool, ListSetOptions, SetOperation,
 };
 pub use vietnamese_font_converter::{FontConvertOptions, VietnameseFontConverterTool};

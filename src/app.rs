@@ -118,6 +118,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Loại bỏ thẻ khóa bảo vệ sheetProtection trong OpenXML để cho phép chỉnh sửa toàn diện.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "list-set-operations",
+        name: "Phép toán Tập hợp Danh sách",
+        domain: "data-lab",
+        description: "Thực hiện phép toán tập hợp giao, hợp, hiệu và hiệu đối xứng cho các danh sách dòng.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]
