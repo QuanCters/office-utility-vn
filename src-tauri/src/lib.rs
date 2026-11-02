@@ -58,7 +58,11 @@ pub fn run() {
             commands::get_tool_presets,
             commands::save_tool_preset,
             commands::delete_tool_preset,
-            commands::toggle_always_on_top
+            commands::toggle_always_on_top,
+            // Lệnh cập nhật ứng dụng (Updater Lifecycle)
+            commands::check_app_update,
+            commands::install_app_update,
+            commands::set_update_action
         ])
         .run(tauri::generate_context!())
         .expect("Lỗi khởi chạy ứng dụng desktop Office Utility VN");

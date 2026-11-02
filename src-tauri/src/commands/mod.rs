@@ -9,6 +9,9 @@ use office_shared::{
 use office_engine::vn_office::number_to_words::VietnameseNumberToWordsTool;
 use office_engine::OfficeTool;
 
+pub mod updater;
+pub use updater::*;
+
 use crate::db;
 use crate::state::AppState;
 
