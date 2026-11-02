@@ -91,6 +91,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-metadata-scrubber",
+        name: "Tẩy sạch Metadata ẩn PDF",
+        domain: "doc-suite",
+        description: "Xóa sạch Trailer Info và luồng XML metadata XMP bảo mật danh tính tác giả.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
