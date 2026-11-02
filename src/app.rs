@@ -97,6 +97,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Phân nhóm dữ liệu theo giá trị của cột chỉ định và xuất thành các file riêng biệt.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "excel-multi-merger",
+        name: "Gộp Nhiều File Excel / Sheet",
+        domain: "data-lab",
+        description: "Gộp nối tiếp dòng hoặc gộp thành nhiều Sheet trong một Workbook kèm truy vết nguồn.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]
