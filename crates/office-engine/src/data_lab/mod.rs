@@ -1,3 +1,4 @@
+pub mod base64_file_codec;
 pub mod data_structure_converter;
 pub mod diff_checker_text_sheets;
 pub mod encoding_mojibake_fixer;
@@ -10,6 +11,11 @@ pub mod list_set_operations;
 pub mod sql_formatter_linter;
 pub mod text_pii_anonymizer;
 pub mod vietnamese_font_converter;
+
+pub use base64_file_codec::{
+    stream_decode_base64, stream_encode_to_base64, Base64CodecOptions, Base64FileCodecTool,
+    CodecMode,
+};
 
 pub use data_structure_converter::{
     DataConverterOptions, DataStructureConverterTool,

@@ -146,6 +146,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Kiểm tra lỗi cú pháp AST bằng linter và căn chỉnh thụt lề, viết hoa từ khóa theo các phương ngữ SQL.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "base64-file-codec",
+        name: "Mã hóa / Giải mã Base64 cho File",
+        domain: "data-lab",
+        description: "Mã hóa/giải mã theo luồng (Streaming Base64 Codec) giữa tệp nhị phân và chuỗi Base64 / Data URI mà không làm tăng đột biến bộ nhớ RAM.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]

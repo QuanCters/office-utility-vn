@@ -1,3 +1,4 @@
+pub mod base64_file_codec_view;
 pub mod data_structure_converter_view;
 pub mod diff_checker_text_sheets_view;
 pub mod encoding_mojibake_fixer_view;
@@ -11,6 +12,7 @@ pub mod sql_formatter_linter_view;
 pub mod text_pii_anonymizer_view;
 pub mod vietnamese_font_converter_view;
 
+pub use base64_file_codec_view::Base64FileCodecView;
 pub use data_structure_converter_view::DataStructureConverterView;
 pub use diff_checker_text_sheets_view::DiffCheckerTextSheetsView;
 pub use encoding_mojibake_fixer_view::EncodingMojibakeFixerView;
