@@ -139,6 +139,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Khởi tạo và liên kết cấu trúc cây từ điển /Outlines đa cấp trong PDF Catalog trỏ trực tiếp đến Page Object ID.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "pdf-to-long-image",
+        name: "Ghép PDF thành Ảnh Dọc Dài",
+        domain: "doc-suite",
+        description: "Kết xuất từng trang PDF và ghép nối tiếp theo chiều dọc thành một ảnh dài duy nhất kèm đường phân cách trang.",
+        is_pinned: false,
+    },
+
 
 
 
