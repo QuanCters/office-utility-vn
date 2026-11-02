@@ -49,6 +49,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "vn-cccd-mst-validator",
+        name: "Kiểm tra Hợp lệ CCCD & Mã số thuế",
+        domain: "vn-office",
+        description: "Giải mã cấu trúc CCCD 12 số và kiểm tra tính hợp lệ Mã số thuế bằng Modulo 11.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "pdf-merge-split",
         name: "Ghép, Tách & Xoay trang PDF",
         domain: "doc-suite",
