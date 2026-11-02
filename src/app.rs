@@ -49,7 +49,7 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
-        slug: "image-batch-convert",
+        slug: "image-batch",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
         description: "Tối ưu hóa ảnh WebP, AVIF, JPEG đa luồng với Rayon.",
