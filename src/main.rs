@@ -1,4 +1,5 @@
 mod app;
+pub mod recent_tools;
 pub mod tools;
 
 use app::*;
