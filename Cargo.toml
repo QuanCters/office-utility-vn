@@ -15,6 +15,18 @@ serde_json = "1"
 serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1.7"
 
+[dev-dependencies]
+office-engine = { path = "crates/office-engine" }
+office-shared = { path = "crates/office-shared" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+paste = "1.0"
+
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+
 [workspace]
 members = [
     "src-tauri",
