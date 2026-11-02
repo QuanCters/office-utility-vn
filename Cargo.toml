@@ -22,6 +22,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 paste = "1.0"
+criterion = { version = "0.5", default-features = false }
+rayon = "1.10"
+rusqlite = { version = "0.32", features = ["bundled"] }
+flate2 = "1.0"
+crc32fast = "1.4"
+
+[[bench]]
+name = "performance_benchmarks"
+harness = false
 
 [[test]]
 name = "e2e"

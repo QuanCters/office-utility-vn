@@ -9,6 +9,7 @@ pub mod tier1_feature_coverage;
 pub mod tier2_boundary_corner;
 pub mod tier3_pairwise_combinations;
 pub mod tier4_real_world_scenarios;
+pub mod desktop_webdriver;
 
 #[test]
 fn test_e2e_suite_inventory_verification() {
