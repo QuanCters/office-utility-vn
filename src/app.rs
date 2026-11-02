@@ -56,6 +56,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-to-markdown",
+        name: "Chuyển đổi PDF sang Markdown",
+        domain: "doc-suite",
+        description: "Bóc tách luồng văn bản, font size và tái tạo bảng biểu sang cú pháp Markdown.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
