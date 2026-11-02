@@ -8,3 +8,5 @@ pub mod pdf_page_number_header_view;
 pub mod pdf_metadata_scrubber_view;
 pub mod pdf_flatten_forms_view;
 pub mod pdf_crop_margin_view;
+pub mod pdf_booklet_imposition_view;
+

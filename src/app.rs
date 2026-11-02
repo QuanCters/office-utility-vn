@@ -112,6 +112,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-booklet-imposition",
+        name: "Dàn trang In Sách Gấp đôi & N-up",
+        domain: "doc-suite",
+        description: "Tính toán ma trận biến đổi cm và sắp xếp lại thứ tự trang theo thuật toán đóng sách lồng Saddle-Stitch khổ A4/A5 hoặc ghép 2-up, 4-up trên một mặt giấy.",
+        is_pinned: false,
+    },
+
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
