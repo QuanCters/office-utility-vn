@@ -56,11 +56,28 @@ macro_rules! define_media_studio_tier2_boundary_tests {
             #[test]
             fn [<test_ $slug _midflight_cancellation>]() {
                 let harness = TestHarness::new();
-                let img = harness.create_valid_bmp(concat!($slug_str, "_midcancel.bmp"), 64, 64);
+                let input_paths = match $slug_str {
+                    "audio-silence-trimmer" => vec![
+                        harness.create_valid_wav(concat!($slug_str, "_mid1.wav")).to_string_lossy().to_string(),
+                        harness.create_valid_wav(concat!($slug_str, "_mid2.wav")).to_string_lossy().to_string(),
+                    ],
+                    "video-to-gif-webp" => vec![
+                        harness.create_valid_mp4(concat!($slug_str, "_mid1.mp4")).to_string_lossy().to_string(),
+                        harness.create_valid_mp4(concat!($slug_str, "_mid2.mp4")).to_string_lossy().to_string(),
+                    ],
+                    "image-exif-inspector" => vec![
+                        harness.create_valid_png(concat!($slug_str, "_mid1.png")).to_string_lossy().to_string(),
+                        harness.create_valid_png(concat!($slug_str, "_mid2.png")).to_string_lossy().to_string(),
+                    ],
+                    _ => vec![
+                        harness.create_valid_bmp(concat!($slug_str, "_mid1.bmp"), 64, 64).to_string_lossy().to_string(),
+                        harness.create_valid_bmp(concat!($slug_str, "_mid2.bmp"), 64, 64).to_string_lossy().to_string(),
+                    ],
+                };
                 let req = DispatchTaskRequest {
                     task_id: format!("{}-cancel-mid", $slug_str),
                     tool_slug: $slug_str.to_string(),
-                    input_paths: vec![img.to_string_lossy().to_string()],
+                    input_paths,
                     output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
                     options: $valid_opts,
                 };
@@ -73,9 +90,11 @@ macro_rules! define_media_studio_tier2_boundary_tests {
                     let res = tool.execute(&req, &cancel, Some(&cb));
                     let elapsed = start.elapsed();
                     assert!(elapsed.as_millis() < 500, "Cooperative cancellation must react rapidly");
-                    if let Err(CommandError::TaskCancelled) = res {
-                        // Hủy thành công
-                    }
+                    assert!(
+                        matches!(res, Err(CommandError::TaskCancelled)),
+                        "Kỳ vọng CommandError::TaskCancelled khi bị hủy giữa chừng, nhận được: {:?}",
+                        res
+                    );
                 }
             }
 

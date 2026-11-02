@@ -137,7 +137,11 @@ fn encode_gif_lzw(indices: &[u8]) -> Vec<u8> {
 }
 
 /// Xuất chuỗi khung hình RawImage ra tệp GIF89a động
-pub fn encode_animated_gif(frames: &[RawImage], fps: u32) -> Result<Vec<u8>, CommandError> {
+pub fn encode_animated_gif(
+    frames: &[RawImage],
+    fps: u32,
+    cancel_flag: &AtomicBool,
+) -> Result<Vec<u8>, CommandError> {
     if frames.is_empty() {
         return Err(CommandError::ValidationFailed {
             reason: "Danh sách khung hình rỗng".to_string(),
@@ -181,6 +185,9 @@ pub fn encode_animated_gif(frames: &[RawImage], fps: u32) -> Result<Vec<u8>, Com
 
     // 5. Ghi từng khung hình
     for frame in frames {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err(CommandError::TaskCancelled);
+        }
         // Graphic Control Extension (8 bytes)
         out.extend_from_slice(&[0x21, 0xF9, 0x04]);
         out.push(0x04); // Packed: Không xóa khung trước (Do not dispose)
@@ -240,6 +247,7 @@ fn extract_frames_from_video(
     bytes: &[u8],
     target_fps: u32,
     max_w: Option<u32>,
+    cancel_flag: &AtomicBool,
 ) -> Result<Vec<RawImage>, CommandError> {
     validate_mp4_mov_container(bytes)?;
 
@@ -251,6 +259,9 @@ fn extract_frames_from_video(
     let mut frames = Vec::with_capacity(num_frames);
 
     for f in 0..num_frames {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err(CommandError::TaskCancelled);
+        }
         let mut pixels = Vec::with_capacity((base_w * base_h * 3) as usize);
         let progress_ratio = f as f32 / num_frames as f32;
 
@@ -369,7 +380,7 @@ impl OfficeTool for VideoToGifWebpTool {
                 }
             };
 
-            let frames = match extract_frames_from_video(&bytes, options.fps, options.max_width) {
+            let frames = match extract_frames_from_video(&bytes, options.fps, options.max_width, cancel_flag) {
                 Ok(f) => f,
                 Err(err) => {
                     if total_files == 1 {
@@ -387,7 +398,7 @@ impl OfficeTool for VideoToGifWebpTool {
                 return Err(CommandError::TaskCancelled);
             }
 
-            let out_bytes = match encode_animated_gif(&frames, options.fps) {
+            let out_bytes = match encode_animated_gif(&frames, options.fps, cancel_flag) {
                 Ok(b) => b,
                 Err(e) => {
                     if total_files == 1 {
@@ -404,6 +415,10 @@ impl OfficeTool for VideoToGifWebpTool {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
             let out_name = format!("{stem}.gif");
             let out_path = output_dir.join(out_name);
+
+            if cancel_flag.load(Ordering::Relaxed) {
+                return Err(CommandError::TaskCancelled);
+            }
 
             if let Err(e) = fs::write(&out_path, out_bytes) {
                 if total_files == 1 {
@@ -590,7 +605,8 @@ mod tests {
             height: 20000,
             pixels: vec![0; 3],
         };
-        let err = encode_animated_gif(&[huge_frame], 10).unwrap_err();
+        let cancel = AtomicBool::new(false);
+        let err = encode_animated_gif(&[huge_frame], 10, &cancel).unwrap_err();
         match err {
             CommandError::ValidationFailed { reason } => {
                 assert!(reason.contains("16384x16384"));

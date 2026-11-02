@@ -110,7 +110,7 @@ pub fn parse_zip_archive(raw: &[u8], cancel_flag: &AtomicBool) -> Result<Vec<Zip
 
         let decompressed_data = if compression == 8 {
             // Deflate decompression
-            let mut decoder = DeflateDecoder::new(comp_data);
+            let mut decoder = DeflateDecoder::new(comp_data).take(250 * 1024 * 1024);
             let mut decomp = Vec::new();
             if decoder.read_to_end(&mut decomp).is_err() {
                 comp_data.to_vec()

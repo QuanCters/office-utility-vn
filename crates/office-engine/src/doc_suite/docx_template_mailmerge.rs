@@ -209,7 +209,7 @@ fn parse_simple_zip(bytes: &[u8]) -> Result<Vec<ZipFileEntry>, CommandError> {
 
         let raw_data = &bytes[data_start..data_end];
         let uncompressed = if method == 8 {
-            let mut decoder = DeflateDecoder::new(raw_data);
+            let mut decoder = DeflateDecoder::new(raw_data).take(250 * 1024 * 1024);
             let mut out = Vec::new();
             let _ = decoder.read_to_end(&mut out);
             out
@@ -307,12 +307,15 @@ pub fn execute_mailmerge_rows(
 ) -> Result<Vec<(String, Vec<u8>)>, CommandError> {
     let base_entries = parse_simple_zip(template_docx_bytes)?;
 
-    let doc_xml_idx = base_entries
+    let (doc_xml_idx, doc_xml_entry) = base_entries
         .iter()
-        .position(|e| e.name == "word/document.xml")
-        .unwrap_or(0);
+        .enumerate()
+        .find(|(_, e)| e.name == "word/document.xml")
+        .ok_or_else(|| CommandError::ValidationFailed {
+            reason: "Tệp Word mẫu (.docx) không hợp lệ hoặc thiếu thành phần word/document.xml".to_string(),
+        })?;
 
-    let doc_xml_str = String::from_utf8_lossy(&base_entries[doc_xml_idx].data).to_string();
+    let doc_xml_str = String::from_utf8_lossy(&doc_xml_entry.data).to_string();
     let normalized_xml = normalize_xml_runs(&doc_xml_str);
 
     let mut output_docs = Vec::with_capacity(rows.len());
@@ -650,9 +653,31 @@ mod tests {
     }
 
     #[test]
+    fn test_docx_mailmerge_truncated_zip_returns_validation_error() {
+        let tool = DocxTemplateMailmergeTool;
+        let temp_dir = std::env::temp_dir().join("test_docx_mailmerge_trunc");
+        let _ = fs::create_dir_all(&temp_dir);
+        let trunc_docx = temp_dir.join("trunc.docx");
+        fs::write(&trunc_docx, b"PK\x03\x04").expect("write trunc");
+
+        let req = DispatchTaskRequest {
+            task_id: "trunc-zip-test".to_string(),
+            tool_slug: "docx-template-mailmerge".to_string(),
+            input_paths: vec![trunc_docx.to_string_lossy().to_string()],
+            output_directory: Some(temp_dir.to_string_lossy().to_string()),
+            options: serde_json::Value::Null,
+        };
+
+        let cancel_flag = AtomicBool::new(false);
+        let res = tool.execute(&req, &cancel_flag, None);
+        assert!(matches!(res, Err(CommandError::ValidationFailed { .. })));
+    }
+
+    #[test]
     fn test_docx_template_mailmerge_security_guardrails() {
         let tool = DocxTemplateMailmergeTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }
 }
+
