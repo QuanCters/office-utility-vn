@@ -16,6 +16,7 @@ pub mod pdf_to_long_image;
 pub mod pdf_grayscale_print;
 pub mod pdf_repair_corrupt;
 pub mod markdown_to_styled_pdf;
+pub mod pdf_table_extractor;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -35,6 +36,8 @@ pub use pdf_to_long_image::{LongImageFormat, PdfToLongImageOptions, PdfToLongIma
 pub use pdf_grayscale_print::{PdfGrayscaleOptions, PdfGrayscalePrintTool};
 pub use pdf_repair_corrupt::{PdfRepairCorruptTool, PdfRepairOptions};
 pub use markdown_to_styled_pdf::{MarkdownToPdfOptions, MarkdownToPdfTool};
+pub use pdf_table_extractor::{PdfTableExtractorOptions, PdfTableExtractorTool};
+
 
 
 

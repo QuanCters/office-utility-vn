@@ -167,6 +167,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Phân tích Markdown AST, kết xuất PDF chuẩn khổ in A4 với Unicode tiếng Việt, tự động ngắt trang và kẻ bảng.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "pdf-table-extractor",
+        name: "Trích xuất Bảng từ PDF ra Excel",
+        domain: "doc-suite",
+        description: "Phân tích tọa độ (x, y) cụm từ và đường kẻ vector để khôi phục bảng biểu ra file .xlsx và .csv.",
+        is_pinned: false,
+    },
+
 
 
 
