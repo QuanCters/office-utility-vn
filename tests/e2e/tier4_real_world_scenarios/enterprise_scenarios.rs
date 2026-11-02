@@ -138,11 +138,10 @@ fn scenario_2_digitized_tender_dossier_and_sanitization() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "format": "Bates {bates:06}", "bates_start": 1, "position": "bottom-right" }),
         };
-        if let Ok(resp) = bates_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = bates_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 3: Đóng dấu Watermark
@@ -154,11 +153,10 @@ fn scenario_2_digitized_tender_dossier_and_sanitization() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "watermark_text": "HỒ SƠ MẬT - KHÔNG SAO CHÉP", "opacity": 0.25 }),
         };
-        if let Ok(resp) = wm_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = wm_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 4: Tẩy sạch metadata ẩn
@@ -170,11 +168,10 @@ fn scenario_2_digitized_tender_dossier_and_sanitization() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "strip_all": true }),
         };
-        if let Ok(resp) = scrub_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = scrub_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 5: Mã hóa bảo vệ tài liệu bằng mật khẩu AES-256
@@ -222,11 +219,10 @@ fn scenario_3_omnichannel_customer_data_cleansing() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "source_encoding": "TCVN3", "target_encoding": "Unicode" }),
         };
-        if let Ok(resp) = font_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = font_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_file = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 2: Sửa lỗi hiển thị chữ Mojibake
@@ -238,11 +234,10 @@ fn scenario_3_omnichannel_customer_data_cleansing() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "expected_language": "vi" }),
         };
-        if let Ok(resp) = mojibake_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = mojibake_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_file = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 3: Làm sạch và chuẩn hóa bảng tính
@@ -254,11 +249,10 @@ fn scenario_3_omnichannel_customer_data_cleansing() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "capitalize_names": true, "normalize_dates": true }),
         };
-        if let Ok(resp) = clean_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = clean_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_file = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 4: Ẩn danh hóa dữ liệu PII
@@ -369,11 +363,10 @@ fn scenario_5_corporate_publishing_and_booklet_imposition() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "theme": "business", "embed_vietnamese_font": true }),
         };
-        if let Ok(resp) = md_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = md_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 2: Tạo Bookmark TOC
@@ -385,11 +378,10 @@ fn scenario_5_corporate_publishing_and_booklet_imposition() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "auto_generate_from_headings": true, "max_depth": 2 }),
         };
-        if let Ok(resp) = toc_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = toc_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 3: Cắt viền trắng thừa (Auto-Crop)
@@ -401,11 +393,10 @@ fn scenario_5_corporate_publishing_and_booklet_imposition() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "auto_detect_whitespace": true, "margin_padding_pt": 15 }),
         };
-        if let Ok(resp) = crop_tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = crop_tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 4: Dàn trang in sách Saddle-Stitch Booklet

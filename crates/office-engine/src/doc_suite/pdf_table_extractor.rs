@@ -71,8 +71,8 @@ pub fn parse_pdf_stream_elements(content: &str) -> (Vec<VectorLine>, Vec<TextIte
         // Check rectangle: x y w h re
         if trimmed.ends_with("re") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 5 {
-                if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
+            if parts.len() >= 5
+                && let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
                     parts[0].parse::<f32>(),
                     parts[1].parse::<f32>(),
                     parts[2].parse::<f32>(),
@@ -84,13 +84,12 @@ pub fn parse_pdf_stream_elements(content: &str) -> (Vec<VectorLine>, Vec<TextIte
                     lines.push(VectorLine { x1: x, y1: y, x2: x, y2: y + h });
                     lines.push(VectorLine { x1: x + w, y1: y, x2: x + w, y2: y + h });
                 }
-            }
         }
         // Check line move/line: x y m / l
         else if trimmed.ends_with('l') && !trimmed.ends_with("re") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 3 {
-                if let (Ok(x), Ok(y)) = (
+            if parts.len() >= 3
+                && let (Ok(x), Ok(y)) = (
                     parts[parts.len() - 3].parse::<f32>(),
                     parts[parts.len() - 2].parse::<f32>(),
                 ) {
@@ -98,44 +97,28 @@ pub fn parse_pdf_stream_elements(content: &str) -> (Vec<VectorLine>, Vec<TextIte
                     cur_x = x;
                     cur_y = y;
                 }
-            }
-        } else if trimmed.ends_with('m') {
+        } else if trimmed.ends_with('m') || trimmed.ends_with("Td") || trimmed.ends_with("TD") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 3 {
-                if let (Ok(x), Ok(y)) = (
+            if parts.len() >= 3
+                && let (Ok(x), Ok(y)) = (
                     parts[parts.len() - 3].parse::<f32>(),
                     parts[parts.len() - 2].parse::<f32>(),
                 ) {
                     cur_x = x;
                     cur_y = y;
                 }
-            }
-        }
-        // Text positioning: x y Td / TD
-        else if trimmed.ends_with("Td") || trimmed.ends_with("TD") {
-            let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 3 {
-                if let (Ok(x), Ok(y)) = (
-                    parts[parts.len() - 3].parse::<f32>(),
-                    parts[parts.len() - 2].parse::<f32>(),
-                ) {
-                    cur_x = x;
-                    cur_y = y;
-                }
-            }
         }
         // Text Matrix: a b c d e f Tm
         else if trimmed.ends_with("Tm") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 7 {
-                if let (Ok(x), Ok(y)) = (
+            if parts.len() >= 7
+                && let (Ok(x), Ok(y)) = (
                     parts[parts.len() - 3].parse::<f32>(),
                     parts[parts.len() - 2].parse::<f32>(),
                 ) {
                     cur_x = x;
                     cur_y = y;
                 }
-            }
         }
 
         // Text string: ( ... ) Tj
@@ -184,13 +167,12 @@ pub fn reconstruct_table_grid(mut texts: Vec<TextItem>) -> Vec<Vec<String>> {
     for item in texts {
         let mut added = false;
         for row in &mut rows {
-            if let Some(first) = row.first() {
-                if (first.y - item.y).abs() < 6.0 {
+            if let Some(first) = row.first()
+                && (first.y - item.y).abs() < 6.0 {
                     row.push(item.clone());
                     added = true;
                     break;
                 }
-            }
         }
         if !added {
             rows.push(vec![item]);
@@ -585,7 +567,7 @@ mod tests {
     #[test]
     fn test_pdf_table_extractor_happy_path() {
         // Phân tích tọa độ (x, y) của cụm từ và đường kẻ vector (m, l, re)
-        let tool = PdfTableExtractorTool::default();
+        let tool = PdfTableExtractorTool;
         assert_eq!(tool.slug(), "pdf-table-extractor");
 
         let temp_dir = std::env::temp_dir().join("test_table_happy");
@@ -637,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_pdf_table_extractor_invalid_magic_bytes() {
-        let tool = PdfTableExtractorTool::default();
+        let tool = PdfTableExtractorTool;
         let temp_dir = std::env::temp_dir().join("test_table_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake = temp_dir.join("fake.pdf");
@@ -658,7 +640,7 @@ mod tests {
 
     #[test]
     fn test_pdf_table_extractor_cooperative_cancellation() {
-        let tool = PdfTableExtractorTool::default();
+        let tool = PdfTableExtractorTool;
         let temp_dir = std::env::temp_dir().join("test_table_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("sample_table.pdf");
@@ -679,7 +661,7 @@ mod tests {
 
     #[test]
     fn test_pdf_table_extractor_security_guardrails() {
-        let tool = PdfTableExtractorTool::default();
+        let tool = PdfTableExtractorTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

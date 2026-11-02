@@ -95,12 +95,11 @@ fn fix_single_token(token: &str) -> String {
             break;
         }
         let raw = text_to_cp1252_or_latin1_bytes(&current);
-        if let Ok(rec) = std::str::from_utf8(&raw) {
-            if rec != current {
+        if let Ok(rec) = std::str::from_utf8(&raw)
+            && rec != current {
                 current = rec.to_string();
                 continue;
             }
-        }
         break;
     }
     current
@@ -131,12 +130,11 @@ pub fn fix_mojibake_text(corrupted: &str, cancel_flag: &AtomicBool) -> Result<St
         }
 
         let raw_bytes = text_to_cp1252_or_latin1_bytes(&whole_candidate);
-        if let Ok(recovered) = std::str::from_utf8(&raw_bytes) {
-            if recovered != whole_candidate {
+        if let Ok(recovered) = std::str::from_utf8(&raw_bytes)
+            && recovered != whole_candidate {
                 whole_candidate = recovered.to_string();
                 continue;
             }
-        }
         break;
     }
 
@@ -279,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_encoding_mojibake_fixer_happy_path() {
-        let tool = EncodingMojibakeFixerTool::default();
+        let tool = EncodingMojibakeFixerTool;
         assert_eq!(tool.slug(), "encoding-mojibake-fixer");
 
         // Kiểm thử khôi phục chuỗi 'Tiáº¿ng Viá»‡t' về 'Tiếng Việt'
@@ -300,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_encoding_mojibake_fixer_invalid_magic_bytes() {
-        let tool = EncodingMojibakeFixerTool::default();
+        let tool = EncodingMojibakeFixerTool;
         let tmp = std::env::temp_dir().join("test_mojibake_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -325,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_encoding_mojibake_fixer_cooperative_cancellation() {
-        let tool = EncodingMojibakeFixerTool::default();
+        let tool = EncodingMojibakeFixerTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-mojibake".to_string(),
             tool_slug: "encoding-mojibake-fixer".to_string(),

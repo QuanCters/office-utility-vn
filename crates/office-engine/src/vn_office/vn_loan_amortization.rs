@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_vn_loan_amortization_invalid_magic_bytes() {
-        let tool = VnLoanAmortizationTool::default();
+        let tool = VnLoanAmortizationTool;
         let bad_file = std::env::temp_dir().join("bad_magic_loan.bin");
         std::fs::write(&bad_file, [0x7F, 0x45, 0x4C, 0x46, 0x01]).ok();
 
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_vn_loan_amortization_cooperative_cancellation() {
-        let tool = VnLoanAmortizationTool::default();
+        let tool = VnLoanAmortizationTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel-loan".to_string(),
             tool_slug: "vn-loan-amortization".to_string(),
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_vn_loan_amortization_security_guardrails() {
-        let tool = VnLoanAmortizationTool::default();
+        let tool = VnLoanAmortizationTool;
         assert_eq!(tool.slug(), "vn-loan-amortization");
         assert_eq!(tool.name(), "Bảng tính Trả nợ Vay Ngân hàng");
     }

@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_vn_working_days_calc_invalid_magic_bytes() {
-        let tool = VnWorkingDaysCalcTool::default();
+        let tool = VnWorkingDaysCalcTool;
         let bad_file = std::env::temp_dir().join("bad_magic_calendar.bin");
         std::fs::write(&bad_file, [0x7F, 0x45, 0x4C, 0x46, 0x01]).ok();
 
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_vn_working_days_calc_cooperative_cancellation() {
-        let tool = VnWorkingDaysCalcTool::default();
+        let tool = VnWorkingDaysCalcTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel-calc".to_string(),
             tool_slug: "vn-working-days-calc".to_string(),
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_vn_working_days_calc_security_guardrails() {
-        let tool = VnWorkingDaysCalcTool::default();
+        let tool = VnWorkingDaysCalcTool;
         assert_eq!(tool.slug(), "vn-working-days-calc");
         assert_eq!(tool.name(), "Tính Ngày Làm việc Trừ Ngày lễ VN");
     }

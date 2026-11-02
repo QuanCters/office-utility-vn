@@ -88,14 +88,14 @@ fn parse_markdown_blocks(md: &str) -> Vec<MdBlock> {
 
         if trimmed == "---" || trimmed == "***" {
             blocks.push(MdBlock::PageBreak);
-        } else if trimmed.starts_with("### ") {
-            blocks.push(MdBlock::Header(3, trimmed[4..].to_string()));
-        } else if trimmed.starts_with("## ") {
-            blocks.push(MdBlock::Header(2, trimmed[3..].to_string()));
-        } else if trimmed.starts_with("# ") {
-            blocks.push(MdBlock::Header(1, trimmed[2..].to_string()));
-        } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-            blocks.push(MdBlock::ListItem(trimmed[2..].to_string()));
+        } else if let Some(h3) = trimmed.strip_prefix("### ") {
+            blocks.push(MdBlock::Header(3, h3.to_string()));
+        } else if let Some(h2) = trimmed.strip_prefix("## ") {
+            blocks.push(MdBlock::Header(2, h2.to_string()));
+        } else if let Some(h1) = trimmed.strip_prefix("# ") {
+            blocks.push(MdBlock::Header(1, h1.to_string()));
+        } else if let Some(item) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+            blocks.push(MdBlock::ListItem(item.to_string()));
         } else if !trimmed.is_empty() {
             blocks.push(MdBlock::Paragraph(trimmed.to_string()));
         }
@@ -498,7 +498,7 @@ mod tests {
     #[test]
     fn test_markdown_to_styled_pdf_happy_path() {
         // Phân tích Markdown AST và kết xuất trực tiếp PDF chuẩn A4
-        let tool = MarkdownToPdfTool::default();
+        let tool = MarkdownToPdfTool;
         assert_eq!(tool.slug(), "markdown-to-styled-pdf");
 
         let md_content = r#"# Quy Chuẩn Hành Chính Việt Nam
@@ -557,7 +557,7 @@ Nội dung trang 2 tự động ngắt trang.
 
     #[test]
     fn test_markdown_to_styled_pdf_invalid_magic_bytes() {
-        let tool = MarkdownToPdfTool::default();
+        let tool = MarkdownToPdfTool;
         let temp_dir = std::env::temp_dir().join("test_md_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake = temp_dir.join("fake.md");
@@ -578,7 +578,7 @@ Nội dung trang 2 tự động ngắt trang.
 
     #[test]
     fn test_markdown_to_styled_pdf_cooperative_cancellation() {
-        let tool = MarkdownToPdfTool::default();
+        let tool = MarkdownToPdfTool;
         let temp_dir = std::env::temp_dir().join("test_md_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("doc.md");
@@ -599,7 +599,7 @@ Nội dung trang 2 tự động ngắt trang.
 
     #[test]
     fn test_markdown_to_styled_pdf_security_guardrails() {
-        let tool = MarkdownToPdfTool::default();
+        let tool = MarkdownToPdfTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

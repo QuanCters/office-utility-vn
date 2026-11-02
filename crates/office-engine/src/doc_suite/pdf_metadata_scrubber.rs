@@ -98,8 +98,8 @@ impl ScrubberParsedPdf {
             let gen_str = parts.next();
             let id_str = parts.next();
 
-            if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-                if let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+            if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+                && let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                     let content_start = abs_obj_start + 4;
                     if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                         let content = raw_text[content_start..content_start + end_offset].trim().to_string();
@@ -112,7 +112,6 @@ impl ScrubberParsedPdf {
                         continue;
                     }
                 }
-            }
             search_from = abs_obj_start + 4;
         }
 
@@ -251,11 +250,10 @@ impl OfficeTool for PdfMetadataScrubberTool {
                     if Some(obj.id) == parsed.info_id {
                         continue; // Bỏ qua object Info hoàn toàn
                     }
-                    if obj.content.contains("/Author") || obj.content.contains("/Creator") || obj.content.contains("/Producer") {
-                        if obj.content.contains("/Title") || obj.content.contains("/CreationDate") {
+                    if (obj.content.contains("/Author") || obj.content.contains("/Creator") || obj.content.contains("/Producer"))
+                        && (obj.content.contains("/Title") || obj.content.contains("/CreationDate")) {
                             continue; // Bỏ qua object thông tin tài liệu
                         }
-                    }
                 }
 
                 // 2. Kiểm tra xóa XMP Metadata stream khỏi Catalog và Objects
@@ -278,15 +276,14 @@ impl OfficeTool for PdfMetadataScrubberTool {
                 }
 
                 // Loại bỏ PieceInfo hoặc dấu vết phần mềm biên soạn
-                if content.contains("/PieceInfo") {
-                    if let Some(p_pos) = content.find("/PieceInfo") {
+                if content.contains("/PieceInfo")
+                    && let Some(p_pos) = content.find("/PieceInfo") {
                         let rest = &content[p_pos + 10..];
                         if let Some(r_pos) = rest.find('R') {
                             let end_idx = p_pos + 10 + r_pos + 1;
                             content.replace_range(p_pos..end_idx, "");
                         }
                     }
-                }
 
                 scrubbed_objects.push(ScrubberPdfObj {
                     id: obj.id,
@@ -366,7 +363,7 @@ trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n500\n%%EOF\n";
 
     #[test]
     fn test_pdf_metadata_scrubber_happy_path() {
-        let tool = PdfMetadataScrubberTool::default();
+        let tool = PdfMetadataScrubberTool;
         let tmp = std::env::temp_dir().join("test_scrub_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -396,7 +393,7 @@ trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n500\n%%EOF\n";
 
     #[test]
     fn test_pdf_metadata_scrubber_edge_case() {
-        let tool = PdfMetadataScrubberTool::default();
+        let tool = PdfMetadataScrubberTool;
         let tmp = std::env::temp_dir().join("test_scrub_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -424,7 +421,7 @@ trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n500\n%%EOF\n";
 
     #[test]
     fn test_pdf_metadata_scrubber_invalid_magic_bytes() {
-        let tool = PdfMetadataScrubberTool::default();
+        let tool = PdfMetadataScrubberTool;
         let tmp = std::env::temp_dir().join("test_scrub_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -451,7 +448,7 @@ trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n500\n%%EOF\n";
 
     #[test]
     fn test_pdf_metadata_scrubber_cooperative_cancellation() {
-        let tool = PdfMetadataScrubberTool::default();
+        let tool = PdfMetadataScrubberTool;
         let tmp = std::env::temp_dir().join("test_scrub_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -473,7 +470,7 @@ trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n500\n%%EOF\n";
 
     #[test]
     fn test_pdf_metadata_scrubber_security_guardrails() {
-        let tool = PdfMetadataScrubberTool::default();
+        let tool = PdfMetadataScrubberTool;
         assert_eq!(tool.slug(), "pdf-metadata-scrubber");
         assert_eq!(tool.name(), "Tẩy sạch Metadata ẩn PDF");
     }

@@ -108,11 +108,10 @@ impl ParsedPdf {
 
         if let Some(enc_idx) = raw_text.find("/Encrypt") {
             let snippet = &raw_text[enc_idx..];
-            if let Some(dict_start) = snippet.find("<<") {
-                if let Some(dict_end) = snippet[dict_start..].find(">>") {
+            if let Some(dict_start) = snippet.find("<<")
+                && let Some(dict_end) = snippet[dict_start..].find(">>") {
                     encrypt_dict = Some(snippet[dict_start..dict_start + dict_end + 2].to_string());
                 }
-            }
         }
 
         while let Some(obj_start) = raw_text[search_from..].find(" obj") {
@@ -122,8 +121,8 @@ impl ParsedPdf {
             let gen_str = parts.next();
             let id_str = parts.next();
 
-            if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-                if let (Ok(id), Ok(generation_num)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+            if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+                && let (Ok(id), Ok(generation_num)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                     let content_start = abs_obj_start + 4;
                     if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                         let content = raw_text[content_start..content_start + end_offset].trim().to_string();
@@ -136,7 +135,6 @@ impl ParsedPdf {
                         continue;
                     }
                 }
-            }
             search_from = abs_obj_start + 4;
         }
 
@@ -388,8 +386,8 @@ impl OfficeTool for PdfProtectSignTool {
                         let mut clean_objects = Vec::new();
                         for obj in &parsed.objects {
                             let mut decrypted_obj = obj.clone();
-                            if decrypted_obj.content.contains("/Encrypted true") {
-                                if let Some(hex_start) = decrypted_obj.content.find("/Payload <") {
+                            if decrypted_obj.content.contains("/Encrypted true")
+                                && let Some(hex_start) = decrypted_obj.content.find("/Payload <") {
                                     let rest = &decrypted_obj.content[hex_start + 10..];
                                     if let Some(hex_end) = rest.find('>') {
                                         let hex_str = &rest[..hex_end];
@@ -407,7 +405,6 @@ impl OfficeTool for PdfProtectSignTool {
                                         decrypted_obj.content = String::from_utf8_lossy(&original_bytes).to_string();
                                     }
                                 }
-                            }
                             clean_objects.push(decrypted_obj);
                         }
 
@@ -509,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_pdf_protect_sign_happy_path() {
-        let tool = PdfProtectSignTool::default();
+        let tool = PdfProtectSignTool;
         let tmp = std::env::temp_dir().join("test_pdf_protect_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -554,7 +551,7 @@ mod tests {
 
     #[test]
     fn test_pdf_protect_sign_edge_case() {
-        let tool = PdfProtectSignTool::default();
+        let tool = PdfProtectSignTool;
         let tmp = std::env::temp_dir().join("test_pdf_unlock_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -596,7 +593,7 @@ mod tests {
 
     #[test]
     fn test_pdf_protect_sign_invalid_magic_bytes() {
-        let tool = PdfProtectSignTool::default();
+        let tool = PdfProtectSignTool;
         let tmp = std::env::temp_dir().join("test_pdf_protect_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -623,7 +620,7 @@ mod tests {
 
     #[test]
     fn test_pdf_protect_sign_cooperative_cancellation() {
-        let tool = PdfProtectSignTool::default();
+        let tool = PdfProtectSignTool;
         let tmp = std::env::temp_dir().join("test_pdf_protect_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -645,7 +642,7 @@ mod tests {
 
     #[test]
     fn test_pdf_protect_sign_security_guardrails() {
-        let tool = PdfProtectSignTool::default();
+        let tool = PdfProtectSignTool;
         assert_eq!(tool.slug(), "pdf-protect-sign");
         assert_eq!(tool.name(), "Bảo mật & Mở khóa PDF");
     }

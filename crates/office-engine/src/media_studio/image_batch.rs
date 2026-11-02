@@ -220,8 +220,8 @@ fn decode_bmp(bytes: &[u8]) -> Result<RawImage, CommandError> {
     }
 
     let offset = u32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]) as usize;
-    let width = i32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]).abs() as u32;
-    let height = i32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]).abs() as u32;
+    let width = i32::from_le_bytes([bytes[18], bytes[19], bytes[20], bytes[21]]).unsigned_abs();
+    let height = i32::from_le_bytes([bytes[22], bytes[23], bytes[24], bytes[25]]).unsigned_abs();
     let bpp = u16::from_le_bytes([bytes[28], bytes[29]]);
 
     if width > 16384 || height > 16384 {
@@ -231,7 +231,7 @@ fn decode_bmp(bytes: &[u8]) -> Result<RawImage, CommandError> {
     }
 
     let mut rgb_pixels = Vec::with_capacity((width * height * 3) as usize);
-    let row_size = ((bpp as usize * width as usize + 31) / 32) * 4;
+    let row_size = (bpp as usize * width as usize).div_ceil(32) * 4;
 
     for y in (0..height as usize).rev() {
         let row_start = offset + y * row_size;
@@ -428,7 +428,7 @@ pub fn encode_png(img: &RawImage, _strip_exif: bool) -> Result<Vec<u8>, CommandE
 /// Xuất ảnh ra định dạng BMP 24-bit
 pub fn encode_bmp(img: &RawImage) -> Result<Vec<u8>, CommandError> {
     let mut out = Vec::new();
-    let row_size = ((24 * img.width as usize + 31) / 32) * 4;
+    let row_size = (24 * img.width as usize).div_ceil(32) * 4;
     let pixel_array_size = row_size * img.height as usize;
     let file_size = 54 + pixel_array_size;
 
@@ -743,7 +743,7 @@ mod tests {
 
     #[test]
     fn test_image_batch_happy_path() {
-        let tool = ImageBatchTool::default();
+        let tool = ImageBatchTool;
         let tmp = std::env::temp_dir().join("test_img_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -780,7 +780,7 @@ mod tests {
 
     #[test]
     fn test_image_batch_edge_case() {
-        let tool = ImageBatchTool::default();
+        let tool = ImageBatchTool;
         let tmp = std::env::temp_dir().join("test_img_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -812,7 +812,7 @@ mod tests {
 
     #[test]
     fn test_image_batch_invalid_magic_bytes() {
-        let tool = ImageBatchTool::default();
+        let tool = ImageBatchTool;
         let tmp = std::env::temp_dir().join("test_img_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -837,7 +837,7 @@ mod tests {
 
     #[test]
     fn test_image_batch_cooperative_cancellation() {
-        let tool = ImageBatchTool::default();
+        let tool = ImageBatchTool;
         let tmp = std::env::temp_dir().join("test_img_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -859,7 +859,7 @@ mod tests {
 
     #[test]
     fn test_image_batch_security_guardrails() {
-        let tool = ImageBatchTool::default();
+        let tool = ImageBatchTool;
         assert_eq!(tool.slug(), "image-batch");
         assert_eq!(tool.name(), "Nén & Đổi Định dạng Ảnh Hàng loạt");
 

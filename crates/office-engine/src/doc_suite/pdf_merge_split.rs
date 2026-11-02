@@ -85,8 +85,8 @@ impl MiniPdf {
             let gen_str = parts.next();
             let id_str = parts.next();
 
-            if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-                if let (Ok(id), Ok(generation_num)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+            if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+                && let (Ok(id), Ok(generation_num)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                     let content_start = abs_obj_start + 4;
                     if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                         let content = &raw_text[content_start..content_start + end_offset];
@@ -99,7 +99,6 @@ impl MiniPdf {
                         continue;
                     }
                 }
-            }
             search_from = abs_obj_start + 4;
         }
 
@@ -194,12 +193,10 @@ fn render_pdf(header: &str, objects: &[PdfObject], root_id: usize) -> Vec<u8> {
     let mut xref_offsets = Vec::new();
     xref_offsets.push(0); // Object 0
 
-    let mut current_id = 1;
     let mut id_map = std::collections::HashMap::new();
 
-    for obj in objects {
-        id_map.insert(obj.id, current_id);
-        current_id += 1;
+    for (idx, obj) in objects.iter().enumerate() {
+        id_map.insert(obj.id, idx + 1);
     }
 
     for obj in objects {
@@ -573,7 +570,7 @@ mod tests {
             objects.push(PdfObject {
                 id: page_id,
                 generation: 0,
-                content: format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>"),
+                content: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
             });
         }
 
@@ -596,7 +593,7 @@ mod tests {
 
     #[test]
     fn test_pdf_merge_split_happy_path() {
-        let tool = PdfMergeSplitTool::default();
+        let tool = PdfMergeSplitTool;
         let tmp = std::env::temp_dir().join("test_pdf_merge_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -631,7 +628,7 @@ mod tests {
 
     #[test]
     fn test_pdf_merge_split_edge_case() {
-        let tool = PdfMergeSplitTool::default();
+        let tool = PdfMergeSplitTool;
         let tmp = std::env::temp_dir().join("test_pdf_split_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -659,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_pdf_merge_split_invalid_magic_bytes() {
-        let tool = PdfMergeSplitTool::default();
+        let tool = PdfMergeSplitTool;
         let tmp = std::env::temp_dir().join("test_pdf_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -686,7 +683,7 @@ mod tests {
 
     #[test]
     fn test_pdf_merge_split_cooperative_cancellation() {
-        let tool = PdfMergeSplitTool::default();
+        let tool = PdfMergeSplitTool;
         let tmp = std::env::temp_dir().join("test_pdf_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -708,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_pdf_merge_split_security_guardrails() {
-        let tool = PdfMergeSplitTool::default();
+        let tool = PdfMergeSplitTool;
         assert_eq!(tool.slug(), "pdf-merge-split");
         assert_eq!(tool.name(), "Ghép, Tách & Xoay trang PDF");
 

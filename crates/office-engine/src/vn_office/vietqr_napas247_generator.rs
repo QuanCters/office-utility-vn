@@ -137,14 +137,13 @@ impl OfficeTool for VietQrNapas247GeneratorTool {
 
         // Validate magic bytes if input file provided
         for path in &request.input_paths {
-            if let Ok(bytes) = std::fs::read(path) {
-                if bytes.len() >= 4 && !bytes.starts_with(b"{\n") && !bytes.starts_with(b"{\"") && !bytes.is_ascii() {
+            if let Ok(bytes) = std::fs::read(path)
+                && bytes.len() >= 4 && !bytes.starts_with(b"{\n") && !bytes.starts_with(b"{\"") && !bytes.is_ascii() {
                     return Err(CommandError::InvalidFileSignature {
                         expected: "JSON / Plaintext VietQR Config".to_string(),
                         actual: format!("{:02X?}", &bytes[..4.min(bytes.len())]),
                     });
                 }
-            }
         }
 
         if let Some(cb) = on_progress {
@@ -293,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_vietqr_napas247_generator_invalid_magic_bytes() {
-        let tool = VietQrNapas247GeneratorTool::default();
+        let tool = VietQrNapas247GeneratorTool;
         let bad_file = std::env::temp_dir().join("bad_magic_vietqr.bin");
         std::fs::write(&bad_file, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]).ok();
 
@@ -319,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_vietqr_napas247_generator_cooperative_cancellation() {
-        let tool = VietQrNapas247GeneratorTool::default();
+        let tool = VietQrNapas247GeneratorTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel".to_string(),
             tool_slug: "vietqr-napas247-generator".to_string(),
@@ -337,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_vietqr_napas247_generator_security_guardrails() {
-        let tool = VietQrNapas247GeneratorTool::default();
+        let tool = VietQrNapas247GeneratorTool;
         assert_eq!(tool.slug(), "vietqr-napas247-generator");
         assert_eq!(tool.name(), "Tạo Mã VietQR Napas247");
     }

@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_data_structure_converter_happy_path() {
-        let tool = DataStructureConverterTool::default();
+        let tool = DataStructureConverterTool;
         assert_eq!(tool.slug(), "data-structure-converter");
 
         // Tạo dữ liệu mô phỏng 10.000 dòng
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_data_structure_converter_edge_case() {
-        let tool = DataStructureConverterTool::default();
+        let tool = DataStructureConverterTool;
         let csv_data = "id,name,join_date,salary,notes\n1,Nguyễn Văn O'Connor,2026-11-02,25000000,NULL";
 
         let req = DispatchTaskRequest {
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_data_structure_converter_invalid_magic_bytes() {
-        let tool = DataStructureConverterTool::default();
+        let tool = DataStructureConverterTool;
         let tmp = std::env::temp_dir().join("test_converter_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_data_structure_converter_cooperative_cancellation() {
-        let tool = DataStructureConverterTool::default();
+        let tool = DataStructureConverterTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-converter".to_string(),
             tool_slug: "data-structure-converter".to_string(),

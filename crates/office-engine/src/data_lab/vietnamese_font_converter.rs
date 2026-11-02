@@ -83,8 +83,6 @@ impl Tcvn3Mapper {
         for &b in bytes {
             if let Some(&u) = self.byte_to_unicode.get(&b) {
                 result.push_str(u);
-            } else if b < 128 {
-                result.push(b as char);
             } else {
                 result.push(b as char);
             }
@@ -92,11 +90,12 @@ impl Tcvn3Mapper {
         result
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn from_unicode(&self, text: &str) -> Vec<u8> {
         let mut out = Vec::new();
-        let mut chars = text.chars().peekable();
+        let chars = text.chars().peekable();
 
-        while let Some(c) = chars.next() {
+        for c in chars {
             let s = c.to_string();
             if let Some(&b) = self.unicode_to_byte.get(s.as_str()) {
                 out.push(b);
@@ -156,6 +155,7 @@ impl VniMapper {
         result
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn from_unicode(&self, text: &str) -> String {
         let mut result = text.to_string();
         for (&u, &v) in &self.unicode_to_vni {
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_font_converter_happy_path() {
-        let tool = VietnameseFontConverterTool::default();
+        let tool = VietnameseFontConverterTool;
         assert_eq!(tool.slug(), "vietnamese-font-converter");
 
         // Kiểm thử TCVN3 sang Unicode
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_font_converter_edge_case() {
-        let tool = VietnameseFontConverterTool::default();
+        let tool = VietnameseFontConverterTool;
         let tmp = std::env::temp_dir().join("test_font_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -465,7 +465,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_font_converter_invalid_magic_bytes() {
-        let tool = VietnameseFontConverterTool::default();
+        let tool = VietnameseFontConverterTool;
         let tmp = std::env::temp_dir().join("test_font_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_font_converter_cooperative_cancellation() {
-        let tool = VietnameseFontConverterTool::default();
+        let tool = VietnameseFontConverterTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-font".to_string(),
             tool_slug: "vietnamese-font-converter".to_string(),
@@ -510,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_font_converter_security_guardrails() {
-        let tool = VietnameseFontConverterTool::default();
+        let tool = VietnameseFontConverterTool;
         assert_eq!(tool.slug(), "vietnamese-font-converter");
         assert_eq!(tool.name(), "Chuyển mã Font Tiếng Việt");
 

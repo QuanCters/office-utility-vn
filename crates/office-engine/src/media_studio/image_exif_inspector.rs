@@ -129,8 +129,8 @@ pub fn parse_jpeg_exif(bytes: &[u8]) -> Result<ExifMetadataSummary, CommandError
         }
 
         // Marker SOF0 (0xC0) hoặc SOF2 (0xC2) lấy kích thước ảnh
-        if marker == 0xC0 || marker == 0xC2 {
-            if segment_start + 7 <= bytes.len() {
+        if (marker == 0xC0 || marker == 0xC2)
+            && segment_start + 7 <= bytes.len() {
                 let h = u16::from_be_bytes([bytes[segment_start + 1], bytes[segment_start + 2]]) as u32;
                 let w = u16::from_be_bytes([bytes[segment_start + 3], bytes[segment_start + 4]]) as u32;
 
@@ -144,7 +144,6 @@ pub fn parse_jpeg_exif(bytes: &[u8]) -> Result<ExifMetadataSummary, CommandError
                 summary.image_width = Some(w);
                 summary.image_height = Some(h);
             }
-        }
 
         // Marker APP1 (0xE1): EXIF
         if marker == 0xE1 && segment_end > segment_start + 6 {
@@ -228,8 +227,8 @@ fn parse_tiff_data(tiff: &[u8], summary: &mut ExifMetadataSummary) {
     }
 
     // Duyệt GPS IFD nếu có
-    if let Some(gps_offset) = gps_ifd_offset {
-        if gps_offset + 2 <= tiff.len() {
+    if let Some(gps_offset) = gps_ifd_offset
+        && gps_offset + 2 <= tiff.len() {
             let Some(num_entries) = read_u16(tiff, gps_offset, is_le) else { return };
             let mut entry_cursor = gps_offset + 2;
 
@@ -271,15 +270,14 @@ fn parse_tiff_data(tiff: &[u8], summary: &mut ExifMetadataSummary) {
                             lon_ref = tiff[entry_cursor + 8] as char;
                         }
                     }
-                    0x0004 => {
+                    0x0004
                         // GPSLongitude (3 rationals)
-                        if value_or_offset + 24 <= tiff.len() {
+                        if value_or_offset + 24 <= tiff.len() => {
                             let deg = read_rational(tiff, value_or_offset, is_le).unwrap_or(0.0);
                             let min = read_rational(tiff, value_or_offset + 8, is_le).unwrap_or(0.0);
                             let sec = read_rational(tiff, value_or_offset + 16, is_le).unwrap_or(0.0);
                             lon_values = Some(deg + min / 60.0 + sec / 3600.0);
                         }
-                    }
                     _ => {}
                 }
 
@@ -293,7 +291,6 @@ fn parse_tiff_data(tiff: &[u8], summary: &mut ExifMetadataSummary) {
                 summary.gps_longitude = Some(if lon_ref == 'W' { -lon } else { lon });
             }
         }
-    }
 }
 
 /// Tước bỏ không tổn hao (Lossless EXIF Stripping) cho tệp JPEG mà không giải nén lại ảnh
@@ -774,7 +771,7 @@ mod tests {
 
     #[test]
     fn test_image_exif_inspector_happy_path() {
-        let tool = ImageExifInspectorTool::default();
+        let tool = ImageExifInspectorTool;
         let tmp = std::env::temp_dir().join("test_exif_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -810,7 +807,7 @@ mod tests {
 
     #[test]
     fn test_image_exif_inspector_edge_case() {
-        let tool = ImageExifInspectorTool::default();
+        let tool = ImageExifInspectorTool;
         let tmp = std::env::temp_dir().join("test_exif_strip_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -845,7 +842,7 @@ mod tests {
 
     #[test]
     fn test_image_exif_inspector_invalid_magic_bytes() {
-        let tool = ImageExifInspectorTool::default();
+        let tool = ImageExifInspectorTool;
         let tmp = std::env::temp_dir().join("test_exif_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -870,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_image_exif_inspector_cooperative_cancellation() {
-        let tool = ImageExifInspectorTool::default();
+        let tool = ImageExifInspectorTool;
         let tmp = std::env::temp_dir().join("test_exif_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -892,7 +889,7 @@ mod tests {
 
     #[test]
     fn test_image_exif_inspector_security_guardrails() {
-        let tool = ImageExifInspectorTool::default();
+        let tool = ImageExifInspectorTool;
         assert_eq!(tool.slug(), "image-exif-inspector");
         assert_eq!(tool.name(), "Kiểm tra & Xóa Exif/GPS Ảnh");
 

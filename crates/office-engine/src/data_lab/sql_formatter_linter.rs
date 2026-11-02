@@ -13,18 +13,15 @@ use crate::OfficeTool;
 /// Các phương ngữ SQL được hỗ trợ
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SqlDialect {
+    #[default]
     Postgres,
     MySql,
     Sqlite,
     TSql,
 }
 
-impl Default for SqlDialect {
-    fn default() -> Self {
-        Self::Postgres
-    }
-}
 
 /// Cấu hình tùy chọn định dạng và linter SQL
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,13 +130,11 @@ pub fn lint_sql_syntax(sql: &str, cancel_flag: &AtomicBool) -> Result<SqlLintRes
 
     // Kiểm tra cấu trúc câu lệnh SELECT cơ bản
     let lower_sql = sql.to_lowercase();
-    if lower_sql.contains("select ") {
-        if let (Some(where_pos), Some(from_pos)) = (lower_sql.find("where "), lower_sql.find("from ")) {
-            if where_pos < from_pos && paren_depth == 0 {
+    if lower_sql.contains("select ")
+        && let (Some(where_pos), Some(from_pos)) = (lower_sql.find("where "), lower_sql.find("from "))
+            && where_pos < from_pos && paren_depth == 0 {
                 errors.push("Cú pháp sai: Mệnh đề WHERE không thể đứng trước FROM trong câu truy vấn chính".to_string());
             }
-        }
-    }
 
     Ok(SqlLintResult {
         is_valid: errors.is_empty(),
@@ -358,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_sql_formatter_linter_happy_path() {
-        let tool = SqlFormatterLinterTool::default();
+        let tool = SqlFormatterLinterTool;
         assert_eq!(tool.slug(), "sql-formatter-linter");
 
         // Kiểm tra cú pháp AST bắt lỗi sai ngữ pháp
@@ -393,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_sql_formatter_linter_invalid_magic_bytes() {
-        let tool = SqlFormatterLinterTool::default();
+        let tool = SqlFormatterLinterTool;
         let tmp = std::env::temp_dir().join("test_sql_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -418,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_sql_formatter_linter_cooperative_cancellation() {
-        let tool = SqlFormatterLinterTool::default();
+        let tool = SqlFormatterLinterTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-sql".to_string(),
             tool_slug: "sql-formatter-linter".to_string(),

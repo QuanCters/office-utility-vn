@@ -11,7 +11,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_number_to_words_happy_path() {
-        let tool = VietnameseNumberToWordsTool::default();
+        let tool = VietnameseNumberToWordsTool;
         let config = NumberToWordsConfig {
             dialect: Dialect::North,
             currency: CurrencyUnit::VND,
@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_number_to_words_invalid_magic_bytes() {
-        let tool = VietnameseNumberToWordsTool::default();
+        let tool = VietnameseNumberToWordsTool;
         let req = DispatchTaskRequest {
             task_id: "test-invalid-1".to_string(),
             tool_slug: "vietnamese-number-to-words".to_string(),
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_number_to_words_cooperative_cancellation() {
-        let tool = VietnameseNumberToWordsTool::default();
+        let tool = VietnameseNumberToWordsTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel".to_string(),
             tool_slug: "vietnamese-number-to-words".to_string(),
@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_vietnamese_number_to_words_security_guardrails() {
-        let tool = VietnameseNumberToWordsTool::default();
+        let tool = VietnameseNumberToWordsTool;
         assert_eq!(tool.slug(), "vietnamese-number-to-words");
         assert_eq!(tool.name(), "Đọc Số Tiền Thành Chữ Chuẩn");
     }

@@ -462,7 +462,7 @@ mod tests {
 
     #[test]
     fn test_screenshot_beautifier_happy_path() {
-        let tool = ScreenshotBeautifierTool::default();
+        let tool = ScreenshotBeautifierTool;
         let tmp = std::env::temp_dir().join("test_shot_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_screenshot_beautifier_edge_case() {
-        let tool = ScreenshotBeautifierTool::default();
+        let tool = ScreenshotBeautifierTool;
         let tmp = std::env::temp_dir().join("test_shot_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn test_screenshot_beautifier_invalid_magic_bytes() {
-        let tool = ScreenshotBeautifierTool::default();
+        let tool = ScreenshotBeautifierTool;
         let tmp = std::env::temp_dir().join("test_shot_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn test_screenshot_beautifier_cooperative_cancellation() {
-        let tool = ScreenshotBeautifierTool::default();
+        let tool = ScreenshotBeautifierTool;
         let tmp = std::env::temp_dir().join("test_shot_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_screenshot_beautifier_security_guardrails() {
-        let tool = ScreenshotBeautifierTool::default();
+        let tool = ScreenshotBeautifierTool;
         assert_eq!(tool.slug(), "screenshot-beautifier");
         assert_eq!(tool.name(), "Làm đẹp Ảnh Chụp Màn hình");
 

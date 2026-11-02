@@ -60,7 +60,7 @@ pub fn quantize_rgb_to_index(r: u8, g: u8, b: u8) -> u8 {
     let r3 = (r >> 5) & 0x07;
     let g3 = (g >> 5) & 0x07;
     let b2 = (b >> 6) & 0x03;
-    ((r3 << 5) | (g3 << 2) | b2) as u8
+    (r3 << 5) | (g3 << 2) | b2
 }
 
 /// Đóng gói mảng byte LZW thành các sub-block GIF (tối đa 254 bytes mỗi block)
@@ -198,7 +198,7 @@ pub fn encode_animated_gif(frames: &[RawImage], fps: u32) -> Result<Vec<u8>, Com
 
         // Lượng tử hóa các pixel RGB về chỉ số trong palette
         let mut indices = Vec::with_capacity((frame.width * frame.height) as usize);
-        for chunk in frame.pixels.chunks_exact(3) {
+        for chunk in frame.pixels.as_chunks::<3>().0 {
             indices.push(quantize_rgb_to_index(chunk[0], chunk[1], chunk[2]));
         }
 
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_video_to_gif_webp_happy_path() {
-        let tool = VideoToGifWebpTool::default();
+        let tool = VideoToGifWebpTool;
         let tmp = std::env::temp_dir().join("test_video_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_video_to_gif_webp_invalid_magic_bytes() {
-        let tool = VideoToGifWebpTool::default();
+        let tool = VideoToGifWebpTool;
         let tmp = std::env::temp_dir().join("test_video_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_video_to_gif_webp_cooperative_cancellation() {
-        let tool = VideoToGifWebpTool::default();
+        let tool = VideoToGifWebpTool;
         let tmp = std::env::temp_dir().join("test_video_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     fn test_video_to_gif_webp_security_guardrails() {
-        let tool = VideoToGifWebpTool::default();
+        let tool = VideoToGifWebpTool;
         assert_eq!(tool.slug(), "video-to-gif-webp");
         assert_eq!(tool.name(), "Chuyển Đổi Video Ngắn sang GIF / WebP");
 

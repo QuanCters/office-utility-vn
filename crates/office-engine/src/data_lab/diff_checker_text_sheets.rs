@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_diff_checker_text_sheets_happy_path() {
-        let tool = DiffCheckerTextSheetsTool::default();
+        let tool = DiffCheckerTextSheetsTool;
         assert_eq!(tool.slug(), "diff-checker-text-sheets");
 
         let text_a = "Mã NV,Tên,Lương\nNV01,Nguyễn Văn A,15000000\nNV02,Trần Thị B,18000000";
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_diff_checker_text_sheets_invalid_magic_bytes() {
-        let tool = DiffCheckerTextSheetsTool::default();
+        let tool = DiffCheckerTextSheetsTool;
         let tmp = std::env::temp_dir().join("test_diff_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_diff_checker_text_sheets_cooperative_cancellation() {
-        let tool = DiffCheckerTextSheetsTool::default();
+        let tool = DiffCheckerTextSheetsTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-diff".to_string(),
             tool_slug: "diff-checker-text-sheets".to_string(),

@@ -433,13 +433,11 @@ impl OfficeTool for DocxTemplateMailmergeTool {
         let mut sample_rows = Vec::new();
         if request.input_paths.len() > 1 {
             let data_path = Path::new(&request.input_paths[1]);
-            if data_path.exists() {
-                if let Ok(content) = fs::read_to_string(data_path) {
-                    if let Ok(parsed_rows) = serde_json::from_str::<Vec<HashMap<String, String>>>(&content) {
+            if data_path.exists()
+                && let Ok(content) = fs::read_to_string(data_path)
+                    && let Ok(parsed_rows) = serde_json::from_str::<Vec<HashMap<String, String>>>(&content) {
                         sample_rows = parsed_rows;
                     }
-                }
-            }
         }
 
         if sample_rows.is_empty() {
@@ -611,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_docx_template_mailmerge_invalid_magic_bytes() {
-        let tool = DocxTemplateMailmergeTool::default();
+        let tool = DocxTemplateMailmergeTool;
         let temp_dir = std::env::temp_dir().join("test_mailmerge_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake_docx = temp_dir.join("fake.docx");
@@ -632,7 +630,7 @@ mod tests {
 
     #[test]
     fn test_docx_template_mailmerge_cooperative_cancellation() {
-        let tool = DocxTemplateMailmergeTool::default();
+        let tool = DocxTemplateMailmergeTool;
         let temp_dir = std::env::temp_dir().join("test_mailmerge_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let valid_docx = temp_dir.join("template.docx");
@@ -653,7 +651,7 @@ mod tests {
 
     #[test]
     fn test_docx_template_mailmerge_security_guardrails() {
-        let tool = DocxTemplateMailmergeTool::default();
+        let tool = DocxTemplateMailmergeTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

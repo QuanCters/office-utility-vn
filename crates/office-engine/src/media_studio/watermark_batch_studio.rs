@@ -119,7 +119,7 @@ fn render_text(
                 if is_set {
                     for dy in 0..s {
                         for dx in 0..s {
-                            let px = cursor_x + (col_idx as i32 * s) + dx;
+                            let px = cursor_x + (col_idx * s) + dx;
                             let py = start_y + (row_idx as i32 * s) + dy;
 
                             if px >= 0 && px < img.width as i32 && py >= 0 && py < img.height as i32 {
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_watermark_batch_studio_happy_path() {
-        let tool = WatermarkBatchTool::default();
+        let tool = WatermarkBatchTool;
         let tmp = std::env::temp_dir().join("test_wm_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn test_watermark_batch_studio_edge_case() {
-        let tool = WatermarkBatchTool::default();
+        let tool = WatermarkBatchTool;
         let tmp = std::env::temp_dir().join("test_wm_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_watermark_batch_studio_invalid_magic_bytes() {
-        let tool = WatermarkBatchTool::default();
+        let tool = WatermarkBatchTool;
         let tmp = std::env::temp_dir().join("test_wm_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -512,7 +512,7 @@ mod tests {
 
     #[test]
     fn test_watermark_batch_studio_cooperative_cancellation() {
-        let tool = WatermarkBatchTool::default();
+        let tool = WatermarkBatchTool;
         let tmp = std::env::temp_dir().join("test_wm_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -534,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_watermark_batch_studio_security_guardrails() {
-        let tool = WatermarkBatchTool::default();
+        let tool = WatermarkBatchTool;
         assert_eq!(tool.slug(), "watermark-batch-studio");
         assert_eq!(tool.name(), "Đóng dấu Bản quyền Ảnh Hàng loạt");
 

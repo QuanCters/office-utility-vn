@@ -44,8 +44,8 @@ pub fn convert_stream_to_grayscale(content: &str) -> String {
 
         if trimmed.ends_with("rg") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 4 {
-                if let (Ok(r), Ok(g), Ok(b)) = (
+            if parts.len() >= 4
+                && let (Ok(r), Ok(g), Ok(b)) = (
                     parts[parts.len() - 4].parse::<f32>(),
                     parts[parts.len() - 3].parse::<f32>(),
                     parts[parts.len() - 2].parse::<f32>(),
@@ -59,11 +59,10 @@ pub fn convert_stream_to_grayscale(content: &str) -> String {
                     out.push_str(&format!("{:.3} g\n", gray));
                     continue;
                 }
-            }
         } else if trimmed.ends_with("RG") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 4 {
-                if let (Ok(r), Ok(g), Ok(b)) = (
+            if parts.len() >= 4
+                && let (Ok(r), Ok(g), Ok(b)) = (
                     parts[parts.len() - 4].parse::<f32>(),
                     parts[parts.len() - 3].parse::<f32>(),
                     parts[parts.len() - 2].parse::<f32>(),
@@ -77,11 +76,10 @@ pub fn convert_stream_to_grayscale(content: &str) -> String {
                     out.push_str(&format!("{:.3} G\n", gray));
                     continue;
                 }
-            }
         } else if trimmed.ends_with('k') && !trimmed.ends_with("endobj") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 5 {
-                if let (Ok(c), Ok(m), Ok(y), Ok(k)) = (
+            if parts.len() >= 5
+                && let (Ok(c), Ok(m), Ok(y), Ok(k)) = (
                     parts[parts.len() - 5].parse::<f32>(),
                     parts[parts.len() - 4].parse::<f32>(),
                     parts[parts.len() - 3].parse::<f32>(),
@@ -91,11 +89,10 @@ pub fn convert_stream_to_grayscale(content: &str) -> String {
                     out.push_str(&format!("{:.3} g\n", gray));
                     continue;
                 }
-            }
         } else if trimmed.ends_with('K') {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 5 {
-                if let (Ok(c), Ok(m), Ok(y), Ok(k)) = (
+            if parts.len() >= 5
+                && let (Ok(c), Ok(m), Ok(y), Ok(k)) = (
                     parts[parts.len() - 5].parse::<f32>(),
                     parts[parts.len() - 4].parse::<f32>(),
                     parts[parts.len() - 3].parse::<f32>(),
@@ -105,7 +102,6 @@ pub fn convert_stream_to_grayscale(content: &str) -> String {
                     out.push_str(&format!("{:.3} G\n", gray));
                     continue;
                 }
-            }
         }
 
         out.push_str(line);
@@ -331,7 +327,7 @@ mod tests {
     #[test]
     fn test_pdf_grayscale_print_happy_path() {
         // Chuyển đổi toàn bộ toán tử màu rg/RG sang g/G
-        let tool = PdfGrayscalePrintTool::default();
+        let tool = PdfGrayscalePrintTool;
         assert_eq!(tool.slug(), "pdf-grayscale-print");
 
         let stream_rgb = "1.0 0.0 0.0 rg\n0.0 1.0 0.0 RG\n";
@@ -381,7 +377,7 @@ mod tests {
 
     #[test]
     fn test_pdf_grayscale_print_invalid_magic_bytes() {
-        let tool = PdfGrayscalePrintTool::default();
+        let tool = PdfGrayscalePrintTool;
         let temp_dir = std::env::temp_dir().join("test_gray_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake = temp_dir.join("fake.pdf");
@@ -402,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_pdf_grayscale_print_cooperative_cancellation() {
-        let tool = PdfGrayscalePrintTool::default();
+        let tool = PdfGrayscalePrintTool;
         let temp_dir = std::env::temp_dir().join("test_gray_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("color.pdf");
@@ -423,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_pdf_grayscale_print_security_guardrails() {
-        let tool = PdfGrayscalePrintTool::default();
+        let tool = PdfGrayscalePrintTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

@@ -88,8 +88,8 @@ impl CropParsedPdf {
             let gen_str = parts.next();
             let id_str = parts.next();
 
-            if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-                if let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+            if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+                && let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                     let content_start = abs_obj_start + 4;
                     if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                         let content = raw_text[content_start..content_start + end_offset].trim().to_string();
@@ -102,7 +102,6 @@ impl CropParsedPdf {
                         continue;
                     }
                 }
-            }
             search_from = abs_obj_start + 4;
         }
 
@@ -146,8 +145,8 @@ fn compute_content_bbox(content: &str) -> (f32, f32, f32, f32) {
         // re operator: x y w h re
         if trimmed.ends_with("re") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 5 {
-                if let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
+            if parts.len() >= 5
+                && let (Ok(x), Ok(y), Ok(w), Ok(h)) = (
                     parts[0].parse::<f32>(),
                     parts[1].parse::<f32>(),
                     parts[2].parse::<f32>(),
@@ -158,31 +157,28 @@ fn compute_content_bbox(content: &str) -> (f32, f32, f32, f32) {
                     max_x = max_x.max(x + w);
                     max_y = max_y.max(y + h);
                 }
-            }
         }
         // Tm operator: 1 0 0 1 x y Tm
         else if trimmed.ends_with("Tm") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 7 {
-                if let (Ok(x), Ok(y)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
+            if parts.len() >= 7
+                && let (Ok(x), Ok(y)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x + 200.0); // ước lượng chiều dài đoạn chữ
                     max_y = max_y.max(y + 20.0);
                 }
-            }
         }
         // Td operator: x y Td
         else if trimmed.ends_with("Td") || trimmed.ends_with("TD") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 3 {
-                if let (Ok(x), Ok(y)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
+            if parts.len() >= 3
+                && let (Ok(x), Ok(y)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x + 200.0);
                     max_y = max_y.max(y + 20.0);
                 }
-            }
         }
     }
 
@@ -441,7 +437,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n";
 
     #[test]
     fn test_pdf_crop_margin_happy_path() {
-        let tool = PdfCropMarginTool::default();
+        let tool = PdfCropMarginTool;
         let tmp = std::env::temp_dir().join("test_crop_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -471,7 +467,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n";
 
     #[test]
     fn test_pdf_crop_margin_edge_case() {
-        let tool = PdfCropMarginTool::default();
+        let tool = PdfCropMarginTool;
         let tmp = std::env::temp_dir().join("test_crop_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -499,7 +495,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n";
 
     #[test]
     fn test_pdf_crop_margin_invalid_magic_bytes() {
-        let tool = PdfCropMarginTool::default();
+        let tool = PdfCropMarginTool;
         let tmp = std::env::temp_dir().join("test_crop_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -526,7 +522,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n";
 
     #[test]
     fn test_pdf_crop_margin_cooperative_cancellation() {
-        let tool = PdfCropMarginTool::default();
+        let tool = PdfCropMarginTool;
         let tmp = std::env::temp_dir().join("test_crop_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -548,7 +544,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n";
 
     #[test]
     fn test_pdf_crop_margin_security_guardrails() {
-        let tool = PdfCropMarginTool::default();
+        let tool = PdfCropMarginTool;
         assert_eq!(tool.slug(), "pdf-crop-margin");
         assert_eq!(tool.name(), "Cắt Viền Trắng Thừa (Auto-Crop)");
     }

@@ -129,7 +129,7 @@ pub fn normalize_date_string(date_str: &str) -> String {
 
     // Tách theo -, /, .
     let parts: Vec<&str> = trimmed
-        .split(|c| c == '-' || c == '/' || c == '.')
+        .split(['-', '/', '.'])
         .map(|s| s.trim())
         .collect();
 
@@ -138,21 +138,19 @@ pub fn normalize_date_string(date_str: &str) -> String {
     }
 
     // Trường hợp YYYY-MM-DD hoặc YYYY/MM/DD
-    if parts[0].len() == 4 {
-        if let (Ok(y), Ok(m), Ok(d)) = (
+    if parts[0].len() == 4
+        && let (Ok(y), Ok(m), Ok(d)) = (
             parts[0].parse::<u32>(),
             parts[1].parse::<u32>(),
             parts[2].parse::<u32>(),
-        ) {
-            if (1..=12).contains(&m) && (1..=31).contains(&d) {
+        )
+            && (1..=12).contains(&m) && (1..=31).contains(&d) {
                 return format!("{:02}/{:02}/{:04}", d, m, y);
             }
-        }
-    }
 
     // Trường hợp DD-MM-YYYY hoặc MM-DD-YYYY
-    if parts[2].len() == 4 {
-        if let (Ok(p1), Ok(p2), Ok(y)) = (
+    if parts[2].len() == 4
+        && let (Ok(p1), Ok(p2), Ok(y)) = (
             parts[0].parse::<u32>(),
             parts[1].parse::<u32>(),
             parts[2].parse::<u32>(),
@@ -170,7 +168,6 @@ pub fn normalize_date_string(date_str: &str) -> String {
                 return format!("{:02}/{:02}/{:04}", p1, p2, y);
             }
         }
-    }
 
     trimmed.to_string()
 }
@@ -405,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_excel_cleaner_normalizer_happy_path() {
-        let tool = ExcelCleanerNormalizerTool::default();
+        let tool = ExcelCleanerNormalizerTool;
         assert_eq!(tool.slug(), "excel-cleaner-normalizer");
 
         // Kiểm thử tách tên chuẩn 'Nguyễn Thị Thu Trang'
@@ -431,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_excel_cleaner_normalizer_invalid_magic_bytes() {
-        let tool = ExcelCleanerNormalizerTool::default();
+        let tool = ExcelCleanerNormalizerTool;
         let tmp = std::env::temp_dir().join("test_cleaner_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -456,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_excel_cleaner_normalizer_cooperative_cancellation() {
-        let tool = ExcelCleanerNormalizerTool::default();
+        let tool = ExcelCleanerNormalizerTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-clean".to_string(),
             tool_slug: "excel-cleaner-normalizer".to_string(),

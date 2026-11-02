@@ -37,11 +37,18 @@ pub fn strip_protection_tags(xml_content: &str) -> String {
     let step1 = re_self_closing.replace_all(xml_content, "");
 
     // Loại bỏ thẻ mở và đóng: <sheetProtection ...>...</sheetProtection>
-    let re_paired = match Regex::new(r"<(sheetProtection|workbookProtection)[^>]*?>.*?</\1>") {
+    let re_sheet = match Regex::new(r"(?s)<sheetProtection[^>]*?>.*?</sheetProtection>") {
         Ok(r) => r,
         Err(_) => return step1.into_owned(),
     };
-    re_paired.replace_all(&step1, "").into_owned()
+    let step2 = re_sheet.replace_all(&step1, "");
+
+    // Loại bỏ thẻ mở và đóng: <workbookProtection ...>...</workbookProtection>
+    let re_workbook = match Regex::new(r"(?s)<workbookProtection[^>]*?>.*?</workbookProtection>") {
+        Ok(r) => r,
+        Err(_) => return step2.into_owned(),
+    };
+    re_workbook.replace_all(&step2, "").into_owned()
 }
 
 /// Cấu trúc đại diện một tệp tin bên trong ZIP archive
@@ -375,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_excel_sheet_unlocker_happy_path() {
-        let tool = ExcelSheetUnlockerTool::default();
+        let tool = ExcelSheetUnlockerTool;
         assert_eq!(tool.slug(), "excel-sheet-unlocker");
 
         // Giả lập luồng XML OpenXML có chứa thẻ sheetProtection
@@ -427,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_excel_sheet_unlocker_invalid_magic_bytes() {
-        let tool = ExcelSheetUnlockerTool::default();
+        let tool = ExcelSheetUnlockerTool;
         let tmp = std::env::temp_dir().join("test_unlock_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -452,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_excel_sheet_unlocker_cooperative_cancellation() {
-        let tool = ExcelSheetUnlockerTool::default();
+        let tool = ExcelSheetUnlockerTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-unlock".to_string(),
             tool_slug: "excel-sheet-unlocker".to_string(),

@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_vn_address_normalizer_invalid_magic_bytes() {
-        let tool = VnAddressNormalizerTool::default();
+        let tool = VnAddressNormalizerTool;
         let bad_file = std::env::temp_dir().join("bad_magic_address.bin");
         std::fs::write(&bad_file, [0x7F, 0x45, 0x4C, 0x46, 0x02]).ok();
 
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_vn_address_normalizer_cooperative_cancellation() {
-        let tool = VnAddressNormalizerTool::default();
+        let tool = VnAddressNormalizerTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel-addr".to_string(),
             tool_slug: "vn-address-normalizer".to_string(),
@@ -482,7 +482,7 @@ mod tests {
 
     #[test]
     fn test_vn_address_normalizer_security_guardrails() {
-        let tool = VnAddressNormalizerTool::default();
+        let tool = VnAddressNormalizerTool;
         assert_eq!(tool.slug(), "vn-address-normalizer");
         assert_eq!(tool.name(), "Chuẩn hóa Địa giới Hành chính VN");
     }

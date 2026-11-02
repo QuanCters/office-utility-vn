@@ -57,15 +57,14 @@ fn extract_page_obj_ids(raw_text: &str) -> Vec<PdfPageRef> {
             let mut parts = before_obj.split_whitespace().rev();
             let _gen = parts.next();
             let id_str = parts.next();
-            if let Some(id_s) = id_str {
-                if let Ok(id) = id_s.parse::<usize>() {
+            if let Some(id_s) = id_str
+                && let Ok(id) = id_s.parse::<usize>() {
                     pages.push(PdfPageRef {
                         page_number: page_num,
                         obj_id: id,
                     });
                     page_num += 1;
                 }
-            }
         }
         search_from = abs_pos + 11;
     }
@@ -194,11 +193,10 @@ pub fn inject_bookmarks_into_pdf(
     while let Some(obj_pos) = raw[search_idx..].find(" obj") {
         let abs = search_idx + obj_pos;
         let prefix = &raw[search_idx..abs];
-        if let Some(id_str) = prefix.split_whitespace().rev().nth(1) {
-            if let Ok(id) = id_str.parse::<usize>() {
+        if let Some(id_str) = prefix.split_whitespace().rev().nth(1)
+            && let Ok(id) = id_str.parse::<usize>() {
                 max_obj_id = max_obj_id.max(id);
             }
-        }
         search_idx = abs + 4;
     }
 
@@ -372,11 +370,10 @@ impl OfficeTool for PdfBookmarkTocTool {
         }
 
         let mut bookmarks = options.bookmarks.clone();
-        if bookmarks.is_empty() && !options.bookmarks_json.trim().is_empty() {
-            if let Ok(parsed) = serde_json::from_str::<Vec<BookmarkEntry>>(&options.bookmarks_json) {
+        if bookmarks.is_empty() && !options.bookmarks_json.trim().is_empty()
+            && let Ok(parsed) = serde_json::from_str::<Vec<BookmarkEntry>>(&options.bookmarks_json) {
                 bookmarks = parsed;
             }
-        }
 
         if bookmarks.is_empty() {
             // Default sample bookmark tree
@@ -481,7 +478,7 @@ mod tests {
     #[test]
     fn test_pdf_bookmark_toc_happy_path() {
         // Xây dựng cây từ điển /Outlines đa cấp trong PDF Catalog
-        let tool = PdfBookmarkTocTool::default();
+        let tool = PdfBookmarkTocTool;
         assert_eq!(tool.slug(), "pdf-bookmark-toc");
 
         let temp_dir = std::env::temp_dir().join("test_bookmark_happy");
@@ -559,7 +556,7 @@ mod tests {
 
     #[test]
     fn test_pdf_bookmark_toc_invalid_magic_bytes() {
-        let tool = PdfBookmarkTocTool::default();
+        let tool = PdfBookmarkTocTool;
         let temp_dir = std::env::temp_dir().join("test_bm_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake = temp_dir.join("fake.pdf");
@@ -580,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_pdf_bookmark_toc_cooperative_cancellation() {
-        let tool = PdfBookmarkTocTool::default();
+        let tool = PdfBookmarkTocTool;
         let temp_dir = std::env::temp_dir().join("test_bm_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("sample.pdf");
@@ -601,7 +598,7 @@ mod tests {
 
     #[test]
     fn test_pdf_bookmark_toc_security_guardrails() {
-        let tool = PdfBookmarkTocTool::default();
+        let tool = PdfBookmarkTocTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

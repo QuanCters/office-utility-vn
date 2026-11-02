@@ -16,16 +16,13 @@ use crate::OfficeTool;
 /// Chế độ hoạt động của Base64 Codec
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum CodecMode {
+    #[default]
     Encode,
     Decode,
 }
 
-impl Default for CodecMode {
-    fn default() -> Self {
-        Self::Encode
-    }
-}
 
 /// Tùy chọn cấu hình Base64 Codec
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,8 +135,8 @@ pub fn stream_decode_base64<R: Read, W: Write>(
     let mut payload = raw_str.trim();
 
     // Bóc tách Data URI prefix nếu có (ví dụ: data:image/png;base64,....)
-    if payload.starts_with("data:") {
-        if let Some(comma_pos) = payload.find(',') {
+    if payload.starts_with("data:")
+        && let Some(comma_pos) = payload.find(',') {
             let meta = &payload[5..comma_pos];
             if let Some(semicolon_pos) = meta.find(';') {
                 detected_mime = Some(meta[..semicolon_pos].to_string());
@@ -148,7 +145,6 @@ pub fn stream_decode_base64<R: Read, W: Write>(
             }
             payload = &payload[comma_pos + 1..];
         }
-    }
 
     // Làm sạch ký tự xuống dòng và khoảng trắng
     let clean_payload: String = payload
@@ -449,7 +445,7 @@ mod tests {
 
     #[test]
     fn test_base64_file_codec_happy_path() {
-        let tool = Base64FileCodecTool::default();
+        let tool = Base64FileCodecTool;
         assert_eq!(tool.slug(), "base64-file-codec");
 
         let tmp = std::env::temp_dir().join("test_base64_happy_path");
@@ -497,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_base64_file_codec_edge_case() {
-        let tool = Base64FileCodecTool::default();
+        let tool = Base64FileCodecTool;
         let tmp = std::env::temp_dir().join("test_base64_edge_case");
         let _ = fs::create_dir_all(&tmp);
 
@@ -532,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_base64_file_codec_invalid_magic_bytes() {
-        let tool = Base64FileCodecTool::default();
+        let tool = Base64FileCodecTool;
         let tmp = std::env::temp_dir().join("test_base64_invalid_mb");
         let _ = fs::create_dir_all(&tmp);
 
@@ -559,7 +555,7 @@ mod tests {
 
     #[test]
     fn test_base64_file_codec_cooperative_cancellation() {
-        let tool = Base64FileCodecTool::default();
+        let tool = Base64FileCodecTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-base64".to_string(),
             tool_slug: "base64-file-codec".to_string(),
@@ -578,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_base64_file_codec_security_guardrails() {
-        let tool = Base64FileCodecTool::default();
+        let tool = Base64FileCodecTool;
         let tmp = std::env::temp_dir().join("test_base64_sec");
         let _ = fs::create_dir_all(&tmp);
 

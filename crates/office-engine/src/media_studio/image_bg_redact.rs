@@ -93,10 +93,14 @@ fn apply_pixelate(img: &mut RawImage, area: &RectArea, block_size: u32) {
                 }
             }
 
-            if count > 0 {
-                let avg_r = (sum_r / count) as u8;
-                let avg_g = (sum_g / count) as u8;
-                let avg_b = (sum_b / count) as u8;
+            if let (Some(avg_r), Some(avg_g), Some(avg_b)) = (
+                sum_r.checked_div(count),
+                sum_g.checked_div(count),
+                sum_b.checked_div(count),
+            ) {
+                let avg_r = avg_r as u8;
+                let avg_g = avg_g as u8;
+                let avg_b = avg_b as u8;
 
                 // Gán màu trung bình cho toàn bộ khối
                 for dy in 0..block_h {
@@ -405,7 +409,7 @@ mod tests {
 
     #[test]
     fn test_image_bg_redact_happy_path() {
-        let tool = ImageBgRedactTool::default();
+        let tool = ImageBgRedactTool;
         let tmp = std::env::temp_dir().join("test_redact_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -438,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_image_bg_redact_edge_case() {
-        let tool = ImageBgRedactTool::default();
+        let tool = ImageBgRedactTool;
         let tmp = std::env::temp_dir().join("test_redact_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -479,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_image_bg_redact_invalid_magic_bytes() {
-        let tool = ImageBgRedactTool::default();
+        let tool = ImageBgRedactTool;
         let tmp = std::env::temp_dir().join("test_redact_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -504,7 +508,7 @@ mod tests {
 
     #[test]
     fn test_image_bg_redact_cooperative_cancellation() {
-        let tool = ImageBgRedactTool::default();
+        let tool = ImageBgRedactTool;
         let tmp = std::env::temp_dir().join("test_redact_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -526,7 +530,7 @@ mod tests {
 
     #[test]
     fn test_image_bg_redact_security_guardrails() {
-        let tool = ImageBgRedactTool::default();
+        let tool = ImageBgRedactTool;
         assert_eq!(tool.slug(), "image-bg-redact");
         assert_eq!(tool.name(), "Làm mờ Dữ liệu Nhạy cảm Giấy tờ");
 

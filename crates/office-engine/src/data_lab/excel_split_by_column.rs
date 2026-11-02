@@ -184,8 +184,8 @@ impl OfficeTool for ExcelSplitByColumnTool {
         }
 
         let mut column_to_split = options.split_column_name.clone();
-        if column_to_split.trim().is_empty() {
-            if let Some(idx) = options.split_column_index {
+        if column_to_split.trim().is_empty()
+            && let Some(idx) = options.split_column_index {
                 let mut lines = content.lines().filter(|l| !l.trim().is_empty());
                 if let Some(header_line) = lines.next() {
                     let delimiter = if header_line.contains('\t') {
@@ -206,7 +206,6 @@ impl OfficeTool for ExcelSplitByColumnTool {
                     }
                 }
             }
-        }
 
         let (header, groups) = split_table_by_column(&content, &column_to_split, cancel_flag)?;
 
@@ -291,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_excel_split_by_column_happy_path() {
-        let tool = ExcelSplitByColumnTool::default();
+        let tool = ExcelSplitByColumnTool;
         assert_eq!(tool.slug(), "excel-split-by-column");
 
         // Tạo bảng lương 5.000 dòng theo 20 phòng ban (PB01 .. PB20)
@@ -316,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_excel_split_by_column_edge_case() {
-        let tool = ExcelSplitByColumnTool::default();
+        let tool = ExcelSplitByColumnTool;
         let csv = "ID,Name,Department\n1,Alice,Finance/Accounting\n2,Bob,IT:Dev\n3,Charlie,Finance/Accounting";
 
         let tmp = std::env::temp_dir().join("test_split_edge");
@@ -349,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_excel_split_by_column_invalid_magic_bytes() {
-        let tool = ExcelSplitByColumnTool::default();
+        let tool = ExcelSplitByColumnTool;
         let tmp = std::env::temp_dir().join("test_split_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -374,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_excel_split_by_column_cooperative_cancellation() {
-        let tool = ExcelSplitByColumnTool::default();
+        let tool = ExcelSplitByColumnTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-split".to_string(),
             tool_slug: "excel-split-by-column".to_string(),

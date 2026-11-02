@@ -25,11 +25,10 @@ fn test_pipeline_document_full_lifecycle() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "theme": "business", "embed_vietnamese_font": true }),
         };
-        if let Ok(resp) = tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 2: pdf-page-number-header
@@ -41,11 +40,10 @@ fn test_pipeline_document_full_lifecycle() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "format": "Trang {page}/{total}", "position": "bottom-right" }),
         };
-        if let Ok(resp) = tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 3: pdf-watermark-stamp
@@ -57,11 +55,10 @@ fn test_pipeline_document_full_lifecycle() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "watermark_text": "LƯU HÀNH NỘI BỘ", "opacity": 0.25 }),
         };
-        if let Ok(resp) = tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_pdf = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 4: pdf-compress
@@ -95,11 +92,10 @@ fn test_pipeline_media_preparation() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "window_frame": "macos_dark", "shadow_radius": 15 }),
         };
-        if let Ok(resp) = tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_img = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 2: image-batch (chuyển đổi và nén tối ưu)
@@ -111,11 +107,10 @@ fn test_pipeline_media_preparation() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "target_format": "png", "quality": 85, "strip_exif": true }),
         };
-        if let Ok(resp) = tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_img = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 3: watermark-batch-studio
@@ -157,11 +152,10 @@ fn test_pipeline_data_cleaning_and_diff() {
             output_directory: Some(harness.temp_dir().to_string_lossy().to_string()),
             options: json!({ "source_encoding": "TCVN3", "target_encoding": "Unicode" }),
         };
-        if let Ok(resp) = tool.execute(&req, &cancel, None) {
-            if let Some(out) = resp.output_paths.first() {
+        if let Ok(resp) = tool.execute(&req, &cancel, None)
+            && let Some(out) = resp.output_paths.first() {
                 current_file = std::path::PathBuf::from(out);
             }
-        }
     }
 
     // Bước 2: text-pii-anonymizer

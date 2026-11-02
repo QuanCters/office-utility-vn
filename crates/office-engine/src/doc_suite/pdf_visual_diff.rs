@@ -11,18 +11,15 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum DiffMode {
     #[serde(rename = "text_diff", alias = "text-diff")]
+    #[default]
     TextDiff,
     #[serde(rename = "visual_pixel_diff", alias = "pixel-diff", alias = "side-by-side")]
     VisualPixelDiff,
 }
 
-impl Default for DiffMode {
-    fn default() -> Self {
-        Self::TextDiff
-    }
-}
 
 fn default_highlight_color() -> String {
     "#rose-600".to_string()
@@ -99,15 +96,14 @@ fn extract_page_texts_and_stream(bytes: &[u8]) -> Vec<(String, String)> {
         search_from = abs_pos + 11;
     }
 
-    if pages.is_empty() {
-        if let Some(s_start) = raw.find("stream") {
+    if pages.is_empty()
+        && let Some(s_start) = raw.find("stream") {
             let abs_s = s_start + 6;
             if let Some(s_end) = raw[abs_s..].find("endstream") {
                 let stream = raw[abs_s..abs_s + s_end].trim().to_string();
                 pages.push((stream.clone(), stream));
             }
         }
-    }
 
     if pages.is_empty() {
         pages.push((String::new(), String::new()));
@@ -468,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_pdf_visual_diff_happy_path() {
-        let tool = PdfVisualDiffTool::default();
+        let tool = PdfVisualDiffTool;
         assert_eq!(tool.slug(), "pdf-visual-diff");
 
         let temp_dir = std::env::temp_dir().join("test_diff_happy");
@@ -513,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_pdf_visual_diff_invalid_magic_bytes() {
-        let tool = PdfVisualDiffTool::default();
+        let tool = PdfVisualDiffTool;
         let temp_dir = std::env::temp_dir().join("test_diff_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let file1 = temp_dir.join("valid.pdf");
@@ -537,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_pdf_visual_diff_cooperative_cancellation() {
-        let tool = PdfVisualDiffTool::default();
+        let tool = PdfVisualDiffTool;
         let temp_dir = std::env::temp_dir().join("test_diff_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let file1 = temp_dir.join("file1.pdf");
@@ -560,7 +556,7 @@ mod tests {
 
     #[test]
     fn test_pdf_visual_diff_security_guardrails() {
-        let tool = PdfVisualDiffTool::default();
+        let tool = PdfVisualDiffTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

@@ -92,8 +92,8 @@ impl MiniPageNumPdf {
             let gen_str = parts.next();
             let id_str = parts.next();
 
-            if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-                if let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+            if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+                && let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                     let content_start = abs_obj_start + 4;
                     if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                         let content = raw_text[content_start..content_start + end_offset].trim().to_string();
@@ -106,7 +106,6 @@ impl MiniPageNumPdf {
                         continue;
                     }
                 }
-            }
             search_from = abs_obj_start + 4;
         }
 
@@ -404,7 +403,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n300\n%%EOF\n";
 
     #[test]
     fn test_pdf_page_number_header_happy_path() {
-        let tool = PdfPageNumberHeaderTool::default();
+        let tool = PdfPageNumberHeaderTool;
         let tmp = std::env::temp_dir().join("test_page_num_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -434,7 +433,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n300\n%%EOF\n";
 
     #[test]
     fn test_pdf_page_number_header_edge_case() {
-        let tool = PdfPageNumberHeaderTool::default();
+        let tool = PdfPageNumberHeaderTool;
         let tmp = std::env::temp_dir().join("test_bates_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -466,7 +465,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n300\n%%EOF\n";
 
     #[test]
     fn test_pdf_page_number_header_invalid_magic_bytes() {
-        let tool = PdfPageNumberHeaderTool::default();
+        let tool = PdfPageNumberHeaderTool;
         let tmp = std::env::temp_dir().join("test_page_num_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -493,7 +492,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n300\n%%EOF\n";
 
     #[test]
     fn test_pdf_page_number_header_cooperative_cancellation() {
-        let tool = PdfPageNumberHeaderTool::default();
+        let tool = PdfPageNumberHeaderTool;
         let tmp = std::env::temp_dir().join("test_page_num_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -515,7 +514,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n300\n%%EOF\n";
 
     #[test]
     fn test_pdf_page_number_header_security_guardrails() {
-        let tool = PdfPageNumberHeaderTool::default();
+        let tool = PdfPageNumberHeaderTool;
         assert_eq!(tool.slug(), "pdf-page-number-header");
         assert_eq!(tool.name(), "Đánh số trang & Bates Numbering");
     }

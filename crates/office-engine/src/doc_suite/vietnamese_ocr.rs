@@ -108,15 +108,12 @@ fn perform_ocr_extract(
                     return Err(CommandError::TaskCancelled);
                 }
                 let trimmed = line.trim();
-                if trimmed.ends_with("Tj") {
-                    if let Some(start) = trimmed.find('(') {
-                        if let Some(end) = trimmed.rfind(')') {
-                            if end > start {
+                if trimmed.ends_with("Tj")
+                    && let Some(start) = trimmed.find('(')
+                        && let Some(end) = trimmed.rfind(')')
+                            && end > start {
                                 extracted_lines.push(trimmed[start + 1..end].to_string());
                             }
-                        }
-                    }
-                }
             }
 
             if extracted_lines.is_empty() {
@@ -250,8 +247,8 @@ impl OfficeTool for VietnameseOcrTool {
         }
 
         // Xác thực gói ONNX nếu chọn chế độ AccurateOnnx
-        if options.engine == OcrEngineMode::AccurateOnnx {
-            if let Some(ref m_path) = options.model_path {
+        if options.engine == OcrEngineMode::AccurateOnnx
+            && let Some(ref m_path) = options.model_path {
                 let m = Path::new(m_path);
                 if !m.exists() {
                     return Err(CommandError::FileNotFound {
@@ -276,7 +273,6 @@ impl OfficeTool for VietnameseOcrTool {
                     }
                 }
             }
-        }
 
         let output_dir = request
             .output_directory
@@ -414,7 +410,7 @@ xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n3
 
     #[test]
     fn test_vietnamese_ocr_happy_path() {
-        let tool = VietnameseOcrTool::default();
+        let tool = VietnameseOcrTool;
         let tmp = std::env::temp_dir().join("test_ocr_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -442,7 +438,7 @@ xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n3
 
     #[test]
     fn test_vietnamese_ocr_edge_case() {
-        let tool = VietnameseOcrTool::default();
+        let tool = VietnameseOcrTool;
         let tmp = std::env::temp_dir().join("test_ocr_onnx_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -496,7 +492,7 @@ xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n3
 
     #[test]
     fn test_vietnamese_ocr_invalid_magic_bytes() {
-        let tool = VietnameseOcrTool::default();
+        let tool = VietnameseOcrTool;
         let tmp = std::env::temp_dir().join("test_ocr_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -521,7 +517,7 @@ xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n3
 
     #[test]
     fn test_vietnamese_ocr_cooperative_cancellation() {
-        let tool = VietnameseOcrTool::default();
+        let tool = VietnameseOcrTool;
         let tmp = std::env::temp_dir().join("test_ocr_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -543,7 +539,7 @@ xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n3
 
     #[test]
     fn test_vietnamese_ocr_security_guardrails() {
-        let tool = VietnameseOcrTool::default();
+        let tool = VietnameseOcrTool;
         assert_eq!(tool.slug(), "vietnamese-ocr");
         assert_eq!(tool.name(), "OCR Nhận dạng Ký tự Tiếng Việt");
     }

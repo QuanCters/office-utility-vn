@@ -18,8 +18,10 @@ pub enum Dialect {
 
 /// Đơn vị tiền tệ
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum CurrencyUnit {
     /// Việt Nam Đồng: "đồng", "đồng chẵn"
+    #[default]
     VND,
     /// Đô la Mỹ: "đô la Mỹ", "xu"
     USD,
@@ -34,11 +36,6 @@ pub enum CurrencyUnit {
     None,
 }
 
-impl Default for CurrencyUnit {
-    fn default() -> Self {
-        Self::VND
-    }
-}
 
 /// Cấu hình tham số cho công cụ Đọc số thành chữ
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,7 +149,7 @@ fn split_into_groups(s: &str) -> Vec<[u8; 3]> {
     let mut i = bytes.len();
 
     while i > 0 {
-        let start = if i >= 3 { i - 3 } else { 0 };
+        let start = i.saturating_sub(3);
         let slice = &bytes[start..i];
         let mut group = [0u8; 3];
         if slice.len() == 3 {
@@ -668,7 +665,7 @@ mod vietnamese_number_to_words_tests {
 
     #[test]
     fn test_office_tool_metadata() {
-        let tool = VietnameseNumberToWordsTool::default();
+        let tool = VietnameseNumberToWordsTool;
         assert_eq!(tool.slug(), "vietnamese-number-to-words");
         assert_eq!(tool.name(), "Đọc Số Tiền Thành Chữ Chuẩn");
         assert!(!tool.description().is_empty());
@@ -676,7 +673,7 @@ mod vietnamese_number_to_words_tests {
 
     #[test]
     fn test_task_cancellation_under_100ms() {
-        let tool = VietnameseNumberToWordsTool::default();
+        let tool = VietnameseNumberToWordsTool;
         let cancel_flag = AtomicBool::new(true);
 
         let request = DispatchTaskRequest {

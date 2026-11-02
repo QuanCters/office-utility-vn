@@ -55,7 +55,7 @@ fn sample_bilinear(img: &RawImage, x: f32, y: f32) -> [u8; 3] {
     let idx11 = ((y1 * img.width + x1) * 3) as usize;
 
     let mut out = [0u8; 3];
-    for c in 0..3 {
+    for (c, out_c) in out.iter_mut().enumerate() {
         let p00 = img.pixels.get(idx00 + c).copied().unwrap_or(0) as f32;
         let p10 = img.pixels.get(idx10 + c).copied().unwrap_or(0) as f32;
         let p01 = img.pixels.get(idx01 + c).copied().unwrap_or(0) as f32;
@@ -64,7 +64,7 @@ fn sample_bilinear(img: &RawImage, x: f32, y: f32) -> [u8; 3] {
         let top = (1.0 - fx) * p00 + fx * p10;
         let bottom = (1.0 - fx) * p01 + fx * p11;
         let val = (1.0 - fy) * top + fy * bottom;
-        out[c] = val.round().clamp(0.0, 255.0) as u8;
+        *out_c = val.round().clamp(0.0, 255.0) as u8;
     }
 
     out
@@ -131,7 +131,7 @@ fn apply_document_enhancement(img: &mut RawImage) {
     let mut max_l = 0u8;
 
     // Tìm giá trị min/max độ sáng
-    for chunk in img.pixels.chunks_exact(3) {
+    for chunk in img.pixels.as_chunks::<3>().0 {
         let lum = ((chunk[0] as u32 * 299 + chunk[1] as u32 * 587 + chunk[2] as u32 * 114) / 1000) as u8;
         if lum < min_l {
             min_l = lum;
@@ -143,7 +143,7 @@ fn apply_document_enhancement(img: &mut RawImage) {
 
     let range = (max_l as f32 - min_l as f32).max(1.0);
 
-    for chunk in img.pixels.chunks_exact_mut(3) {
+    for chunk in img.pixels.as_chunks_mut::<3>().0 {
         let lum = ((chunk[0] as u32 * 299 + chunk[1] as u32 * 587 + chunk[2] as u32 * 114) / 1000) as u8;
         let norm = ((lum as f32 - min_l as f32) / range).clamp(0.0, 1.0);
 
@@ -420,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_doc_scanner_perspective_happy_path() {
-        let tool = DocScannerPerspectiveTool::default();
+        let tool = DocScannerPerspectiveTool;
         let tmp = std::env::temp_dir().join("test_persp_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_doc_scanner_perspective_edge_case() {
-        let tool = DocScannerPerspectiveTool::default();
+        let tool = DocScannerPerspectiveTool;
         let tmp = std::env::temp_dir().join("test_persp_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn test_doc_scanner_perspective_invalid_magic_bytes() {
-        let tool = DocScannerPerspectiveTool::default();
+        let tool = DocScannerPerspectiveTool;
         let tmp = std::env::temp_dir().join("test_persp_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_doc_scanner_perspective_cooperative_cancellation() {
-        let tool = DocScannerPerspectiveTool::default();
+        let tool = DocScannerPerspectiveTool;
         let tmp = std::env::temp_dir().join("test_persp_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_doc_scanner_perspective_security_guardrails() {
-        let tool = DocScannerPerspectiveTool::default();
+        let tool = DocScannerPerspectiveTool;
         assert_eq!(tool.slug(), "doc-scanner-perspective");
         assert_eq!(tool.name(), "Phẳng hóa Tài liệu Chụp Nghiêng");
 

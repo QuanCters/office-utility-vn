@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_list_set_operations_happy_path() {
-        let tool = ListSetOperationsTool::default();
+        let tool = ListSetOperationsTool;
         assert_eq!(tool.slug(), "list-set-operations");
 
         // Mô phỏng 100.000 số điện thoại: A (1..100k), B (50k..150k)
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_list_set_operations_invalid_magic_bytes() {
-        let tool = ListSetOperationsTool::default();
+        let tool = ListSetOperationsTool;
         let tmp = std::env::temp_dir().join("test_set_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_list_set_operations_cooperative_cancellation() {
-        let tool = ListSetOperationsTool::default();
+        let tool = ListSetOperationsTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-set".to_string(),
             tool_slug: "list-set-operations".to_string(),

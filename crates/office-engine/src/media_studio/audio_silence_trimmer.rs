@@ -219,7 +219,7 @@ pub fn trim_silence(
     }
 
     let num_windows = audio.samples.len() / samples_per_window;
-    let min_silent_windows = ((min_silence_duration_ms + window_duration_ms - 1) / window_duration_ms) as usize;
+    let min_silent_windows = min_silence_duration_ms.div_ceil(window_duration_ms) as usize;
 
     // Phân loại từng cửa sổ: im lặng hay có âm thanh
     let mut is_silent_window = Vec::with_capacity(num_windows);
@@ -242,8 +242,8 @@ pub fn trim_silence(
             }
             let silent_count = j - i;
             if silent_count >= min_silent_windows {
-                for k in i..j {
-                    keep_window[k] = false;
+                for item in &mut keep_window[i..j] {
+                    *item = false;
                 }
             }
             i = j;
@@ -254,8 +254,8 @@ pub fn trim_silence(
 
     // Ghép các cửa sổ giữ lại
     let mut trimmed_samples = Vec::new();
-    for w in 0..num_windows {
-        if keep_window[w] {
+    for (w, &keep) in keep_window.iter().enumerate().take(num_windows) {
+        if keep {
             let start = w * samples_per_window;
             let end = start + samples_per_window;
             trimmed_samples.extend_from_slice(&audio.samples[start..end]);
@@ -461,9 +461,7 @@ mod tests {
         }
 
         // Đoạn 2: Khoảng lặng (silence: giá trị gần 0)
-        for _ in 0..silence_samples {
-            samples.push(0);
-        }
+        samples.resize(samples.len() + silence_samples, 0);
 
         // Đoạn 3: Tiếng nói tiếp theo
         for i in 0..tone_samples {
@@ -483,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_audio_silence_trimmer_happy_path() {
-        let tool = AudioSilenceTrimmerTool::default();
+        let tool = AudioSilenceTrimmerTool;
         let tmp = std::env::temp_dir().join("test_audio_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -525,7 +523,7 @@ mod tests {
 
     #[test]
     fn test_audio_silence_trimmer_edge_case() {
-        let tool = AudioSilenceTrimmerTool::default();
+        let tool = AudioSilenceTrimmerTool;
         let tmp = std::env::temp_dir().join("test_audio_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -562,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_audio_silence_trimmer_invalid_magic_bytes() {
-        let tool = AudioSilenceTrimmerTool::default();
+        let tool = AudioSilenceTrimmerTool;
         let tmp = std::env::temp_dir().join("test_audio_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -587,7 +585,7 @@ mod tests {
 
     #[test]
     fn test_audio_silence_trimmer_cooperative_cancellation() {
-        let tool = AudioSilenceTrimmerTool::default();
+        let tool = AudioSilenceTrimmerTool;
         let tmp = std::env::temp_dir().join("test_audio_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -609,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_audio_silence_trimmer_security_guardrails() {
-        let tool = AudioSilenceTrimmerTool::default();
+        let tool = AudioSilenceTrimmerTool;
         assert_eq!(tool.slug(), "audio-silence-trimmer");
         assert_eq!(tool.name(), "Cắt Bỏ Khoảng lặng Ghi âm");
 

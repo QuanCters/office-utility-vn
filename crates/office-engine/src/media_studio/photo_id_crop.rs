@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_photo_id_crop_happy_path() {
-        let tool = PhotoIdCropTool::default();
+        let tool = PhotoIdCropTool;
         let tmp = std::env::temp_dir().join("test_photo_id_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_photo_id_crop_edge_case() {
-        let tool = PhotoIdCropTool::default();
+        let tool = PhotoIdCropTool;
         let tmp = std::env::temp_dir().join("test_photo_id_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_photo_id_crop_invalid_magic_bytes() {
-        let tool = PhotoIdCropTool::default();
+        let tool = PhotoIdCropTool;
         let tmp = std::env::temp_dir().join("test_photo_id_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_photo_id_crop_cooperative_cancellation() {
-        let tool = PhotoIdCropTool::default();
+        let tool = PhotoIdCropTool;
         let tmp = std::env::temp_dir().join("test_photo_id_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_photo_id_crop_security_guardrails() {
-        let tool = PhotoIdCropTool::default();
+        let tool = PhotoIdCropTool;
         assert_eq!(tool.slug(), "photo-id-crop");
         assert_eq!(tool.name(), "Cắt Ảnh Thẻ Chuẩn 300 DPI");
 

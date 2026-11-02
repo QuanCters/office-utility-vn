@@ -58,8 +58,8 @@ pub fn linear_scan_objects(raw_text: &str, cancel_flag: &AtomicBool) -> Result<V
         let gen_str = tokens.next();
         let id_str = tokens.next();
 
-        if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-            if let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+        if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+            && let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                 let content_start = abs_marker + 4;
                 if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                     let abs_end = content_start + end_offset;
@@ -73,7 +73,6 @@ pub fn linear_scan_objects(raw_text: &str, cancel_flag: &AtomicBool) -> Result<V
                     continue;
                 }
             }
-        }
 
         search_from = abs_marker + 4;
     }
@@ -362,7 +361,7 @@ mod tests {
     #[test]
     fn test_pdf_repair_corrupt_happy_path() {
         // Quét toàn bộ mảng byte để định vị lại offset của các cặp từ khóa obj / endobj
-        let tool = PdfRepairCorruptTool::default();
+        let tool = PdfRepairCorruptTool;
         assert_eq!(tool.slug(), "pdf-repair-corrupt");
 
         let cancel_flag = AtomicBool::new(false);
@@ -382,7 +381,7 @@ mod tests {
     #[test]
     fn test_pdf_repair_corrupt_edge_case() {
         // Tái tạo bảng tham chiếu chéo xref và trailer bị hỏng
-        let tool = PdfRepairCorruptTool::default();
+        let tool = PdfRepairCorruptTool;
         let temp_dir = std::env::temp_dir().join("test_repair_edge");
         fs::create_dir_all(&temp_dir).unwrap();
         let broken_file = temp_dir.join("damaged.pdf");
@@ -414,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_pdf_repair_corrupt_invalid_magic_bytes() {
-        let tool = PdfRepairCorruptTool::default();
+        let tool = PdfRepairCorruptTool;
         let temp_dir = std::env::temp_dir().join("test_repair_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake = temp_dir.join("fake.pdf");
@@ -435,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_pdf_repair_corrupt_cooperative_cancellation() {
-        let tool = PdfRepairCorruptTool::default();
+        let tool = PdfRepairCorruptTool;
         let temp_dir = std::env::temp_dir().join("test_repair_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let broken_file = temp_dir.join("damaged.pdf");
@@ -456,7 +455,7 @@ mod tests {
 
     #[test]
     fn test_pdf_repair_corrupt_security_guardrails() {
-        let tool = PdfRepairCorruptTool::default();
+        let tool = PdfRepairCorruptTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

@@ -28,9 +28,9 @@ pub struct UniversalConverterTool {
 impl Default for UniversalConverterTool {
     fn default() -> Self {
         Self {
-            pdf_tool: PdfMergeSplitTool::default(),
-            image_tool: ImageBatchTool::default(),
-            font_tool: VietnameseFontConverterTool::default(),
+            pdf_tool: PdfMergeSplitTool,
+            image_tool: ImageBatchTool,
+            font_tool: VietnameseFontConverterTool,
         }
     }
 }

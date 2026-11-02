@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn test_vn_einvoice_xml_reader_invalid_magic_bytes() {
-        let tool = VnEinvoiceXmlReaderTool::default();
+        let tool = VnEinvoiceXmlReaderTool;
         let bad_file = std::env::temp_dir().join("bad_magic_einvoice.bin");
         std::fs::write(&bad_file, [0x00, 0x01, 0x02, 0x03, 0x04]).ok();
 
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_vn_einvoice_xml_reader_cooperative_cancellation() {
-        let tool = VnEinvoiceXmlReaderTool::default();
+        let tool = VnEinvoiceXmlReaderTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel-einvoice".to_string(),
             tool_slug: "vn-einvoice-xml-reader".to_string(),
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_vn_einvoice_xml_reader_security_guardrails() {
-        let tool = VnEinvoiceXmlReaderTool::default();
+        let tool = VnEinvoiceXmlReaderTool;
         assert_eq!(tool.slug(), "vn-einvoice-xml-reader");
         assert_eq!(tool.name(), "Đọc Hóa đơn Điện tử XML VN");
     }

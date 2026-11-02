@@ -66,37 +66,34 @@ fn extract_text_from_stream(stream_bytes: &[u8]) -> Vec<TextElement> {
         // Toán tử chọn font: /F1 18 Tf
         if trimmed.ends_with("Tf") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 3 {
-                if let Ok(size) = parts[parts.len() - 2].parse::<f32>() {
+            if parts.len() >= 3
+                && let Ok(size) = parts[parts.len() - 2].parse::<f32>() {
                     current_font_size = size;
                 }
-            }
         }
         // Toán tử ma trận tọa độ: 1 0 0 1 x y Tm
         else if trimmed.ends_with("Tm") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 7 {
-                if let (Ok(x), Ok(y)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
+            if parts.len() >= 7
+                && let (Ok(x), Ok(y)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
                     cur_x = x;
                     cur_y = y;
                 }
-            }
         }
         // Toán tử dịch chuyển: x y Td
         else if trimmed.ends_with("Td") || trimmed.ends_with("TD") {
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() >= 3 {
-                if let (Ok(dx), Ok(dy)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
+            if parts.len() >= 3
+                && let (Ok(dx), Ok(dy)) = (parts[parts.len() - 3].parse::<f32>(), parts[parts.len() - 2].parse::<f32>()) {
                     cur_x += dx;
                     cur_y += dy;
                 }
-            }
         }
         // Toán tử in chuỗi văn bản: (Nội dung) Tj
         else if trimmed.ends_with("Tj") {
-            if let Some(start) = trimmed.find('(') {
-                if let Some(end) = trimmed.rfind(')') {
-                    if end > start {
+            if let Some(start) = trimmed.find('(')
+                && let Some(end) = trimmed.rfind(')')
+                    && end > start {
                         let text = trimmed[start + 1..end].to_string();
                         elements.push(TextElement {
                             text,
@@ -105,8 +102,6 @@ fn extract_text_from_stream(stream_bytes: &[u8]) -> Vec<TextElement> {
                             _y: cur_y,
                         });
                     }
-                }
-            }
         }
         // Toán tử mảng chuỗi: [(Chuỗi 1) -10 (Chuỗi 2)] TJ
         else if trimmed.ends_with("TJ") {
@@ -487,7 +482,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n500\n%%EOF\n",
 
     #[test]
     fn test_pdf_to_markdown_happy_path() {
-        let tool = PdfToMarkdownTool::default();
+        let tool = PdfToMarkdownTool;
         let tmp = std::env::temp_dir().join("test_pdf_to_md_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -517,7 +512,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n500\n%%EOF\n",
 
     #[test]
     fn test_pdf_to_markdown_edge_case() {
-        let tool = PdfToMarkdownTool::default();
+        let tool = PdfToMarkdownTool;
         let tmp = std::env::temp_dir().join("test_pdf_to_md_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -547,7 +542,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n500\n%%EOF\n",
 
     #[test]
     fn test_pdf_to_markdown_invalid_magic_bytes() {
-        let tool = PdfToMarkdownTool::default();
+        let tool = PdfToMarkdownTool;
         let tmp = std::env::temp_dir().join("test_pdf_to_md_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -574,7 +569,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n500\n%%EOF\n",
 
     #[test]
     fn test_pdf_to_markdown_cooperative_cancellation() {
-        let tool = PdfToMarkdownTool::default();
+        let tool = PdfToMarkdownTool;
         let tmp = std::env::temp_dir().join("test_pdf_to_md_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -596,7 +591,7 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n500\n%%EOF\n",
 
     #[test]
     fn test_pdf_to_markdown_security_guardrails() {
-        let tool = PdfToMarkdownTool::default();
+        let tool = PdfToMarkdownTool;
         assert_eq!(tool.slug(), "pdf-to-markdown");
         assert_eq!(tool.name(), "Chuyển đổi PDF sang Markdown");
     }

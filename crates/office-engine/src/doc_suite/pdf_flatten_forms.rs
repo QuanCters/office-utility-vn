@@ -85,8 +85,8 @@ impl FlattenParsedPdf {
             let gen_str = parts.next();
             let id_str = parts.next();
 
-            if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-                if let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+            if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+                && let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                     let content_start = abs_obj_start + 4;
                     if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                         let content = raw_text[content_start..content_start + end_offset].trim().to_string();
@@ -99,7 +99,6 @@ impl FlattenParsedPdf {
                         continue;
                     }
                 }
-            }
             search_from = abs_obj_start + 4;
         }
 
@@ -229,17 +228,15 @@ impl OfficeTool for PdfFlattenFormsTool {
                 // Thu thập giá trị text từ các widget form fields
                 let mut form_values = Vec::new();
                 for obj in &parsed.objects {
-                    if obj.content.contains("/Subtype /Widget") || obj.content.contains("/FT /Tx") {
-                        if let Some(v_idx) = obj.content.find("/V ") {
+                    if (obj.content.contains("/Subtype /Widget") || obj.content.contains("/FT /Tx"))
+                        && let Some(v_idx) = obj.content.find("/V ") {
                             let rest = &obj.content[v_idx + 3..];
-                            if let Some(start) = rest.find('(') {
-                                if let Some(end) = rest[start + 1..].find(')') {
+                            if let Some(start) = rest.find('(')
+                                && let Some(end) = rest[start + 1..].find(')') {
                                     let val = &rest[start + 1..start + 1 + end];
                                     form_values.push(val.to_string());
                                 }
-                            }
                         }
-                    }
                 }
 
                 let mut max_id = parsed.objects.iter().map(|o| o.id).max().unwrap_or(10);
@@ -263,15 +260,14 @@ impl OfficeTool for PdfFlattenFormsTool {
                     let mut content = obj.content.clone();
 
                     // 3. Trong Catalog, loại bỏ tham chiếu /AcroForm
-                    if content.contains("/Type /Catalog") || content.contains("/Type/Catalog") {
-                        if let Some(af_pos) = content.find("/AcroForm") {
+                    if (content.contains("/Type /Catalog") || content.contains("/Type/Catalog"))
+                        && let Some(af_pos) = content.find("/AcroForm") {
                             let rest = &content[af_pos + 9..];
                             if let Some(r_pos) = rest.find('R') {
                                 let end_idx = af_pos + 9 + r_pos + 1;
                                 content.replace_range(af_pos..end_idx, "");
                             }
                         }
-                    }
 
                     // 4. Trong Page, loại bỏ /Annots và hợp nhất text của Form vào /Contents
                     if content.contains("/Type /Page") || content.contains("/Type/Page") {
@@ -399,7 +395,7 @@ trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n600\n%%EOF\n";
 
     #[test]
     fn test_pdf_flatten_forms_happy_path() {
-        let tool = PdfFlattenFormsTool::default();
+        let tool = PdfFlattenFormsTool;
         let tmp = std::env::temp_dir().join("test_flatten_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -429,7 +425,7 @@ trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n600\n%%EOF\n";
 
     #[test]
     fn test_pdf_flatten_forms_edge_case() {
-        let tool = PdfFlattenFormsTool::default();
+        let tool = PdfFlattenFormsTool;
         let tmp = std::env::temp_dir().join("test_flatten_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -456,7 +452,7 @@ trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n600\n%%EOF\n";
 
     #[test]
     fn test_pdf_flatten_forms_invalid_magic_bytes() {
-        let tool = PdfFlattenFormsTool::default();
+        let tool = PdfFlattenFormsTool;
         let tmp = std::env::temp_dir().join("test_flatten_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -483,7 +479,7 @@ trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n600\n%%EOF\n";
 
     #[test]
     fn test_pdf_flatten_forms_cooperative_cancellation() {
-        let tool = PdfFlattenFormsTool::default();
+        let tool = PdfFlattenFormsTool;
         let tmp = std::env::temp_dir().join("test_flatten_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -505,7 +501,7 @@ trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n600\n%%EOF\n";
 
     #[test]
     fn test_pdf_flatten_forms_security_guardrails() {
-        let tool = PdfFlattenFormsTool::default();
+        let tool = PdfFlattenFormsTool;
         assert_eq!(tool.slug(), "pdf-flatten-forms");
         assert_eq!(tool.name(), "Làm phẳng PDF (Flatten Forms)");
     }

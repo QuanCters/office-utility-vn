@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn test_text_pii_anonymizer_happy_path() {
-        let tool = TextPiiAnonymizerTool::default();
+        let tool = TextPiiAnonymizerTool;
         assert_eq!(tool.slug(), "text-pii-anonymizer");
 
         // Quét và thay thế số CCCD 12 số trong văn bản
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_text_pii_anonymizer_invalid_magic_bytes() {
-        let tool = TextPiiAnonymizerTool::default();
+        let tool = TextPiiAnonymizerTool;
         let tmp = std::env::temp_dir().join("test_pii_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_text_pii_anonymizer_cooperative_cancellation() {
-        let tool = TextPiiAnonymizerTool::default();
+        let tool = TextPiiAnonymizerTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-pii".to_string(),
             tool_slug: "text-pii-anonymizer".to_string(),

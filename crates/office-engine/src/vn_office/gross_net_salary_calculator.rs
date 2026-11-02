@@ -157,14 +157,13 @@ impl OfficeTool for GrossNetSalaryCalculatorTool {
 
         // Validate magic bytes if input files provided
         for path in &request.input_paths {
-            if let Ok(bytes) = std::fs::read(path) {
-                if bytes.len() >= 4 && !bytes.starts_with(b"{\n") && !bytes.starts_with(b"{\"") && !bytes.is_ascii() {
+            if let Ok(bytes) = std::fs::read(path)
+                && bytes.len() >= 4 && !bytes.starts_with(b"{\n") && !bytes.starts_with(b"{\"") && !bytes.is_ascii() {
                     return Err(CommandError::InvalidFileSignature {
                         expected: "JSON / Plaintext Salary Config".to_string(),
                         actual: format!("{:02X?}", &bytes[..4.min(bytes.len())]),
                     });
                 }
-            }
         }
 
         if let Some(cb) = on_progress {
@@ -194,10 +193,8 @@ impl OfficeTool for GrossNetSalaryCalculatorTool {
                 .map_err(|_| CommandError::ValidationFailed {
                     reason: format!("Mức lương gross_amount không hợp lệ: {s}"),
                 })?
-        } else if let Some(v) = request.options.get("salary").and_then(|v| v.as_f64()) {
-            v
         } else {
-            30_000_000.0
+            request.options.get("salary").and_then(|v| v.as_f64()).unwrap_or(30_000_000.0)
         };
 
         let region = request
@@ -308,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_gross_net_salary_calculator_invalid_magic_bytes() {
-        let tool = GrossNetSalaryCalculatorTool::default();
+        let tool = GrossNetSalaryCalculatorTool;
         let bad_file = std::env::temp_dir().join("bad_magic_salary.bin");
         std::fs::write(&bad_file, [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]).ok();
 
@@ -331,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_gross_net_salary_calculator_cooperative_cancellation() {
-        let tool = GrossNetSalaryCalculatorTool::default();
+        let tool = GrossNetSalaryCalculatorTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel".to_string(),
             tool_slug: "gross-net-salary-calculator".to_string(),
@@ -346,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_gross_net_salary_calculator_security_guardrails() {
-        let tool = GrossNetSalaryCalculatorTool::default();
+        let tool = GrossNetSalaryCalculatorTool;
         assert_eq!(tool.slug(), "gross-net-salary-calculator");
         assert_eq!(tool.name(), "Tính Lương Gross - Net & Thuế");
     }

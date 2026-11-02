@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_excel_visual_joiner_happy_path() {
-        let tool = ExcelVisualJoinerTool::default();
+        let tool = ExcelVisualJoinerTool;
         assert_eq!(tool.slug(), "excel-visual-joiner");
 
         // Bảng A: Danh sách nhân viên (Mã NV, Họ tên)
@@ -392,7 +392,7 @@ mod tests {
 
     #[test]
     fn test_excel_visual_joiner_invalid_magic_bytes() {
-        let tool = ExcelVisualJoinerTool::default();
+        let tool = ExcelVisualJoinerTool;
         let tmp = std::env::temp_dir().join("test_join_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_excel_visual_joiner_cooperative_cancellation() {
-        let tool = ExcelVisualJoinerTool::default();
+        let tool = ExcelVisualJoinerTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-join".to_string(),
             tool_slug: "excel-visual-joiner".to_string(),

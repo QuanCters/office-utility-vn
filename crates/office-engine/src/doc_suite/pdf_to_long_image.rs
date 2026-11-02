@@ -15,20 +15,17 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum LongImageFormat {
     #[serde(rename = "webp")]
     WebP,
     #[serde(rename = "jpg")]
     Jpg,
     #[serde(rename = "png")]
+    #[default]
     Png,
 }
 
-impl Default for LongImageFormat {
-    fn default() -> Self {
-        Self::Png
-    }
-}
 
 fn default_dpi() -> u32 {
     150
@@ -415,7 +412,7 @@ mod tests {
     #[test]
     fn test_pdf_to_long_image_happy_path() {
         // Render từng trang PDF thành bitmap sắc nét
-        let tool = PdfToLongImageTool::default();
+        let tool = PdfToLongImageTool;
         assert_eq!(tool.slug(), "pdf-to-long-image");
 
         let temp_dir = std::env::temp_dir().join("test_long_image_happy");
@@ -462,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_pdf_to_long_image_invalid_magic_bytes() {
-        let tool = PdfToLongImageTool::default();
+        let tool = PdfToLongImageTool;
         let temp_dir = std::env::temp_dir().join("test_long_img_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let fake = temp_dir.join("fake.pdf");
@@ -483,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_pdf_to_long_image_cooperative_cancellation() {
-        let tool = PdfToLongImageTool::default();
+        let tool = PdfToLongImageTool;
         let temp_dir = std::env::temp_dir().join("test_long_img_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("sample.pdf");
@@ -504,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_pdf_to_long_image_security_guardrails() {
-        let tool = PdfToLongImageTool::default();
+        let tool = PdfToLongImageTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

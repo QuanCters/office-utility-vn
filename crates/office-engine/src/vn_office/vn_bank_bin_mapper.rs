@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_vn_bank_bin_mapper_invalid_magic_bytes() {
-        let tool = VnBankBinMapperTool::default();
+        let tool = VnBankBinMapperTool;
         let bad_file = std::env::temp_dir().join("bad_magic_bank.bin");
         std::fs::write(&bad_file, [0x7F, 0x45, 0x4C, 0x46, 0x01]).ok();
 
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_vn_bank_bin_mapper_cooperative_cancellation() {
-        let tool = VnBankBinMapperTool::default();
+        let tool = VnBankBinMapperTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel-bank".to_string(),
             tool_slug: "vn-bank-bin-mapper".to_string(),
@@ -398,7 +398,7 @@ mod tests {
 
     #[test]
     fn test_vn_bank_bin_mapper_security_guardrails() {
-        let tool = VnBankBinMapperTool::default();
+        let tool = VnBankBinMapperTool;
         assert_eq!(tool.slug(), "vn-bank-bin-mapper");
         assert_eq!(tool.name(), "Tra cứu Mã Định danh Ngân hàng");
     }

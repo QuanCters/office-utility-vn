@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 use crate::OfficeTool;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ImpositionMode {
     #[serde(rename = "saddle_stitch")]
+    #[default]
     SaddleStitch,
     #[serde(rename = "two_up")]
     TwoUp,
@@ -20,11 +22,6 @@ pub enum ImpositionMode {
     FourUp,
 }
 
-impl Default for ImpositionMode {
-    fn default() -> Self {
-        Self::SaddleStitch
-    }
-}
 
 fn default_paper_size() -> String {
     "A4".to_string()
@@ -86,8 +83,8 @@ impl ParsedPdfPage {
             search_from = abs_pos + 11;
         }
 
-        if pages.is_empty() {
-            if let Some(s_start) = raw_text.find("stream") {
+        if pages.is_empty()
+            && let Some(s_start) = raw_text.find("stream") {
                 let abs_s = s_start + 6;
                 if let Some(s_end) = raw_text[abs_s..].find("endstream") {
                     pages.push(ParsedPdfPage {
@@ -96,7 +93,6 @@ impl ParsedPdfPage {
                     });
                 }
             }
-        }
 
         if pages.is_empty() {
             pages.push(ParsedPdfPage {
@@ -110,7 +106,7 @@ impl ParsedPdfPage {
 }
 
 pub fn calculate_saddle_stitch_order(page_count: usize) -> Vec<(Option<usize>, Option<usize>)> {
-    let sheets_needed = (page_count + 3) / 4;
+    let sheets_needed = page_count.div_ceil(4);
     let total_slots = sheets_needed * 4;
     let mut pairs = Vec::with_capacity(sheets_needed * 2);
 
@@ -132,7 +128,7 @@ pub fn calculate_saddle_stitch_order(page_count: usize) -> Vec<(Option<usize>, O
 }
 
 pub fn calculate_two_up_order(page_count: usize) -> Vec<(Option<usize>, Option<usize>)> {
-    let sheets = (page_count + 1) / 2;
+    let sheets = page_count.div_ceil(2);
     let mut pairs = Vec::with_capacity(sheets);
     for s in 0..sheets {
         let left = 2 * s + 1;
@@ -145,7 +141,7 @@ pub fn calculate_two_up_order(page_count: usize) -> Vec<(Option<usize>, Option<u
 }
 
 pub fn calculate_four_up_order(page_count: usize) -> Vec<[Option<usize>; 4]> {
-    let sheets = (page_count + 3) / 4;
+    let sheets = page_count.div_ceil(4);
     let mut quads = Vec::with_capacity(sheets);
     for s in 0..sheets {
         let p1 = 4 * s + 1;
@@ -270,20 +266,18 @@ impl OfficeTool for PdfBookletImpositionTool {
                         }
 
                         let mut stream = String::new();
-                        if let Some(left_idx) = left_opt {
-                            if let Some(p) = extracted_pages.iter().find(|p| p.page_num == *left_idx) {
+                        if let Some(left_idx) = left_opt
+                            && let Some(p) = extracted_pages.iter().find(|p| p.page_num == *left_idx) {
                                 stream.push_str("q 0.7071 0 0 0.7071 20 50 cm\n");
                                 stream.push_str(&p.content);
                                 stream.push_str("\nQ\n");
                             }
-                        }
-                        if let Some(right_idx) = right_opt {
-                            if let Some(p) = extracted_pages.iter().find(|p| p.page_num == *right_idx) {
+                        if let Some(right_idx) = right_opt
+                            && let Some(p) = extracted_pages.iter().find(|p| p.page_num == *right_idx) {
                                 stream.push_str("q 0.7071 0 0 0.7071 420 50 cm\n");
                                 stream.push_str(&p.content);
                                 stream.push_str("\nQ\n");
                             }
-                        }
                         stream.push_str("0.5 w [2 2] 0 d 0.7 g 420 0 m 420 595 l S\n");
                         imposed_stream_pages.push(stream);
 
@@ -305,26 +299,24 @@ impl OfficeTool for PdfBookletImpositionTool {
                 }
                 ImpositionMode::TwoUp => {
                     let order = calculate_two_up_order(page_count);
-                    for (_sheet_idx, (left_opt, right_opt)) in order.iter().enumerate() {
+                    for (left_opt, right_opt) in order.iter() {
                         if cancel_flag.load(Ordering::Relaxed) {
                             return Err(CommandError::TaskCancelled);
                         }
 
                         let mut stream = String::new();
-                        if let Some(left_idx) = left_opt {
-                            if let Some(p) = extracted_pages.iter().find(|p| p.page_num == *left_idx) {
+                        if let Some(left_idx) = left_opt
+                            && let Some(p) = extracted_pages.iter().find(|p| p.page_num == *left_idx) {
                                 stream.push_str("q 0.7071 0 0 0.7071 20 50 cm\n");
                                 stream.push_str(&p.content);
                                 stream.push_str("\nQ\n");
                             }
-                        }
-                        if let Some(right_idx) = right_opt {
-                            if let Some(p) = extracted_pages.iter().find(|p| p.page_num == *right_idx) {
+                        if let Some(right_idx) = right_opt
+                            && let Some(p) = extracted_pages.iter().find(|p| p.page_num == *right_idx) {
                                 stream.push_str("q 0.7071 0 0 0.7071 420 50 cm\n");
                                 stream.push_str(&p.content);
                                 stream.push_str("\nQ\n");
                             }
-                        }
                         stream.push_str("0.5 w [2 2] 0 d 0.7 g 420 0 m 420 595 l S\n");
                         imposed_stream_pages.push(stream);
                     }
@@ -338,14 +330,13 @@ impl OfficeTool for PdfBookletImpositionTool {
                         let mut stream = String::new();
                         let coords = [(20, 300), (300, 300), (20, 20), (300, 20)];
                         for (i, p_opt) in quad.iter().enumerate() {
-                            if let Some(pid) = p_opt {
-                                if let Some(p) = extracted_pages.iter().find(|p| p.page_num == *pid) {
+                            if let Some(pid) = p_opt
+                                && let Some(p) = extracted_pages.iter().find(|p| p.page_num == *pid) {
                                     let (tx_c, ty_c) = coords[i];
                                     stream.push_str(&format!("q 0.5 0 0 0.5 {} {} cm\n", tx_c, ty_c));
                                     stream.push_str(&p.content);
                                     stream.push_str("\nQ\n");
                                 }
-                            }
                         }
                         stream.push_str("0.5 w [2 2] 0 d 0.7 g 300 0 m 300 600 l 0 300 m 600 300 l S\n");
                         imposed_stream_pages.push(stream);
@@ -506,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_pdf_booklet_imposition_happy_path() {
-        let tool = PdfBookletImpositionTool::default();
+        let tool = PdfBookletImpositionTool;
         assert_eq!(tool.slug(), "pdf-booklet-imposition");
 
         let temp_dir = std::env::temp_dir().join("test_booklet_happy");
@@ -558,7 +549,7 @@ mod tests {
 
     #[test]
     fn test_pdf_booklet_imposition_invalid_magic_bytes() {
-        let tool = PdfBookletImpositionTool::default();
+        let tool = PdfBookletImpositionTool;
         let temp_dir = std::env::temp_dir().join("test_booklet_invalid");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("fake.pdf");
@@ -579,7 +570,7 @@ mod tests {
 
     #[test]
     fn test_pdf_booklet_imposition_cooperative_cancellation() {
-        let tool = PdfBookletImpositionTool::default();
+        let tool = PdfBookletImpositionTool;
         let temp_dir = std::env::temp_dir().join("test_booklet_cancel");
         fs::create_dir_all(&temp_dir).unwrap();
         let in_file = temp_dir.join("input.pdf");
@@ -600,7 +591,7 @@ mod tests {
 
     #[test]
     fn test_pdf_booklet_imposition_security_guardrails() {
-        let tool = PdfBookletImpositionTool::default();
+        let tool = PdfBookletImpositionTool;
         assert!(!tool.slug().is_empty());
         assert!(!tool.name().is_empty());
     }

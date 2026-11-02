@@ -75,7 +75,7 @@ impl TestHarness {
     /// Tạo tệp ảnh BMP hợp lệ (24-bit RGB)
     pub fn create_valid_bmp(&self, filename: &str, width: u32, height: u32) -> PathBuf {
         let path = self.temp_dir.path().join(filename);
-        let row_size = ((24 * width as usize + 31) / 32) * 4;
+        let row_size = (24 * width as usize).div_ceil(32) * 4;
         let pixel_array_size = row_size * height as usize;
         let file_size = 54 + pixel_array_size;
 
@@ -105,7 +105,7 @@ impl TestHarness {
                 data.extend_from_slice(&[180, 100, 50]); // BGR
             }
             let padding = row_size - (width as usize * 3);
-            data.extend(std::iter::repeat(0).take(padding));
+            data.extend(std::iter::repeat_n(0, padding));
         }
 
         fs::write(&path, data).expect("write valid bmp");
@@ -224,9 +224,7 @@ impl TestHarness {
             let val = (t * 440.0 * 2.0 * std::f32::consts::PI).sin();
             samples.push((val * 16000.0) as i16);
         }
-        for _ in 0..silence_samples {
-            samples.push(0i16);
-        }
+        samples.resize(samples.len() + silence_samples, 0i16);
         for i in 0..tone_samples {
             let t = i as f32 / sample_rate as f32;
             let val = (t * 880.0 * 2.0 * std::f32::consts::PI).sin();
@@ -405,5 +403,11 @@ impl TestHarness {
                 }
             }
         }
+    }
+}
+
+impl Default for TestHarness {
+    fn default() -> Self {
+        Self::new()
     }
 }

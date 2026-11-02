@@ -1,3 +1,5 @@
+#![allow(clippy::default_constructed_unit_structs)]
+
 pub mod commands;
 pub mod db;
 pub mod state;

@@ -74,13 +74,11 @@ fn recompress_stream(data: &[u8], is_already_flate: bool) -> Vec<u8> {
     };
 
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
-    if encoder.write_all(&uncompressed).is_ok() {
-        if let Ok(compressed) = encoder.finish() {
-            if compressed.len() < data.len() || !is_already_flate {
+    if encoder.write_all(&uncompressed).is_ok()
+        && let Ok(compressed) = encoder.finish()
+            && (compressed.len() < data.len() || !is_already_flate) {
                 return compressed;
             }
-        }
-    }
     data.to_vec()
 }
 
@@ -102,13 +100,11 @@ fn collect_referenced_ids(objects: &[PdfObj], root_id: usize) -> HashSet<usize> 
         if let Some(obj) = objects.iter().find(|o| o.id == curr) {
             let words: Vec<&str> = obj.dict.split_whitespace().collect();
             for i in 0..words.len() {
-                if i + 2 < words.len() && words[i + 2] == "R" {
-                    if let Ok(ref_id) = words[i].parse::<usize>() {
-                        if referenced.insert(ref_id) {
+                if i + 2 < words.len() && words[i + 2] == "R"
+                    && let Ok(ref_id) = words[i].parse::<usize>()
+                        && referenced.insert(ref_id) {
                             queue.push(ref_id);
                         }
-                    }
-                }
             }
         }
     }
@@ -151,8 +147,8 @@ fn parse_pdf_objects(bytes: &[u8]) -> Result<(String, Vec<PdfObj>, usize), Comma
         let gen_str = parts.next();
         let id_str = parts.next();
 
-        if let (Some(g_s), Some(i_s)) = (gen_str, id_str) {
-            if let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
+        if let (Some(g_s), Some(i_s)) = (gen_str, id_str)
+            && let (Ok(id), Ok(generation)) = (i_s.parse::<usize>(), g_s.parse::<usize>()) {
                 let content_start = abs_obj_start + 4;
                 if let Some(end_offset) = raw_text[content_start..].find("endobj") {
                     let full_block = &raw_text[content_start..content_start + end_offset];
@@ -176,7 +172,6 @@ fn parse_pdf_objects(bytes: &[u8]) -> Result<(String, Vec<PdfObj>, usize), Comma
                     continue;
                 }
             }
-        }
         search_from = abs_obj_start + 4;
     }
 
@@ -435,7 +430,7 @@ trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n1000\n%%EOF\n",
 
     #[test]
     fn test_pdf_compress_happy_path() {
-        let tool = PdfCompressTool::default();
+        let tool = PdfCompressTool;
         let tmp = std::env::temp_dir().join("test_pdf_compress_happy");
         let _ = fs::create_dir_all(&tmp);
 
@@ -468,7 +463,7 @@ trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n1000\n%%EOF\n",
 
     #[test]
     fn test_pdf_compress_edge_case() {
-        let tool = PdfCompressTool::default();
+        let tool = PdfCompressTool;
         let tmp = std::env::temp_dir().join("test_pdf_compress_edge");
         let _ = fs::create_dir_all(&tmp);
 
@@ -496,7 +491,7 @@ trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n1000\n%%EOF\n",
 
     #[test]
     fn test_pdf_compress_invalid_magic_bytes() {
-        let tool = PdfCompressTool::default();
+        let tool = PdfCompressTool;
         let tmp = std::env::temp_dir().join("test_pdf_compress_fake");
         let _ = fs::create_dir_all(&tmp);
 
@@ -523,7 +518,7 @@ trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n1000\n%%EOF\n",
 
     #[test]
     fn test_pdf_compress_cooperative_cancellation() {
-        let tool = PdfCompressTool::default();
+        let tool = PdfCompressTool;
         let tmp = std::env::temp_dir().join("test_pdf_compress_cancel");
         let _ = fs::create_dir_all(&tmp);
 
@@ -545,7 +540,7 @@ trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n1000\n%%EOF\n",
 
     #[test]
     fn test_pdf_compress_security_guardrails() {
-        let tool = PdfCompressTool::default();
+        let tool = PdfCompressTool;
         assert_eq!(tool.slug(), "pdf-compress");
         assert_eq!(tool.name(), "Nén giảm Dung lượng PDF");
     }

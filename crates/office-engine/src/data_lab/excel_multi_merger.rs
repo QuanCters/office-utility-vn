@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn test_excel_multi_merger_happy_path() {
-        let tool = ExcelMultiMergerTool::default();
+        let tool = ExcelMultiMergerTool;
         assert_eq!(tool.slug(), "excel-multi-merger");
 
         // Mô phỏng 10 file báo cáo có cùng cấu trúc cột
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn test_excel_multi_merger_invalid_magic_bytes() {
-        let tool = ExcelMultiMergerTool::default();
+        let tool = ExcelMultiMergerTool;
         let tmp = std::env::temp_dir().join("test_merger_invalid");
         let _ = fs::create_dir_all(&tmp);
 
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_excel_multi_merger_cooperative_cancellation() {
-        let tool = ExcelMultiMergerTool::default();
+        let tool = ExcelMultiMergerTool;
         let req = DispatchTaskRequest {
             task_id: "task-cancel-merger".to_string(),
             tool_slug: "excel-multi-merger".to_string(),

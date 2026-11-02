@@ -275,14 +275,13 @@ impl OfficeTool for VnCccdMstValidatorTool {
 
         // Validate magic bytes if input file provided
         for path in &request.input_paths {
-            if let Ok(bytes) = std::fs::read(path) {
-                if bytes.len() >= 4 && !bytes.starts_with(b"{\n") && !bytes.starts_with(b"{\"") && !bytes.is_ascii() {
+            if let Ok(bytes) = std::fs::read(path)
+                && bytes.len() >= 4 && !bytes.starts_with(b"{\n") && !bytes.starts_with(b"{\"") && !bytes.is_ascii() {
                     return Err(CommandError::InvalidFileSignature {
                         expected: "Plaintext / JSON CCCD or MST".to_string(),
                         actual: format!("{:02X?}", &bytes[..4.min(bytes.len())]),
                     });
                 }
-            }
         }
 
         if let Some(cb) = on_progress {
@@ -407,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_vn_cccd_mst_validator_invalid_magic_bytes() {
-        let tool = VnCccdMstValidatorTool::default();
+        let tool = VnCccdMstValidatorTool;
         let bad_file = std::env::temp_dir().join("bad_magic_cccd.bin");
         std::fs::write(&bad_file, [0x1F, 0x8B, 0x08, 0x00, 0x00]).ok();
 
@@ -430,7 +429,7 @@ mod tests {
 
     #[test]
     fn test_vn_cccd_mst_validator_cooperative_cancellation() {
-        let tool = VnCccdMstValidatorTool::default();
+        let tool = VnCccdMstValidatorTool;
         let req = DispatchTaskRequest {
             task_id: "test-cancel-cccd".to_string(),
             tool_slug: "vn-cccd-mst-validator".to_string(),
@@ -445,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_vn_cccd_mst_validator_security_guardrails() {
-        let tool = VnCccdMstValidatorTool::default();
+        let tool = VnCccdMstValidatorTool;
         assert_eq!(tool.slug(), "vn-cccd-mst-validator");
         assert_eq!(tool.name(), "Kiểm tra Hợp lệ CCCD & Mã số thuế");
     }
