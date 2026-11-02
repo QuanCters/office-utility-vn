@@ -14,6 +14,7 @@ pub mod docx_template_mailmerge;
 pub mod pdf_bookmark_toc;
 pub mod pdf_to_long_image;
 pub mod pdf_grayscale_print;
+pub mod pdf_repair_corrupt;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -31,6 +32,8 @@ pub use docx_template_mailmerge::{DocxTemplateMailmergeTool, MailmergeOptions};
 pub use pdf_bookmark_toc::{BookmarkEntry, PdfBookmarkOptions, PdfBookmarkTocTool};
 pub use pdf_to_long_image::{LongImageFormat, PdfToLongImageOptions, PdfToLongImageTool};
 pub use pdf_grayscale_print::{PdfGrayscaleOptions, PdfGrayscalePrintTool};
+pub use pdf_repair_corrupt::{PdfRepairCorruptTool, PdfRepairOptions};
+
 
 
 

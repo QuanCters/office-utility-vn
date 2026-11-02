@@ -14,6 +14,8 @@ pub mod docx_template_mailmerge_view;
 pub mod pdf_bookmark_toc_view;
 pub mod pdf_to_long_image_view;
 pub mod pdf_grayscale_print_view;
+pub mod pdf_repair_corrupt_view;
+
 
 
 

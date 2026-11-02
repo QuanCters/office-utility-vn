@@ -153,6 +153,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Chuyển đổi toàn bộ toán tử màu trong luồng nội dung và hình ảnh nhúng sang DeviceGray 8-bit tiết kiệm mực in.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "pdf-repair-corrupt",
+        name: "Phục hồi File PDF Lỗi Cấu trúc",
+        domain: "doc-suite",
+        description: "Quét tuyến tính toàn bộ mảng byte để tìm obj / endobj và tái tạo lại bảng xref cùng trailer bị hỏng.",
+        is_pinned: false,
+    },
+
 
 
 
