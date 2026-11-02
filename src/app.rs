@@ -160,6 +160,14 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Quét tuyến tính toàn bộ mảng byte để tìm obj / endobj và tái tạo lại bảng xref cùng trailer bị hỏng.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "markdown-to-styled-pdf",
+        name: "Biên dịch Markdown sang PDF",
+        domain: "doc-suite",
+        description: "Phân tích Markdown AST, kết xuất PDF chuẩn khổ in A4 với Unicode tiếng Việt, tự động ngắt trang và kẻ bảng.",
+        is_pinned: false,
+    },
+
 
 
 
