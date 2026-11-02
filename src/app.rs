@@ -70,6 +70,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "image-exif-inspector",
+        name: "Kiểm tra & Xóa Exif/GPS Ảnh",
+        domain: "media-studio",
+        description: "Đọc thông số máy ảnh, tọa độ GPS và tước bỏ siêu dữ liệu bảo vệ riêng tư.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "universal-file-converter-hub",
         name: "Trạm Chuyển đổi Tệp Vạn năng",
         domain: "sys-hub",
