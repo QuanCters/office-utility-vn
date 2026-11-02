@@ -56,6 +56,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "vn-address-normalizer",
+        name: "Chuẩn hóa Địa giới Hành chính VN",
+        domain: "vn-office",
+        description: "Khớp chuỗi mờ Jaro-Winkler chuẩn hóa địa chỉ theo mô hình 2 cấp và 3 cấp.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "pdf-merge-split",
         name: "Ghép, Tách & Xoay trang PDF",
         domain: "doc-suite",
