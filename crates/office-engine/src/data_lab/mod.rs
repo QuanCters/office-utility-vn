@@ -7,6 +7,7 @@ pub mod excel_sheet_unlocker;
 pub mod excel_split_by_column;
 pub mod excel_visual_joiner;
 pub mod list_set_operations;
+pub mod text_pii_anonymizer;
 pub mod vietnamese_font_converter;
 
 pub use data_structure_converter::{
@@ -35,5 +36,8 @@ pub use excel_visual_joiner::{
 };
 pub use list_set_operations::{
     compute_set_operation, ListSetOperationsTool, ListSetOptions, SetOperation,
+};
+pub use text_pii_anonymizer::{
+    anonymize_pii_text, PiiAnonymizerOptions, TextPiiAnonymizerTool,
 };
 pub use vietnamese_font_converter::{FontConvertOptions, VietnameseFontConverterTool};

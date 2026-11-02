@@ -132,6 +132,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         description: "Khôi phục chuỗi văn bản tiếng Việt bị lỗi hiển thị bảng mã UTF-8 và Windows-1252 / ISO-8859-1.",
         is_pinned: false,
     },
+    ToolItem {
+        slug: "text-pii-anonymizer",
+        name: "Ẩn danh hóa Dữ liệu Nhạy cảm PII",
+        domain: "data-lab",
+        description: "Quét và ẩn tự động số CCCD, SĐT di động VN, MST, STK ngân hàng thành nhãn ẩn danh.",
+        is_pinned: false,
+    },
 ];
 
 #[derive(Serialize, Deserialize)]

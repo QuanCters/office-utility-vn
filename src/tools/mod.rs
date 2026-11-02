@@ -7,6 +7,7 @@ pub mod excel_sheet_unlocker_view;
 pub mod excel_split_by_column_view;
 pub mod excel_visual_joiner_view;
 pub mod list_set_operations_view;
+pub mod text_pii_anonymizer_view;
 pub mod vietnamese_font_converter_view;
 
 pub use data_structure_converter_view::DataStructureConverterView;
@@ -18,4 +19,5 @@ pub use excel_sheet_unlocker_view::ExcelSheetUnlockerView;
 pub use excel_split_by_column_view::ExcelSplitByColumnView;
 pub use excel_visual_joiner_view::ExcelVisualJoinerView;
 pub use list_set_operations_view::ListSetOperationsView;
+pub use text_pii_anonymizer_view::TextPiiAnonymizerView;
 pub use vietnamese_font_converter_view::VietnameseFontConverterView;
