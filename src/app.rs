@@ -98,6 +98,13 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "audio-silence-trimmer",
+        name: "Cắt Bỏ Khoảng lặng Ghi âm",
+        domain: "media-studio",
+        description: "Phân tích RMS năng lượng âm thanh và loại bỏ các đoạn im lặng kéo dài.",
+        is_pinned: true,
+    },
+    ToolItem {
         slug: "universal-file-converter-hub",
         name: "Trạm Chuyển đổi Tệp Vạn năng",
         domain: "sys-hub",

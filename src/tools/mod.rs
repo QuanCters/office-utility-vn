@@ -1,3 +1,4 @@
+pub mod audio_silence_trimmer_view;
 pub mod doc_scanner_perspective_view;
 pub mod image_batch_view;
 pub mod image_bg_redact_view;
