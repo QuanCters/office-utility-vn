@@ -49,6 +49,141 @@ const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: true,
     },
     ToolItem {
+        slug: "pdf-protect-sign",
+        name: "Bảo mật & Mở khóa PDF",
+        domain: "doc-suite",
+        description: "Áp dụng mã hóa AES-256 hoặc mở khóa mật khẩu PDF an toàn on-device.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-to-markdown",
+        name: "Chuyển đổi PDF sang Markdown",
+        domain: "doc-suite",
+        description: "Bóc tách luồng văn bản, font size và tái tạo bảng biểu sang cú pháp Markdown.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-compress",
+        name: "Nén giảm Dung lượng PDF",
+        domain: "doc-suite",
+        description: "Nén lại các luồng FlateDecode và tái lấy mẫu ảnh nhúng giảm dung lượng file.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "vietnamese-ocr",
+        name: "OCR Nhận dạng Ký tự Tiếng Việt",
+        domain: "doc-suite",
+        description: "Nhận dạng chữ tiếng Việt có dấu từ tài liệu scan hoặc ảnh bằng OS Native OCR hoặc VietOCR.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-watermark-stamp",
+        name: "Đóng dấu Watermark & Con dấu đỏ",
+        domain: "doc-suite",
+        description: "Chèn luồng đồ họa ExtGState chứa watermark bản quyền hoặc nhúng con dấu đỏ PNG.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-page-number-header",
+        name: "Đánh số trang & Bates Numbering",
+        domain: "doc-suite",
+        description: "Đánh số trang tự động, Bates Numbering và tùy biến căn lề header/footer.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-metadata-scrubber",
+        name: "Tẩy sạch Metadata ẩn PDF",
+        domain: "doc-suite",
+        description: "Xóa sạch Trailer Info và luồng XML metadata XMP bảo mật danh tính tác giả.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-flatten-forms",
+        name: "Làm phẳng PDF (Flatten Forms)",
+        domain: "doc-suite",
+        description: "Làm phẳng biểu mẫu AcroForm, hợp nhất dữ liệu nhập liệu thành văn bản tĩnh.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-crop-margin",
+        name: "Cắt Viền Trắng Thừa (Auto-Crop)",
+        domain: "doc-suite",
+        description: "Tìm hộp giới hạn Bounding Box nội dung và cập nhật lại CropBox cắt lề chính xác.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-booklet-imposition",
+        name: "Dàn trang In Sách Gấp đôi & N-up",
+        domain: "doc-suite",
+        description: "Tính toán ma trận biến đổi cm và sắp xếp lại thứ tự trang theo thuật toán đóng sách lồng Saddle-Stitch khổ A4/A5 hoặc ghép 2-up, 4-up trên một mặt giấy.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-visual-diff",
+        name: "So sánh Đối soát 2 Bản PDF",
+        domain: "doc-suite",
+        description: "Hỗ trợ 2 chế độ: Text Diff (so sánh câu chữ) và Visual Pixel Diff (so sánh hình ảnh và tô đỏ vùng sai khác).",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "docx-template-mailmerge",
+        name: "Trộn Hợp đồng Mailmerge Hàng loạt",
+        domain: "doc-suite",
+        description: "Giải nén luồng XML, hợp nhất thẻ <w:r> bị cắt vụn và trộn hàng loạt file Word tốc độ cao.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-bookmark-toc",
+        name: "Tạo Cây Mục lục PDF (Bookmark TOC)",
+        domain: "doc-suite",
+        description: "Khởi tạo và liên kết cấu trúc cây từ điển /Outlines đa cấp trong PDF Catalog trỏ trực tiếp đến Page Object ID.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-to-long-image",
+        name: "Ghép PDF thành Ảnh Dọc Dài",
+        domain: "doc-suite",
+        description: "Kết xuất từng trang PDF và ghép nối tiếp theo chiều dọc thành một ảnh dài duy nhất kèm đường phân cách trang.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-grayscale-print",
+        name: "Chuyển PDF sang Đen trắng",
+        domain: "doc-suite",
+        description: "Chuyển đổi toàn bộ toán tử màu trong luồng nội dung và hình ảnh nhúng sang DeviceGray 8-bit tiết kiệm mực in.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-repair-corrupt",
+        name: "Phục hồi File PDF Lỗi Cấu trúc",
+        domain: "doc-suite",
+        description: "Quét tuyến tính toàn bộ mảng byte để tìm obj / endobj và tái tạo lại bảng xref cùng trailer bị hỏng.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "markdown-to-styled-pdf",
+        name: "Biên dịch Markdown sang PDF",
+        domain: "doc-suite",
+        description: "Phân tích Markdown AST, kết xuất PDF chuẩn khổ in A4 với Unicode tiếng Việt, tự động ngắt trang và kẻ bảng.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-table-extractor",
+        name: "Trích xuất Bảng từ PDF ra Excel",
+        domain: "doc-suite",
+        description: "Phân tích tọa độ (x, y) cụm từ và đường kẻ vector để khôi phục bảng biểu ra file .xlsx và .csv.",
+        is_pinned: false,
+    },
+
+
+
+
+
+
+
+
+
+    ToolItem {
         slug: "image-batch-convert",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",
