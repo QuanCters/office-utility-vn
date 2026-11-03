@@ -60,6 +60,10 @@ path = "tests/pdf_studio_test.rs"
 name = "media_studio_test"
 path = "tests/media_studio_test.rs"
 
+[[test]]
+name = "data_lab_test"
+path = "tests/data_lab_test.rs"
+
 [workspace]
 members = [
     "src-tauri",

@@ -5179,12 +5179,631 @@ input, textarea, .selectable-text {
   color: #64748B;
 }
 
+/* ==========================================================================
+   DATA LAB MICRO-APP
+   ========================================================================== */
 
+.data-lab-app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #0F172A;
+  color: #F8FAFC;
+  overflow: hidden;
+}
 
+/* Header */
+.data-lab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #1E293B;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+  gap: 16px;
+}
 
+.data-lab-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
 
+.data-lab-header-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 
+.data-lab-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin: 0;
+  white-space: nowrap;
+}
 
+.data-lab-header-tagline {
+  font-size: 11px;
+  color: #94A3B8;
+  white-space: nowrap;
+}
 
+.data-lab-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
 
+.data-lab-header-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.data-lab-privacy-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: rgba(14, 165, 233, 0.15);
+  color: #38BDF8;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+/* Toolbar */
+.data-lab-toolbar {
+  display: flex;
+  flex-direction: column;
+  background: #1E293B;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.data-lab-toolbar-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #182234;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 12px;
+}
+
+.data-lab-category-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.data-lab-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  color: #94A3B8;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.data-lab-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #F8FAFC;
+}
+
+.data-lab-tab-btn.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.data-tab-count {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  color: #94A3B8;
+}
+
+.data-lab-tab-btn.active .data-tab-count {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6EE7B7;
+}
+
+.data-lab-toolbar-tabs-right {
+  display: flex;
+  align-items: center;
+}
+
+.data-lab-workflow-tab-btn {
+  background: rgba(245, 158, 11, 0.1);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.data-lab-workflow-tab-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FDE68A;
+}
+
+.data-lab-workflow-tab-btn.active {
+  background: #F59E0B;
+  color: #0F172A;
+  border-color: #F59E0B;
+}
+
+.data-lab-workflow-tab-btn.active .data-tab-badge {
+  background: #D97706;
+  color: #FFFFFF;
+}
+
+/* Toolbar Subrow */
+.data-lab-toolbar-subrow {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #141E2E;
+  min-height: 48px;
+}
+
+.data-lab-subrow-workflow-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.data-lab-tool-chips-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.data-lab-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #1E293B;
+  color: #CBD5E1;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.data-lab-tool-chip:hover {
+  background: #334155;
+  color: #F8FAFC;
+}
+
+.data-lab-tool-chip.active {
+  background: #10B981;
+  color: #0F172A;
+  border-color: #10B981;
+  font-weight: 600;
+}
+
+/* Workspace Body */
+.data-lab-workspace-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* File Panel (Left) */
+.data-lab-file-panel {
+  width: 280px;
+  background: #1E293B;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.data-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.data-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.data-panel-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  color: #F8FAFC;
+}
+
+.data-panel-count-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: #334155;
+  border-radius: 9999px;
+  color: #94A3B8;
+}
+
+.data-panel-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-panel-add-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #10B981;
+  color: #0F172A;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.data-panel-add-btn:hover {
+  background: #059669;
+}
+
+.data-panel-clear-btn {
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.data-panel-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.data-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.data-panel-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 16px;
+  color: #94A3B8;
+  gap: 8px;
+}
+
+.data-panel-empty-state .empty-icon {
+  font-size: 32px;
+}
+
+.data-panel-empty-state .empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #CBD5E1;
+  margin: 0;
+}
+
+.data-panel-empty-state .empty-desc {
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.empty-add-btn {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #10B981;
+  color: #0F172A;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.data-panel-file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.data-panel-file-item {
+  padding: 8px 10px;
+  background: #141E2E;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.data-panel-file-item:hover {
+  background: #1E293B;
+  border-color: #475569;
+}
+
+.data-panel-file-item.active {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: #10B981;
+}
+
+.file-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.file-item-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.format-pill {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.format-pill-excel {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.format-pill-csv {
+  background: rgba(6, 182, 212, 0.2);
+  color: #22D3EE;
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.format-pill-json {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.format-pill-sql {
+  background: rgba(168, 85, 247, 0.2);
+  color: #C084FC;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.format-pill-docx {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60A5FA;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.format-pill-txt {
+  background: rgba(148, 163, 184, 0.2);
+  color: #CBD5E1;
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.format-pill-default {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94A3B8;
+  border-color: rgba(100, 116, 139, 0.4);
+}
+
+.file-name {
+  font-size: 11px;
+  color: #E2E8F0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-remove-btn {
+  background: transparent;
+  border: none;
+  color: #64748B;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.file-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+}
+
+.file-item-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.sheet-label {
+  font-size: 10px;
+  color: #94A3B8;
+  flex-shrink: 0;
+}
+
+.sheet-dropdown {
+  flex: 1;
+  background: #0F172A;
+  color: #F8FAFC;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+/* Center Workspace */
+.data-lab-center-workspace {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  min-width: 0;
+}
+
+.data-lab-workflow-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.data-lab-tool-workspace {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.data-lab-tool-card-header {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.data-lab-tool-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.data-lab-tool-icon {
+  font-size: 24px;
+}
+
+.data-lab-tool-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin: 0;
+}
+
+.data-lab-tool-description {
+  font-size: 11px;
+  color: #94A3B8;
+  margin: 2px 0 0 0;
+}
+
+.data-lab-tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.data-lab-cat-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border-radius: 4px;
+}
+
+.data-lab-slug-badge {
+  font-size: 10px;
+  font-family: monospace;
+  padding: 3px 6px;
+  background: #0F172A;
+  color: #64748B;
+  border: 1px solid #334155;
+  border-radius: 4px;
+}
+
+.data-lab-privacy-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #34D399;
+  border-radius: 4px;
+}
+
+/* Context Banner */
+.data-lab-context-banner {
+  padding: 10px 16px;
+  background: #1E293B;
+  border: 1px dashed #334155;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.context-sheet-tag {
+  color: #34D399;
+  font-weight: 600;
+}
+
+/* Tool View Body */
+.data-lab-tool-view-body {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.data-lab-not-found {
+  padding: 32px;
+  text-align: center;
+  color: #94A3B8;
+  font-size: 13px;
+}
 

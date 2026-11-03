@@ -10,6 +10,9 @@ pub use pdf_studio::{PdfStudioApp, PdfStudioState};
 pub mod media_studio;
 pub use media_studio::{MediaStudioApp, MediaStudioState};
 
+pub mod data_lab;
+pub use data_lab::{DataLabApp, DataLabState};
+
 /// Định danh cho 4 Micro-Apps độc lập của Office Utility VN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MicroAppId {

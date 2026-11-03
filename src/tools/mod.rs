@@ -72,11 +72,13 @@ pub mod excel_visual_joiner_view;
 pub mod list_set_operations_view;
 pub mod sql_formatter_linter_view;
 pub mod text_pii_anonymizer_view;
+pub mod universal_file_converter_hub_view;
 pub mod vietnamese_font_converter_view;
 
 pub use base64_file_codec_view::Base64FileCodecView;
 pub use data_structure_converter_view::DataStructureConverterView;
 pub use diff_checker_text_sheets_view::DiffCheckerTextSheetsView;
+pub use docx_template_mailmerge_view::DocxTemplateMailmergeView;
 pub use encoding_mojibake_fixer_view::EncodingMojibakeFixerView;
 pub use excel_cleaner_normalizer_view::ExcelCleanerNormalizerView;
 pub use excel_multi_merger_view::ExcelMultiMergerView;
@@ -86,6 +88,7 @@ pub use excel_visual_joiner_view::ExcelVisualJoinerView;
 pub use list_set_operations_view::ListSetOperationsView;
 pub use sql_formatter_linter_view::SqlFormatterLinterView;
 pub use text_pii_anonymizer_view::TextPiiAnonymizerView;
+pub use universal_file_converter_hub_view::UniversalFileConverterHubView;
 pub use vietnamese_font_converter_view::VietnameseFontConverterView;
 
 // Vietnam Office (9 tools)
