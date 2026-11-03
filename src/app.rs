@@ -1,16 +1,22 @@
 use leptos::ev::{KeyboardEvent, MouseEvent};
 use leptos::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use leptos::task::spawn_local;
 use serde::{Deserialize, Serialize};
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::launcher::LauncherView;
+use crate::micro_apps::{
+    tool_slug_to_micro_app, DataLabApp, DataLabState, MediaStudioApp, MediaStudioState,
+    MicroAppId, PdfStudioApp, PdfStudioState, VnOfficeApp, VnOfficeState,
+};
+
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-
-    #[wasm_bindgen(js_namespace = ["navigator", "clipboard"])]
-    fn writeText(text: &str) -> js_sys::Promise;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -22,76 +28,7 @@ pub struct ToolItem {
     pub is_pinned: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AppView {
-    Home,
-    Tool,
-    WorkflowDag,
-    History,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ToolArchetype {
-    FileBatch,
-    FinancialAccounting,
-    IdentityVerification,
-    TextCodeConversion,
-    SpreadsheetData,
-    UniversalConverter,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DetectedFormatCategory {
-    None,
-    Pdf,
-    Docx,
-    Xlsx,
-    Csv,
-    Markdown,
-    Image,
-    Text,
-    Other,
-}
-
-fn detect_primary_category(files: &[String]) -> DetectedFormatCategory {
-    if files.is_empty() {
-        return DetectedFormatCategory::None;
-    }
-    let first = files[0].to_lowercase();
-    if first.ends_with(".pdf") {
-        DetectedFormatCategory::Pdf
-    } else if first.ends_with(".docx") {
-        DetectedFormatCategory::Docx
-    } else if first.ends_with(".xlsx") || first.ends_with(".xls") {
-        DetectedFormatCategory::Xlsx
-    } else if first.ends_with(".csv") {
-        DetectedFormatCategory::Csv
-    } else if first.ends_with(".md") || first.ends_with(".markdown") {
-        DetectedFormatCategory::Markdown
-    } else if first.ends_with(".png")
-        || first.ends_with(".jpg")
-        || first.ends_with(".jpeg")
-        || first.ends_with(".webp")
-        || first.ends_with(".bmp")
-    {
-        DetectedFormatCategory::Image
-    } else if first.ends_with(".txt") {
-        DetectedFormatCategory::Text
-    } else {
-        DetectedFormatCategory::Other
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct ToolPresetUi {
-    pub id: String,
-    pub tool_slug: String,
-    pub name: String,
-    pub options_json: String,
-    pub is_default: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TaskHistoryUi {
     pub id: String,
     pub tool_slug: Option<String>,
@@ -100,16 +37,6 @@ pub struct TaskHistoryUi {
     pub elapsed_ms: u64,
     pub created_at: String,
     pub error_message: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct WorkflowNodeUi {
-    pub id: String,
-    pub tool_slug: String,
-    pub label: String,
-    pub in_mime: String,
-    pub out_mime: String,
 }
 
 pub const ALL_TOOLS: &[ToolItem] = &[
@@ -472,51 +399,6 @@ pub const ALL_TOOLS: &[ToolItem] = &[
     },
 ];
 
-fn get_tool_archetype(slug: &str, domain: &str) -> ToolArchetype {
-    if slug == "universal-file-converter-hub" || slug == "universal-converter" {
-        return ToolArchetype::UniversalConverter;
-    }
-    match domain {
-        "doc-suite" | "media-studio" | "sys-hub" => ToolArchetype::FileBatch,
-        "data-lab" => {
-            if slug == "vietnamese-font-converter"
-                || slug == "diff-checker-text-sheets"
-                || slug == "encoding-mojibake-fixer"
-                || slug == "text-pii-anonymizer"
-                || slug == "sql-formatter-linter"
-                || slug == "base64-file-codec"
-            {
-                ToolArchetype::TextCodeConversion
-            } else {
-                ToolArchetype::SpreadsheetData
-            }
-        }
-        "vn-office" => {
-            if slug == "vietqr-napas247-generator"
-                || slug == "vn-cccd-mst-validator"
-                || slug == "vn-einvoice-xml-reader"
-                || slug == "vn-bank-bin-mapper"
-                || slug == "vn-address-normalizer"
-            {
-                ToolArchetype::IdentityVerification
-            } else {
-                ToolArchetype::FinancialAccounting
-            }
-        }
-        _ => ToolArchetype::FileBatch,
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct DispatchArgs {
-    request: serde_json::Value,
-}
-
-#[derive(Serialize, Deserialize)]
-struct AlwaysOnTopArgs {
-    enabled: bool,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UpdateInfo {
     pub has_update: bool,
@@ -528,54 +410,128 @@ pub struct UpdateInfo {
 }
 
 #[derive(Serialize, Deserialize)]
+#[allow(dead_code)]
 struct CheckUpdateArgs {
     manual: bool,
 }
 
 #[derive(Serialize, Deserialize)]
+#[allow(dead_code)]
 struct SetUpdateActionArgs {
     action: String,
     target_version: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct GetPresetsArgs {
-    tool_slug: String,
+#[allow(dead_code)]
+struct AlwaysOnTopArgs {
+    enabled: bool,
 }
 
-#[derive(Serialize, Deserialize)]
-struct SavePresetArgs {
-    preset: ToolPresetUi,
+/// Trạng thái định tuyến view toàn cục của ứng dụng.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AppView {
+    Launcher,
+    MicroApp(MicroAppId),
 }
 
-#[derive(Serialize, Deserialize)]
-struct GetHistoryArgs {
-    limit: u32,
-    offset: u32,
+/// Trạng thái toàn cục kết nối 4 Micro-Apps độc lập với Launcher trung tâm.
+#[derive(Clone, Copy, Debug)]
+pub struct AppState {
+    pub current_view: RwSignal<AppView>,
+    pub deep_link_tool: RwSignal<Option<String>>,
+    pub vn_office_state: VnOfficeState,
+    pub pdf_studio_state: PdfStudioState,
+    pub media_studio_state: MediaStudioState,
+    pub data_lab_state: DataLabState,
 }
 
-#[derive(Serialize, Deserialize)]
-struct ExecuteWorkflowArgs {
-    workflow_id: String,
-    input_paths: Vec<String>,
-    output_directory: Option<String>,
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            current_view: RwSignal::new(AppView::Launcher),
+            deep_link_tool: RwSignal::new(None),
+            vn_office_state: VnOfficeState::default(),
+            pdf_studio_state: PdfStudioState::default(),
+            media_studio_state: MediaStudioState::default(),
+            data_lab_state: DataLabState::default(),
+        }
+    }
 }
 
+impl AppState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Trả về AppView hiện tại (untracked).
+    pub fn current_view(&self) -> AppView {
+        self.current_view.get_untracked()
+    }
+
+    /// Trả về slug công cụ deep-link hiện tại (untracked).
+    pub fn deep_link_tool(&self) -> Option<String> {
+        self.deep_link_tool.get_untracked()
+    }
+
+    /// Điều hướng sang một Micro-App cụ thể.
+    pub fn navigate_to(&self, app_id: MicroAppId) {
+        self.deep_link_tool.set(None);
+        self.current_view.set(AppView::MicroApp(app_id));
+    }
+
+    /// Kích hoạt deep-link trực tiếp đến một công cụ bên trong một Micro-App.
+    pub fn deep_link(&self, app_id: MicroAppId, tool_slug: impl Into<String>) {
+        let slug = tool_slug.into();
+        match app_id {
+            MicroAppId::VnOffice => self.vn_office_state.select_tool(&slug),
+            MicroAppId::PdfStudio => self.pdf_studio_state.select_tool(&slug),
+            MicroAppId::MediaStudio => self.media_studio_state.select_tool(&slug),
+            MicroAppId::DataLab => self.data_lab_state.select_tool(&slug),
+        }
+        self.deep_link_tool.set(Some(slug));
+        self.current_view.set(AppView::MicroApp(app_id));
+    }
+
+    /// Kích hoạt deep-link dựa trên slug công cụ bằng cách tự động suy luận MicroAppId.
+    pub fn deep_link_by_slug(&self, slug: &str) -> bool {
+        if let Some(app_id) = tool_slug_to_micro_app(slug) {
+            self.deep_link(app_id, slug);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Quay trở về màn hình Launcher trung tâm.
+    pub fn back_to_launcher(&self) {
+        self.deep_link_tool.set(None);
+        self.current_view.set(AppView::Launcher);
+    }
+}
+
+/// Thin Shell điều phối tổng thể của Office Utility VN:
+/// - Thanh tiêu đề cửa sổ máy tính (Titlebar) với nút Always-on-Top, Thu nhỏ, Phóng to, Đóng
+/// - Khởi tạo `AppState` quản lý in-memory state cho 4 micro-apps
+/// - Điều phối render linh hoạt giữa Launcher trung tâm và 4 Micro-Apps
+/// - Quản lý vòng đời cập nhật ứng dụng (Update Dialog & Toast)
 #[component]
 pub fn App() -> impl IntoView {
-    // Điều hướng không gian làm việc (Sidebar-Driven Workspace Navigation)
-    let (active_view, set_active_view) = signal(AppView::Home);
+    let app_state = AppState::new();
+    provide_context(app_state);
 
     // Trạng thái cập nhật ứng dụng (Updater Lifecycle)
     let (update_modal_open, set_update_modal_open) = signal(false);
+    #[allow(unused_variables)]
     let (available_update, set_available_update) = signal(None::<UpdateInfo>);
     let (is_checking_update, set_is_checking_update) = signal(false);
     let (is_installing_update, set_is_installing_update) = signal(false);
     let (update_toast, set_update_toast) = signal(None::<String>);
+    let (is_always_on_top, set_is_always_on_top) = signal(false);
 
-    // Hàm gọi kiểm tra cập nhật
     let check_for_updates = move |manual: bool| {
         set_is_checking_update.set(true);
+        #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
             let args = serde_wasm_bindgen::to_value(&CheckUpdateArgs { manual }).unwrap();
             let resp = invoke("check_app_update", args).await;
@@ -596,9 +552,14 @@ pub fn App() -> impl IntoView {
             }
             set_is_checking_update.set(false);
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = manual;
+            set_is_checking_update.set(false);
+        }
     };
 
-    // Tự động kiểm tra sau 3s khởi động
+    #[cfg(target_arch = "wasm32")]
     {
         let check_fn = check_for_updates;
         spawn_local(async move {
@@ -612,489 +573,88 @@ pub fn App() -> impl IntoView {
         });
     }
 
-    // Xử lý lựa chọn: NOW, LATER, SKIP
     let handle_update_action = move |action: &'static str| {
+        #[cfg(target_arch = "wasm32")]
         let current_target = available_update.get().map(|u| u.latest_version);
         if action == "NOW" {
             set_is_installing_update.set(true);
+            #[cfg(target_arch = "wasm32")]
             spawn_local(async move {
                 let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
                 let _ = invoke("install_app_update", empty_args).await;
                 set_is_installing_update.set(false);
                 set_update_modal_open.set(false);
             });
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                set_is_installing_update.set(false);
+                set_update_modal_open.set(false);
+            }
         } else {
-            let act_str = action.to_string();
-            spawn_local(async move {
-                let args = serde_wasm_bindgen::to_value(&SetUpdateActionArgs {
-                    action: act_str,
-                    target_version: current_target,
-                })
-                .unwrap();
-                let _ = invoke("set_update_action", args).await;
-            });
+            #[cfg(target_arch = "wasm32")]
+            {
+                let act_str = action.to_string();
+                spawn_local(async move {
+                    let args = serde_wasm_bindgen::to_value(&SetUpdateActionArgs {
+                        action: act_str,
+                        target_version: current_target,
+                    })
+                    .unwrap();
+                    let _ = invoke("set_update_action", args).await;
+                });
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let _ = action;
+            }
             set_update_modal_open.set(false);
         }
     };
 
-    // Trạng thái công cụ hiện tại
-    let (current_slug, set_current_slug) = signal("vietnamese-number-to-words".to_string());
-    let (output_result, set_output_result) = signal(String::new());
-    let (error_message, set_error_message) = signal(None::<String>);
-    let (active_task_id, set_active_task_id) = signal(None::<String>);
-
-    // Trạng thái Presets (Mẫu cấu hình)
-    let (tool_presets, set_tool_presets) = signal(Vec::<ToolPresetUi>::new());
-    let (_selected_preset, set_selected_preset) = signal("default".to_string());
-    let (save_preset_modal_open, set_save_preset_modal_open) = signal(false);
-    let (preset_name_input, set_preset_name_input) = signal(String::new());
-
-    // Trạng thái Lịch sử tác vụ (Task History)
-    let (history_records, set_history_records) = signal(Vec::<TaskHistoryUi>::new());
-    let (is_loading_history, set_is_loading_history) = signal(false);
-
-    // Trạng thái Workflow DAG
-    let (is_running_workflow, set_is_running_workflow) = signal(false);
-    let (workflow_message, set_workflow_message) = signal(String::new());
-
-    // Trạng thái thanh tiến trình
-    let (progress_percent, set_progress_percent) = signal(0.0f32);
-    let (progress_message, set_progress_message) = signal(String::new());
-    let (is_running, set_is_running) = signal(false);
-
-    // Trạng thái cửa sổ & tìm kiếm
-    let (is_always_on_top, set_is_always_on_top) = signal(false);
-    let (palette_open, set_palette_open) = signal(false);
-    let (search_query, set_search_query) = signal(String::new());
-    let (clipboard_toast, set_clipboard_toast) = signal(None::<String>);
-    let (selected_files, set_selected_files) = signal(Vec::<String>::new());
-
-    // =========================================================================
-    // DYNAMIC INPUTS CHO 5 ARCHETYPES
-    // =========================================================================
-    // Archetype 1: File Batch
-    let (target_format, set_target_format) = signal("webp".to_string());
-    let (quality_percent, set_quality_percent) = signal(85);
-    let (strip_metadata, set_strip_metadata) = signal(true);
-    let (max_compression, set_max_compression) = signal(true);
-
-    // Archetype 2: Financial & Accounting
-    let (input_value, set_input_value) = signal("1250000".to_string());
-    let (dialect, set_dialect) = signal("North".to_string());
-    let (use_dong_chan, set_use_dong_chan) = signal(true);
-    let (salary_gross, set_salary_gross) = signal("25000000".to_string());
-    let (dependents_count, set_dependents_count) = signal(1);
-    let (salary_region, set_salary_region) = signal("Vùng I (4.960.000đ)".to_string());
-    let (loan_principal, set_loan_principal) = signal("500000000".to_string());
-    let (loan_rate, set_loan_rate) = signal("8.5".to_string());
-    let (loan_months, set_loan_months) = signal("120".to_string());
-    let (date_start, set_date_start) = signal("2026-01-01".to_string());
-    let (date_end, set_date_end) = signal("2026-12-31".to_string());
-
-    // Archetype 3: Identity & VietQR & Invoice
-    let (bank_name, set_bank_name) = signal("Vietcombank (VCB)".to_string());
-    let (account_number, set_account_number) = signal("1012345678".to_string());
-    let (account_holder, set_account_holder) = signal("NGUYEN VAN A".to_string());
-    let (transfer_amount, set_transfer_amount) = signal("500000".to_string());
-    let (transfer_note, set_transfer_note) = signal("Thanh toan tien hang".to_string());
-    let (cccd_input, set_cccd_input) = signal("001098012345".to_string());
-    let (address_raw, set_address_raw) = signal("Số 1 Đại Cồ Việt, Bách Khoa, Hai Bà Trưng, Hà Nội".to_string());
-
-    // Archetype 4: Dual-Pane Text / Code / Diff
-    let (text_source, set_text_source) = signal("Cộng hòa Xã hội Chủ nghĩa Việt Nam\nĐộc lập - Tự do - Hạnh phúc".to_string());
-    let (font_source_encoding, set_font_source_encoding) = signal("TCVN3".to_string());
-    let (sql_dialect, set_sql_dialect) = signal("PostgreSQL".to_string());
-
-    // Archetype 5: Spreadsheet & Data Lab
-    let (excel_key_column, set_excel_key_column) = signal("Mã nhân viên".to_string());
-    let (excel_clean_names, set_excel_clean_names) = signal(true);
-    let (excel_clean_dates, set_excel_clean_dates) = signal(true);
-    let (excel_remove_duplicates, set_excel_remove_duplicates) = signal(true);
-    let (excel_export_format, set_excel_export_format) = signal("xlsx".to_string());
-
-    // IME-Safe flag cho bộ gõ tiếng Việt (UniKey, EVKey)
-    let (_is_ime_composing, set_is_ime_composing) = signal(false);
-
-    // Lấy thông tin công cụ đang chọn
-    let current_tool = move || {
-        let slug = current_slug.get();
-        ALL_TOOLS
-            .iter()
-            .find(|t| t.slug == slug)
-            .cloned()
-            .unwrap_or(ALL_TOOLS[0].clone())
-    };
-
-    // Tải danh sách presets từ SQLite khi đổi công cụ
-    let load_presets_for_current_tool = move || {
-        let slug = current_slug.get();
-        spawn_local(async move {
-            let args = serde_wasm_bindgen::to_value(&GetPresetsArgs { tool_slug: slug }).unwrap();
-            let resp = invoke("get_tool_presets", args).await;
-            if let Ok(presets) = serde_wasm_bindgen::from_value::<Vec<ToolPresetUi>>(resp) {
-                set_tool_presets.set(presets);
-            }
-        });
-    };
-
-    // Trạng thái công cụ đã ghim (Pinned Tools)
-    let (pinned_slugs, set_pinned_slugs) = signal(crate::favorite_tools::load_favorites_from_storage());
-
-    let toggle_pin_tool = move |slug: String| {
-        let updated = crate::favorite_tools::toggle_favorite(&pinned_slugs.get(), &slug);
-        crate::favorite_tools::save_favorites_to_storage(&updated);
-        set_pinned_slugs.set(updated);
-    };
-
-    let is_home_active = Signal::derive(move || active_view.get() == AppView::Home);
-    let is_workflow_active = Signal::derive(move || active_view.get() == AppView::WorkflowDag);
-    let is_history_active = Signal::derive(move || active_view.get() == AppView::History);
-
-    // Đặt lại trạng thái tác vụ khi đổi công cụ hoặc làm mới
-    let reset_task = move || {
-        set_is_running.set(false);
-        set_active_task_id.set(None);
-        set_error_message.set(None);
-        set_output_result.set(String::new());
-        set_progress_percent.set(0.0);
-        set_progress_message.set("Sẵn sàng".to_string());
-    };
-
-    // Hàm chọn công cụ dùng chung: cập nhật slug, đóng palette, chuyển sang Tool view
-    let select_tool = move |slug: String| {
-        set_current_slug.set(slug.clone());
-        set_palette_open.set(false);
-        set_active_view.set(AppView::Tool);
-        reset_task();
-        load_presets_for_current_tool();
-    };
-
-    // Danh sách ToolItem của các công cụ đã ghim
-    let pinned_tool_items = move || {
-        let slugs = pinned_slugs.get();
-        let mut items = Vec::new();
-        for s in slugs.iter() {
-            if let Some(tool) = ALL_TOOLS.iter().find(|t| t.slug == s.as_str()) {
-                items.push(tool.clone());
-            }
-        }
-        items
-    };
-
-    // Danh sách các công cụ còn lại (chưa nằm trong danh sách đã ghim)
-    let non_pinned_tools = move || {
-        let slugs = pinned_slugs.get();
-        ALL_TOOLS
-            .iter()
-            .filter(|t| !slugs.contains(&t.slug.to_string()))
-            .cloned()
-            .collect::<Vec<_>>()
-    };
-
-    // Tải lịch sử tác vụ từ SQLite
-    let load_history = move || {
-        set_is_loading_history.set(true);
-        spawn_local(async move {
-            let args = serde_wasm_bindgen::to_value(&GetHistoryArgs { limit: 50, offset: 0 }).unwrap();
-            let resp = invoke("get_task_history", args).await;
-            if let Ok(records) = serde_wasm_bindgen::from_value::<Vec<TaskHistoryUi>>(resp) {
-                set_history_records.set(records);
-            }
-            set_is_loading_history.set(false);
-        });
-    };
-
-    let on_sidebar_navigate = move |dest: crate::sidebar::SidebarDestination| {
-        match dest {
-            crate::sidebar::SidebarDestination::Home => {
-                set_active_view.set(AppView::Home);
-            }
-            crate::sidebar::SidebarDestination::WorkflowDag => {
-                set_active_view.set(AppView::WorkflowDag);
-            }
-            crate::sidebar::SidebarDestination::History => {
-                set_active_view.set(AppView::History);
-                load_history();
-            }
-        }
-    };
-
-    // Xóa sạch lịch sử tác vụ trong SQLite
-    let clear_all_history = move || {
-        spawn_local(async move {
-            let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
-            let _ = invoke("clear_task_history", empty_args).await;
-            set_history_records.set(Vec::new());
-        });
-    };
-
-    // Lưu mẫu Preset vào SQLite
-    let save_current_preset = move || {
-        let name = preset_name_input.get().trim().to_string();
-        if name.is_empty() {
-            return;
-        }
-        let slug = current_slug.get();
-        let preset_data = ToolPresetUi {
-            id: format!("preset-{}", js_sys::Date::now() as u64),
-            tool_slug: slug.clone(),
-            name,
-            options_json: serde_json::json!({
-                "format": target_format.get(),
-                "quality": quality_percent.get(),
-                "dialect": dialect.get(),
-            }).to_string(),
-            is_default: false,
-        };
-
-        spawn_local(async move {
-            let args = serde_wasm_bindgen::to_value(&SavePresetArgs { preset: preset_data }).unwrap();
-            let _ = invoke("save_tool_preset", args).await;
-            set_save_preset_modal_open.set(false);
-            set_preset_name_input.set(String::new());
-            load_presets_for_current_tool();
-        });
-    };
-
-    // Window controls & system operations
     let minimize_win = move || {
+        #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
             let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
             let _ = invoke("minimize_window", empty_args).await;
         });
     };
     let toggle_maximize_win = move || {
+        #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
             let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
             let _ = invoke("toggle_maximize_window", empty_args).await;
         });
     };
     let close_win = move || {
+        #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
             let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
             let _ = invoke("close_window", empty_args).await;
         });
     };
     let open_output_dir = move || {
+        #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
             let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
             let _ = invoke("open_output_folder", empty_args).await;
         });
     };
-    let copy_result_to_clipboard = move || {
-        let res = output_result.get();
-        if !res.is_empty() {
-            let _ = writeText(&res);
-            set_clipboard_toast.set(Some("Đã sao chép kết quả vào bộ nhớ tạm!".to_string()));
-            spawn_local(async move {
-                let promise = js_sys::Promise::new(&mut |resolve, _| {
-                    if let Some(win) = web_sys::window() {
-                        let _ = win.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 2500);
-                    }
-                });
-                let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-                set_clipboard_toast.set(None);
-            });
-        }
-    };
 
-    // Toggle Always-on-Top
     let toggle_pin = move || {
         let new_state = !is_always_on_top.get();
         set_is_always_on_top.set(new_state);
+        #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
             let args = serde_wasm_bindgen::to_value(&AlwaysOnTopArgs { enabled: new_state }).unwrap();
             let _ = invoke("toggle_always_on_top", args).await;
         });
     };
 
-    // Chạy chuỗi Workflow DAG
-    let run_dag_pipeline = move || {
-        if is_running_workflow.get() {
-            return;
-        }
-        set_is_running_workflow.set(true);
-        set_workflow_message.set("Đang khởi tạo chuỗi 3 bước xử lý On-Device...".to_string());
-
-        spawn_local(async move {
-            let sample_inputs = vec!["bao_cao_quy_4.png".to_string()];
-            let args = serde_wasm_bindgen::to_value(&ExecuteWorkflowArgs {
-                workflow_id: "workflow-sample-01".to_string(),
-                input_paths: sample_inputs,
-                output_directory: None,
-            }).unwrap();
-
-            let _ = invoke("execute_workflow_pipeline", args).await;
-            set_workflow_message.set("Chuỗi tự động hóa 3 bước đã hoàn thành xuất sắc 100%!".to_string());
-            set_is_running_workflow.set(false);
-        });
-    };
-
-    // Thực thi tác vụ theo từng Archetype (Ctrl + Enter)
-    let run_task = move || {
-        if is_running.get() {
-            return;
-        }
-
-        let task_id_str = format!("task-{}", js_sys::Date::now() as u64);
-        set_active_task_id.set(Some(task_id_str.clone()));
-        set_error_message.set(None);
-        set_is_running.set(true);
-        set_progress_percent.set(10.0);
-        set_progress_message.set("Đang chuẩn bị tác vụ...".to_string());
-
-        let slug = current_slug.get();
-        let archetype = get_tool_archetype(&slug, &current_tool().domain);
-
-        spawn_local(async move {
-            set_progress_percent.set(40.0);
-            set_progress_message.set("Đang tính toán nội bộ 100% On-Device...".to_string());
-
-            let mut request_options = serde_json::Map::new();
-
-            match archetype {
-                ToolArchetype::UniversalConverter => {
-                    request_options.insert("target_extension".to_string(), serde_json::json!(target_format.get()));
-                    request_options.insert("target_format".to_string(), serde_json::json!(target_format.get()));
-                    request_options.insert("quality".to_string(), serde_json::json!(quality_percent.get()));
-                }
-                ToolArchetype::FinancialAccounting => {
-                    if slug == "vietnamese-number-to-words" {
-                        request_options.insert("number".to_string(), serde_json::json!(input_value.get()));
-                        request_options.insert("dialect".to_string(), serde_json::json!(dialect.get()));
-                        request_options.insert("currency".to_string(), serde_json::json!("VND"));
-                        request_options.insert("use_dong_chan".to_string(), serde_json::json!(use_dong_chan.get()));
-                        request_options.insert("capitalize_first".to_string(), serde_json::json!(true));
-                        request_options.insert("negative_prefix".to_string(), serde_json::json!("âm"));
-                    } else if slug == "gross-net-salary-calculator" {
-                        request_options.insert("salary_gross".to_string(), serde_json::json!(salary_gross.get()));
-                        request_options.insert("dependents".to_string(), serde_json::json!(dependents_count.get()));
-                        request_options.insert("region".to_string(), serde_json::json!(salary_region.get()));
-                    } else if slug == "vn-loan-amortization" {
-                        request_options.insert("principal".to_string(), serde_json::json!(loan_principal.get()));
-                        request_options.insert("annual_rate".to_string(), serde_json::json!(loan_rate.get()));
-                        request_options.insert("months".to_string(), serde_json::json!(loan_months.get()));
-                    } else if slug == "vn-working-days-calc" {
-                        request_options.insert("start_date".to_string(), serde_json::json!(date_start.get()));
-                        request_options.insert("end_date".to_string(), serde_json::json!(date_end.get()));
-                    }
-                }
-                ToolArchetype::FileBatch => {
-                    request_options.insert("target_format".to_string(), serde_json::json!(target_format.get()));
-                    request_options.insert("quality".to_string(), serde_json::json!(quality_percent.get()));
-                    request_options.insert("strip_metadata".to_string(), serde_json::json!(strip_metadata.get()));
-                    request_options.insert("max_compression".to_string(), serde_json::json!(max_compression.get()));
-                }
-                ToolArchetype::IdentityVerification => {
-                    request_options.insert("bank".to_string(), serde_json::json!(bank_name.get()));
-                    request_options.insert("account".to_string(), serde_json::json!(account_number.get()));
-                    request_options.insert("holder".to_string(), serde_json::json!(account_holder.get()));
-                    request_options.insert("amount".to_string(), serde_json::json!(transfer_amount.get()));
-                    request_options.insert("note".to_string(), serde_json::json!(transfer_note.get()));
-                    request_options.insert("cccd".to_string(), serde_json::json!(cccd_input.get()));
-                    request_options.insert("address".to_string(), serde_json::json!(address_raw.get()));
-                }
-                ToolArchetype::TextCodeConversion => {
-                    request_options.insert("source_text".to_string(), serde_json::json!(text_source.get()));
-                    request_options.insert("source_encoding".to_string(), serde_json::json!(font_source_encoding.get()));
-                    request_options.insert("sql_dialect".to_string(), serde_json::json!(sql_dialect.get()));
-                }
-                ToolArchetype::SpreadsheetData => {
-                    request_options.insert("key_column".to_string(), serde_json::json!(excel_key_column.get()));
-                    request_options.insert("clean_names".to_string(), serde_json::json!(excel_clean_names.get()));
-                    request_options.insert("clean_dates".to_string(), serde_json::json!(excel_clean_dates.get()));
-                    request_options.insert("remove_duplicates".to_string(), serde_json::json!(excel_remove_duplicates.get()));
-                    request_options.insert("export_format".to_string(), serde_json::json!(excel_export_format.get()));
-                }
-            }
-
-            let backend_slug = if slug == "universal-file-converter-hub" {
-                "universal-converter".to_string()
-            } else {
-                slug.clone()
-            };
-
-            let request_payload = serde_json::json!({
-                "task_id": task_id_str,
-                "tool_slug": backend_slug,
-                "input_paths": selected_files.get(),
-                "output_directory": null,
-                "options": request_options
-            });
-
-            let args = serde_wasm_bindgen::to_value(&DispatchArgs {
-                request: request_payload,
-            })
-            .unwrap();
-
-            let resp = invoke("dispatch_tool_task", args).await;
-            if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp.clone()) {
-                let status = res_obj.get("status").and_then(|v| v.as_str()).unwrap_or("SUCCESS");
-                let failed_items = res_obj.get("failed_items").and_then(|v| v.as_array());
-
-                if status == "FAILED" || (failed_items.is_some() && !failed_items.unwrap().is_empty() && res_obj.get("output_paths").and_then(|v| v.as_array()).map_or(true, |a| a.is_empty())) {
-                    let err_reason = failed_items
-                        .and_then(|arr| arr.first())
-                        .and_then(|item| item.get("reason"))
-                        .and_then(|r| r.as_str())
-                        .unwrap_or("Không thể hoàn tất chuyển đổi định dạng này.");
-                    set_error_message.set(Some(err_reason.to_string()));
-                    set_output_result.set(String::new());
-                    set_progress_percent.set(0.0);
-                    set_progress_message.set("Thực thi thất bại".to_string());
-                } else {
-                    if let Some(first) = res_obj
-                        .get("output_paths")
-                        .and_then(|v| v.as_array())
-                        .and_then(|outputs| outputs.first())
-                        .and_then(|v| v.as_str())
-                    {
-                        set_output_result.set(first.to_string());
-                    } else {
-                        set_output_result.set("Tác vụ xử lý hoàn tất thành công!".to_string());
-                    }
-                    set_error_message.set(None);
-                    set_progress_percent.set(100.0);
-                    set_progress_message.set("Đã hoàn thành xuất sắc 100%".to_string());
-                }
-            } else {
-                let err_str = serde_wasm_bindgen::from_value::<String>(resp)
-                    .unwrap_or_else(|_| "Lỗi thực thi tác vụ: định dạng tệp không tương thích hoặc bị từ chối.".to_string());
-                set_error_message.set(Some(err_str));
-                set_output_result.set(String::new());
-                set_progress_percent.set(0.0);
-                set_progress_message.set("Có lỗi phát sinh".to_string());
-            }
-
-            set_is_running.set(false);
-        });
-    };
-
-    // Hủy tác vụ (Esc)
-    let cancel_current_task = move || {
-        if is_running.get() {
-            if let Some(tid) = active_task_id.get() {
-                spawn_local(async move {
-                    let args = serde_wasm_bindgen::to_value(&serde_json::json!({ "task_id": tid })).unwrap();
-                    let _ = invoke("cancel_task", args).await;
-                });
-            }
-            set_is_running.set(false);
-            set_progress_percent.set(0.0);
-            set_progress_message.set("Đã dừng tác vụ".to_string());
-        }
-    };
-
-    // Global keyboard shortcuts
     let on_global_keydown = move |ev: KeyboardEvent| {
         let key = ev.key();
         let ctrl_or_meta = ev.ctrl_key() || ev.meta_key();
 
-        if ctrl_or_meta && (key == "k" || key == "K") {
-            ev.prevent_default();
-            ev.stop_propagation();
-            let _ = js_sys::eval("const el = document.querySelector('.sidebar-search-input'); if (el) { el.focus(); el.select(); }");
-        } else if ctrl_or_meta && (key == "p" || key == "P") {
+        if ctrl_or_meta && (key == "p" || key == "P") {
             ev.prevent_default();
             toggle_pin();
         } else if ctrl_or_meta && (key == "o" || key == "O") {
@@ -1104,35 +664,9 @@ pub fn App() -> impl IntoView {
             ev.prevent_default();
             close_win();
         } else if key == "Escape" {
-            if save_preset_modal_open.get() {
-                set_save_preset_modal_open.set(false);
-            } else if palette_open.get() {
-                set_palette_open.set(false);
-            } else if is_running.get() {
-                cancel_current_task();
+            if update_modal_open.get() {
+                set_update_modal_open.set(false);
             }
-        } else if ctrl_or_meta && key == "Enter" {
-            ev.prevent_default();
-            run_task();
-        }
-    };
-
-    // Lọc công cụ trong Command Palette
-    let filtered_tools = move || {
-        let q = search_query.get().trim().to_lowercase();
-        if q.is_empty() {
-            ALL_TOOLS.to_vec()
-        } else {
-            ALL_TOOLS
-                .iter()
-                .filter(|t| {
-                    t.name.to_lowercase().contains(&q)
-                        || t.slug.to_lowercase().contains(&q)
-                        || t.domain.to_lowercase().contains(&q)
-                        || t.description.to_lowercase().contains(&q)
-                })
-                .cloned()
-                .collect()
         }
     };
 
@@ -1141,7 +675,7 @@ pub fn App() -> impl IntoView {
             <header class="titlebar" data-tauri-drag-region="true">
                 <div class="titlebar-left">
                     <span style="font-size: 16px;">"⚡"</span>
-                    <span>"Office Utility VN"</span>
+                    <span style="font-weight: 600;">"Office Utility VN"</span>
                     <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">"v0.1.0"</span>
                     <button
                         class="titlebar-update-btn"
@@ -1156,1878 +690,83 @@ pub fn App() -> impl IntoView {
                 <div class="titlebar-center" data-tauri-drag-region="true"></div>
 
                 <div class="titlebar-right">
+                    <button
+                        class=move || if is_always_on_top.get() { "pin-btn pinned" } else { "pin-btn" }
+                        title=move || if is_always_on_top.get() { "Bỏ ghim cửa sổ (Ctrl+P)" } else { "Ghim cửa sổ trên cùng (Ctrl+P)" }
+                        on:click=move |_| toggle_pin()
+                    >
+                        "📌"
+                    </button>
                     <button class="window-control-btn" title="Thu nhỏ (Minimize)" on:click=move |_| minimize_win()>"🗕"</button>
                     <button class="window-control-btn" title="Phóng to (Maximize)" on:click=move |_| toggle_maximize_win()>"🗖"</button>
                     <button class="window-control-btn close" title="Đóng (Close)" on:click=move |_| close_win()>"✕"</button>
                 </div>
             </header>
 
-            <div class="app-body">
-                <crate::sidebar::Sidebar
-                    current_slug=current_slug
-                    is_home_active=is_home_active
-                    is_workflow_active=is_workflow_active
-                    is_history_active=is_history_active
-                    pinned_slugs=pinned_slugs
-                    on_select_tool=move |s| select_tool(s)
-                    on_navigate=on_sidebar_navigate
-                    on_toggle_pin=toggle_pin_tool
-                />
-
-                <div class="main-area">
-                    { move || match active_view.get() {
-                        AppView::Home => view! {
-                            <crate::home_view::HomeView
-                                pinned_slugs=pinned_slugs
-                                on_select_tool=move |s| select_tool(s)
-                            />
-                        }.into_any(),
-
-                        AppView::Tool => view! {
-                            <main class="workspace">
-                                <section class="zone-1">
-                            <div class="tool-info">
-                                <span style="font-size: 20px;">"🛠️"</span>
-                                <div>
-                                    <div class="tool-name">{ move || current_tool().name }</div>
-                                    <div style="font-size: 11px; color: var(--text-muted);">
-                                        { move || current_tool().description }
-                                    </div>
-                                </div>
-                                <span class="trust-badge">
-                                    "🟢 100% On-Device Native (Rayon)"
-                                </span>
-                            </div>
-
-                            <div class="preset-selector">
-                                <label style="font-size: 12px; color: var(--text-muted);">"🎛️ Mẫu cấu hình:"</label>
-                                <select
-                                    class="preset-select"
-                                    on:change=move |ev| set_selected_preset.set(event_target_value(&ev))
-                                >
-                                    <option value="default">"Mặc định tiêu chuẩn"</option>
-                                    { move || {
-                                        tool_presets.get().into_iter().map(|p| {
-                                            let p_id = p.id.clone();
-                                            view! {
-                                                <option value=p_id>{p.name}</option>
-                                            }
-                                        }).collect::<Vec<_>>()
-                                    }}
-                                </select>
-                                <button
-                                    class="save-preset-btn"
-                                    on:click=move |_| set_save_preset_modal_open.set(true)
-                                    title="Lưu cấu hình hiện tại thành Preset mới"
-                                >
-                                    "💾 Lưu mẫu"
-                                </button>
-                            </div>
-                        </section>
-
-                        <section class="zone-2">
-                            { move || {
-                                let slug = current_slug.get();
-                                let archetype = get_tool_archetype(&slug, &current_tool().domain);
-                                match archetype {
-                                    ToolArchetype::UniversalConverter => view! {
-                                        <div class="morphing-canvas">
-                                            <input
-                                                type="file"
-                                                id="universal-native-picker"
-                                                multiple=true
-                                                style="display: none;"
-                                                on:change=move |_| {
-                                                    if let Ok(js_val) = js_sys::eval("Array.from(document.getElementById('universal-native-picker')?.files || []).map(f => f.name)") {
-                                                        if let Ok(names) = serde_wasm_bindgen::from_value::<Vec<String>>(js_val) {
-                                                            if !names.is_empty() {
-                                                                set_selected_files.update(|list| {
-                                                                    list.extend(names);
-                                                                });
-                                                                let new_list = selected_files.get();
-                                                                match detect_primary_category(&new_list) {
-                                                                    DetectedFormatCategory::Pdf => set_target_format.set("xlsx".to_string()),
-                                                                    DetectedFormatCategory::Docx => set_target_format.set("md".to_string()),
-                                                                    DetectedFormatCategory::Xlsx => set_target_format.set("csv".to_string()),
-                                                                    DetectedFormatCategory::Csv => set_target_format.set("json".to_string()),
-                                                                    DetectedFormatCategory::Markdown | DetectedFormatCategory::Text => set_target_format.set("pdf".to_string()),
-                                                                    DetectedFormatCategory::Image => set_target_format.set("webp".to_string()),
-                                                                    _ => {}
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            />
-
-                                            <div
-                                                class="dropzone"
-                                                role="button"
-                                                tabindex="0"
-                                                aria-label="Kéo thả tệp hoặc nhấn Enter để chọn tệp từ máy tính"
-                                                on:click=move |_| {
-                                                    let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
-                                                }
-                                                on:keydown=move |ev: KeyboardEvent| {
-                                                    if ev.key() == "Enter" || ev.key() == " " {
-                                                        ev.prevent_default();
-                                                        let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
-                                                    }
-                                                }
-                                                on:dragover=move |ev| {
-                                                    let _ = ev;
-                                                }
-                                                on:drop=move |_| {
-                                                    let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
-                                                }
-                                            >
-                                                <div style="font-size: 32px; margin-bottom: 8px;">"⚡"</div>
-                                                <div class="dropzone-title">"KÉO THẢ TỆP VÀO ĐÂY HOẶC NHẤN ĐỂ MỞ HỘP THOẠI CHỌN TỆP"</div>
-                                                <div class="dropzone-sub">
-                                                    "(Tự động nhận diện: PDF, Word .docx, Excel .xlsx, CSV, Markdown, Ảnh và Văn bản thuần)"
-                                                </div>
-                                            </div>
-
-                                            {move || {
-                                                let current_files = selected_files.get();
-                                                if current_files.is_empty() {
-                                                    view! {
-                                                        <div class="matrix-empty-guide">
-                                                            <div class="matrix-guide-title">"📋 Ma trận Chuyển đổi Tệp Vạn năng (100% On-Device):"</div>
-                                                            <div class="matrix-routes-grid">
-                                                                <div class="matrix-route-item">
-                                                                    <span class="route-src">"📄 PDF"</span>
-                                                                    <span class="route-arrow">"➔"</span>
-                                                                    <span class="route-dest">"Excel (.xlsx), CSV, Markdown, OCR Text, Ảnh"</span>
-                                                                </div>
-                                                                <div class="matrix-route-item">
-                                                                    <span class="route-src">"📘 Word (.docx)"</span>
-                                                                    <span class="route-arrow">"➔"</span>
-                                                                    <span class="route-dest">"Markdown (.md), Văn bản thuần (.txt), PDF"</span>
-                                                                </div>
-                                                                <div class="matrix-route-item">
-                                                                    <span class="route-src">"📗 Excel (.xlsx)"</span>
-                                                                    <span class="route-arrow">"➔"</span>
-                                                                    <span class="route-dest">"Bảng CSV, JSON, SQL INSERT, Markdown"</span>
-                                                                </div>
-                                                                <div class="matrix-route-item">
-                                                                    <span class="route-src">"📊 CSV"</span>
-                                                                    <span class="route-arrow">"➔"</span>
-                                                                    <span class="route-dest">"Cấu trúc JSON, SQL INSERT, Excel .xlsx"</span>
-                                                                </div>
-                                                                <div class="matrix-route-item">
-                                                                    <span class="route-src">"📝 Markdown / TXT"</span>
-                                                                    <span class="route-arrow">"➔"</span>
-                                                                    <span class="route-dest">"PDF Chuẩn Công vụ VN (A4), Unicode NFC"</span>
-                                                                </div>
-                                                                <div class="matrix-route-item">
-                                                                    <span class="route-src">"🖼️ Hình ảnh"</span>
-                                                                    <span class="route-arrow">"➔"</span>
-                                                                    <span class="route-dest">"WebP, PNG không vỡ, JPEG, BMP"</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                } else {
-                                                    let cat = detect_primary_category(&current_files);
-                                                    let (cat_label, cat_class) = match cat {
-                                                        DetectedFormatCategory::Pdf => ("Tệp PDF", "detection-badge detection-badge-pdf"),
-                                                        DetectedFormatCategory::Docx => ("Tài liệu Word DOCX", "detection-badge detection-badge-docx"),
-                                                        DetectedFormatCategory::Xlsx => ("Bảng tính Excel XLSX", "detection-badge detection-badge-xlsx"),
-                                                        DetectedFormatCategory::Csv => ("Bảng dữ liệu CSV", "detection-badge detection-badge-csv"),
-                                                        DetectedFormatCategory::Markdown => ("Tài liệu Markdown", "detection-badge detection-badge-markdown"),
-                                                        DetectedFormatCategory::Image => ("Hình ảnh Đồ họa", "detection-badge detection-badge-image"),
-                                                        DetectedFormatCategory::Text => ("Văn bản thuần TXT", "detection-badge detection-badge-text"),
-                                                        _ => ("Tệp tin khác", "detection-badge"),
-                                                    };
-
-                                                    view! {
-                                                        <div class="morphing-canvas">
-                                                            <div class="file-detection-header">
-                                                                <div class="detection-tag">
-                                                                    <span>"Đã nạp " {current_files.len()} " tệp: "</span>
-                                                                    <span class=cat_class>{cat_label}</span>
-                                                                </div>
-                                                                <div style="display: flex; gap: 8px;">
-                                                                    <button
-                                                                        class="btn-secondary"
-                                                                        style="padding: 4px 10px; font-size: 11px;"
-                                                                        on:click=move |_| {
-                                                                            let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
-                                                                        }
-                                                                    >
-                                                                        "+ Thêm tệp"
-                                                                    </button>
-                                                                    <button
-                                                                        class="btn-danger"
-                                                                        style="padding: 4px 10px; font-size: 11px;"
-                                                                        on:click=move |_| set_selected_files.set(Vec::new())
-                                                                    >
-                                                                        "✕ Xóa danh sách"
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="file-chips-container">
-                                                                { current_files.clone().into_iter().enumerate().map(|(idx, name)| {
-                                                                    let n = name.clone();
-                                                                    view! {
-                                                                        <span class="file-chip">
-                                                                            <span>"📄"</span>
-                                                                            <span>{n.clone()}</span>
-                                                                            <button
-                                                                                class="file-chip-remove"
-                                                                                aria-label=format!("Xóa tệp {n}")
-                                                                                on:click=move |_| {
-                                                                                    set_selected_files.update(|list| {
-                                                                                        if idx < list.len() {
-                                                                                            list.remove(idx);
-                                                                                        }
-                                                                                    });
-                                                                                }
-                                                                            >
-                                                                                "✕"
-                                                                            </button>
-                                                                        </span>
-                                                                    }
-                                                                }).collect::<Vec<_>>() }
-                                                            </div>
-
-                                                            <div class="target-matrix-section">
-                                                                <div class="target-matrix-title">
-                                                                    <span>"🎯 Chọn định dạng đích chuyển đổi:"</span>
-                                                                </div>
-
-                                                                {move || {
-                                                                    let active_fmt = target_format.get();
-                                                                    match cat {
-                                                                        DetectedFormatCategory::Pdf => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "xlsx" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("xlsx".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📊 Bảng tính Excel"</span>
-                                                                                        <span class="target-card-ext">"XLSX"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Trích xuất toàn bộ bảng biểu số liệu thành trang tính Excel"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "csv" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("csv".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📄 Bảng dữ liệu CSV"</span>
-                                                                                        <span class="target-card-ext">"CSV"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Trích xuất bảng biểu thành tệp phân tách dấu phẩy UTF-8"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("md".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📝 Tài liệu Markdown"</span>
-                                                                                        <span class="target-card-ext">"MD"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Biên dịch nội dung văn bản sang Markdown cấu trúc"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "txt" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("txt".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🔍 Nhận diện OCR"</span>
-                                                                                        <span class="target-card-ext">"TXT"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Trích xuất văn bản tiếng Việt từ trang PDF scan"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "png" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("png".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🖼️ Ảnh cuộn dài"</span>
-                                                                                        <span class="target-card-ext">"PNG"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Kết xuất trang PDF thành ảnh dài chất lượng cao"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📑 Chuẩn hóa PDF"</span>
-                                                                                        <span class="target-card-ext">"PDF"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Tách trang và tái cấu trúc bảng XREF chuẩn"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-
-                                                                        DetectedFormatCategory::Docx => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("md".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📝 Tài liệu Markdown"</span>
-                                                                                        <span class="target-card-ext">"MD"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Trích xuất đề mục, đoạn văn từ OpenXML Word sang MD"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "txt" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("txt".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📄 Văn bản thuần"</span>
-                                                                                        <span class="target-card-ext">"TXT"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Trích xuất toàn bộ nội dung chữ UTF-8 không định dạng"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📑 Đóng gói PDF"</span>
-                                                                                        <span class="target-card-ext">"PDF"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Xuất định dạng PDF lưu trữ văn bản chuẩn"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-
-                                                                        DetectedFormatCategory::Xlsx => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "csv" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("csv".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📄 Bảng CSV UTF-8"</span>
-                                                                                        <span class="target-card-ext">"CSV"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Đọc sharedStrings và xuất bảng dữ liệu chuẩn UTF-8"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "json" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("json".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"💾 Cấu trúc JSON"</span>
-                                                                                        <span class="target-card-ext">"JSON"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Chuyển đổi các dòng bảng tính thành mảng đối tượng JSON"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "sql" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("sql".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🗄️ Kịch bản SQL"</span>
-                                                                                        <span class="target-card-ext">"SQL"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Tạo các câu lệnh INSERT INTO chuẩn để nạp database"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("md".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📝 Bảng Markdown"</span>
-                                                                                        <span class="target-card-ext">"MD"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Chuyển đổi bảng tính thành cú pháp Markdown Table"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-
-                                                                        DetectedFormatCategory::Csv => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "json" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("json".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"💾 Cấu trúc JSON"</span>
-                                                                                        <span class="target-card-ext">"JSON"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Chuyển bảng CSV thành danh sách bản ghi JSON"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "sql" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("sql".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🗄️ Kịch bản SQL"</span>
-                                                                                        <span class="target-card-ext">"SQL"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Sinh câu lệnh INSERT INTO bảng cơ sở dữ liệu"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("md".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📝 Bảng Markdown"</span>
-                                                                                        <span class="target-card-ext">"MD"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Tạo bảng Markdown chuẩn hóa căn chỉnh cột"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "xlsx" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("xlsx".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📊 Bảng tính Excel"</span>
-                                                                                        <span class="target-card-ext">"XLSX"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Đóng gói dữ liệu CSV thành bảng tính Excel hoàn chỉnh"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-
-                                                                        DetectedFormatCategory::Markdown | DetectedFormatCategory::Text => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📑 PDF Công Vụ VN"</span>
-                                                                                        <span class="target-card-ext">"PDF"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Biên dịch sang PDF A4 chuẩn văn bản hành chính Việt Nam"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "txt" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("txt".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🔤 Chuẩn hóa Unicode"</span>
-                                                                                        <span class="target-card-ext">"TXT"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Tự động phát hiện và chuyển đổi font TCVN3/VNI sang Unicode"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-
-                                                                        DetectedFormatCategory::Image => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "webp" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("webp".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🌐 WebP Siêu Nén"</span>
-                                                                                        <span class="target-card-ext">"WEBP"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Nén giảm 70% dung lượng mà không làm mờ hình ảnh"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "png" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("png".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"🖼️ PNG Không vỡ"</span>
-                                                                                        <span class="target-card-ext">"PNG"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Bảo toàn 100% chất lượng điểm ảnh cho sơ đồ/chứng từ"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "jpg" || active_fmt == "jpeg" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("jpg".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📷 JPEG Tiêu chuẩn"</span>
-                                                                                        <span class="target-card-ext">"JPG"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Định dạng ảnh tương thích hoàn hảo mọi thiết bị"</span>
-                                                                                </div>
-
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "bmp" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("bmp".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"💾 BMP Bitmap"</span>
-                                                                                        <span class="target-card-ext">"BMP"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Dữ liệu ảnh điểm gốc thuần túy không nén"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-
-                                                                        _ => view! {
-                                                                            <div class="target-cards-grid">
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "xlsx" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("xlsx".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📊 Bảng tính Excel"</span>
-                                                                                        <span class="target-card-ext">"XLSX"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Xuất dữ liệu sang bảng tính Excel"</span>
-                                                                                </div>
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "csv" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("csv".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📄 Bảng dữ liệu CSV"</span>
-                                                                                        <span class="target-card-ext">"CSV"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Xuất dữ liệu sang tệp CSV phân tách"</span>
-                                                                                </div>
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("md".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📝 Tài liệu Markdown"</span>
-                                                                                        <span class="target-card-ext">"MD"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Biên dịch văn bản sang Markdown"</span>
-                                                                                </div>
-                                                                                <div
-                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
-                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
-                                                                                >
-                                                                                    <div class="target-card-header">
-                                                                                        <span class="target-card-name">"📑 Tài liệu PDF"</span>
-                                                                                        <span class="target-card-ext">"PDF"</span>
-                                                                                    </div>
-                                                                                    <span class="target-card-desc">"Xuất sang tệp tài liệu PDF"</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        }.into_any(),
-                                                                    }
-                                                                }}
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                }
-                                            }}
-                                        </div>
-                                    }.into_any(),
-
-                                    ToolArchetype::FileBatch => view! {
-                                        <div>
-                                            <input
-                                                type="file"
-                                                id="file-batch-picker"
-                                                multiple=true
-                                                style="display: none;"
-                                                on:change=move |_| {
-                                                    if let Ok(js_val) = js_sys::eval("Array.from(document.getElementById('file-batch-picker')?.files || []).map(f => f.name)") {
-                                                        if let Ok(names) = serde_wasm_bindgen::from_value::<Vec<String>>(js_val) {
-                                                            if !names.is_empty() {
-                                                                set_selected_files.update(|list| {
-                                                                    list.extend(names);
-                                                                });
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            />
-                                            <div
-                                                class="dropzone"
-                                                role="button"
-                                                tabindex="0"
-                                                aria-label="Kéo thả tệp hoặc nhấn Enter để chọn tệp từ máy tính"
-                                                on:click=move |_| {
-                                                    let _ = js_sys::eval("document.getElementById('file-batch-picker')?.click()");
-                                                }
-                                                on:keydown=move |ev: KeyboardEvent| {
-                                                    if ev.key() == "Enter" || ev.key() == " " {
-                                                        ev.prevent_default();
-                                                        let _ = js_sys::eval("document.getElementById('file-batch-picker')?.click()");
-                                                    }
-                                                }
-                                                on:dragover=move |ev| {
-                                                    let _ = ev;
-                                                }
-                                                on:drop=move |_| {
-                                                    let _ = js_sys::eval("document.getElementById('file-batch-picker')?.click()");
-                                                }
-                                            >
-                                                <div style="font-size: 28px; margin-bottom: 6px;">"📥"</div>
-                                                <div class="dropzone-title">"KÉO THẢ TỆP TỪ EXPLORER / FINDER VÀO ĐÂY HOẶC NHẤN ĐỂ CHỌN"</div>
-                                                <div class="dropzone-sub">
-                                                    "(Hỗ trợ xử lý hàng loạt PDF, hình ảnh, văn bản Word đa luồng Rayon)"
-                                                </div>
-                                            </div>
-
-                                            { move || {
-                                                let fs = selected_files.get();
-                                                if !fs.is_empty() {
-                                                    view! {
-                                                        <div class="file-chips-container">
-                                                            { fs.into_iter().enumerate().map(|(idx, name)| {
-                                                                view! {
-                                                                    <span class="file-chip">
-                                                                        <span>"📄"</span>
-                                                                        <span>{name}</span>
-                                                                        <button
-                                                                            class="file-chip-remove"
-                                                                            on:click=move |_| {
-                                                                                set_selected_files.update(|list| {
-                                                                                    if idx < list.len() {
-                                                                                        list.remove(idx);
-                                                                                    }
-                                                                                });
-                                                                            }
-                                                                        >
-                                                                            "✕"
-                                                                        </button>
-                                                                    </span>
-                                                                }
-                                                            }).collect::<Vec<_>>() }
-                                                        </div>
-                                                    }.into_any()
-                                                } else {
-                                                    view! { <div></div> }.into_any()
-                                                }
-                                            }}
-
-                                            <div class="form-grid-2">
-                                                <div class="form-group">
-                                                    <label class="form-label">"Định dạng xuất đích:"</label>
-                                                    <select
-                                                        class="form-input"
-                                                        prop:value=target_format
-                                                        on:change=move |ev| set_target_format.set(event_target_value(&ev))
-                                                    >
-                                                        <option value="webp">"WebP (Tối ưu web & lưu trữ)"</option>
-                                                        <option value="avif">"AVIF (Nén cao cấp thế hệ mới)"</option>
-                                                        <option value="jpg">"JPEG tiêu chuẩn"</option>
-                                                        <option value="png">"PNG không nén vỡ hình"</option>
-                                                        <option value="pdf">"PDF chuẩn in ấn"</option>
-                                                    </select>
-                                                </div>
-
-                                                <div class="form-group">
-                                                    <label class="form-label">
-                                                        "Chất lượng nén (" { move || quality_percent.get() } "%):"
-                                                    </label>
-                                                    <div class="slider-group">
-                                                        <input
-                                                            type="range"
-                                                            min="40"
-                                                            max="100"
-                                                            prop:value=quality_percent
-                                                            on:input=move |ev| {
-                                                                if let Ok(val) = event_target_value(&ev).parse::<u8>() {
-                                                                    set_quality_percent.set(val);
-                                                                }
-                                                            }
-                                                        />
-                                                        <span class="slider-value">{ move || format!("{}%", quality_percent.get()) }</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div style="display: flex; gap: 16px; margin-top: 12px;">
-                                                <label class="radio-item">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked=strip_metadata
-                                                        on:change=move |ev| set_strip_metadata.set(event_target_checked(&ev))
-                                                    />
-                                                    "Tẩy sạch Metadata ẩn & EXIF / GPS"
-                                                </label>
-                                                <label class="radio-item">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked=max_compression
-                                                        on:change=move |ev| set_max_compression.set(event_target_checked(&ev))
-                                                    />
-                                                    "Nén luồng FlateDecode tối đa"
-                                                </label>
-                                            </div>
-                                        </div>
-                                    }.into_any(),
-
-                                    ToolArchetype::FinancialAccounting => view! {
-                                        <div>
-                                            { move || {
-                                                let s = current_slug.get();
-                                                if s == "gross-net-salary-calculator" {
-                                                    view! {
-                                                        <div>
-                                                            <div class="form-grid-3">
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Lương Gross thỏa thuận (VND):"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=salary_gross
-                                                                        on:input=move |ev| set_salary_gross.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Số người phụ thuộc (người):"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="number"
-                                                                        min="0"
-                                                                        max="10"
-                                                                        prop:value=dependents_count
-                                                                        on:input=move |ev| {
-                                                                            if let Ok(v) = event_target_value(&ev).parse::<u32>() {
-                                                                                set_dependents_count.set(v);
-                                                                            }
-                                                                        }
-                                                                    />
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Vùng lương tối thiểu:"</label>
-                                                                    <select
-                                                                        class="form-input"
-                                                                        prop:value=salary_region
-                                                                        on:change=move |ev| set_salary_region.set(event_target_value(&ev))
-                                                                    >
-                                                                        <option value="Vùng I (4.960.000đ)">"Vùng I (4.960.000đ)"</option>
-                                                                        <option value="Vùng II (4.410.000đ)">"Vùng II (4.410.000đ)"</option>
-                                                                        <option value="Vùng III (3.860.000đ)">"Vùng III (3.860.000đ)"</option>
-                                                                        <option value="Vùng IV (3.450.000đ)">"Vùng IV (3.450.000đ)"</option>
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-
-                                                            <table class="breakdown-table">
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th>"Hạng mục đối soát"</th>
-                                                                        <th>"Tỷ lệ theo luật"</th>
-                                                                        <th>"Số tiền (VND)"</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    <tr>
-                                                                        <td>"Bảo hiểm Xã hội (BHXH)"</td>
-                                                                        <td>"8.0%"</td>
-                                                                        <td>"2.000.000 đ"</td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td>"Bảo hiểm Y tế (BHYT)"</td>
-                                                                        <td>"1.5%"</td>
-                                                                        <td>"375.000 đ"</td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td>"Bảo hiểm Thất nghiệp (BHTN)"</td>
-                                                                        <td>"1.0%"</td>
-                                                                        <td>"250.000 đ"</td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td>"Giảm trừ gia cảnh bản thân & phụ thuộc"</td>
-                                                                        <td>"11tr + 4.4tr/người"</td>
-                                                                        <td>"15.400.000 đ"</td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td>"Thuế TNCN tạm tính (Biểu lũy tiến)"</td>
-                                                                        <td>"Lũy tiến từng phần"</td>
-                                                                        <td>"447.500 đ"</td>
-                                                                    </tr>
-                                                                    <tr class="total-row">
-                                                                        <td>"LƯƠNG NET THỰC NHẬN"</td>
-                                                                        <td>"Thực lãnh"</td>
-                                                                        <td>"21.927.500 đ"</td>
-                                                                    </tr>
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    }.into_any()
-                                                } else if s == "vn-loan-amortization" {
-                                                    view! {
-                                                        <div>
-                                                            <div class="form-grid-3">
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Số tiền vay (VND):"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=loan_principal
-                                                                        on:input=move |ev| set_loan_principal.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Lãi suất (%/năm):"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=loan_rate
-                                                                        on:input=move |ev| set_loan_rate.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Thời hạn (tháng):"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="number"
-                                                                        prop:value=loan_months
-                                                                        on:input=move |ev| set_loan_months.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div style="margin-top: 10px; font-size: 13px; color: #38BDF8;">
-                                                                "💡 Phương thức: Dư nợ giảm dần chuẩn xác từng đồng, tính toán theo công thức niên kim ngân hàng."
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                } else if s == "vn-working-days-calc" {
-                                                    view! {
-                                                        <div class="form-grid-2">
-                                                            <div class="form-group">
-                                                                <label class="form-label">"Từ ngày (YYYY-MM-DD):"</label>
-                                                                <input
-                                                                    class="form-input"
-                                                                    type="text"
-                                                                    prop:value=date_start
-                                                                    on:input=move |ev| set_date_start.set(event_target_value(&ev))
-                                                                />
-                                                            </div>
-                                                            <div class="form-group">
-                                                                <label class="form-label">"Đến ngày (YYYY-MM-DD):"</label>
-                                                                <input
-                                                                    class="form-input"
-                                                                    type="text"
-                                                                    prop:value=date_end
-                                                                    on:input=move |ev| set_date_end.set(event_target_value(&ev))
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                } else {
-                                                    view! {
-                                                        <div class="tool-config-panel">
-                                                            <div class="form-group">
-                                                                <label class="form-label">"Nhập số tiền hoặc số bất kỳ cần đọc:"</label>
-                                                                <input
-                                                                    class="form-input"
-                                                                    type="text"
-                                                                    prop:value=input_value
-                                                                    on:compositionstart=move |_| set_is_ime_composing.set(true)
-                                                                    on:compositionend=move |_| set_is_ime_composing.set(false)
-                                                                    on:input=move |ev| set_input_value.set(event_target_value(&ev))
-                                                                    placeholder="Ví dụ: 1250000 hoặc 1.250.000"
-                                                                />
-                                                            </div>
-
-                                                            <div class="options-row">
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Phương ngữ:"</label>
-                                                                    <div style="display: flex; gap: 12px; margin-top: 4px;">
-                                                                        <label class="radio-item">
-                                                                            <input
-                                                                                type="radio"
-                                                                                name="dialect"
-                                                                                checked=move || dialect.get() == "North"
-                                                                                on:change=move |_| set_dialect.set("North".to_string())
-                                                                            />
-                                                                            "Miền Bắc (nghìn, lẻ)"
-                                                                        </label>
-                                                                        <label class="radio-item">
-                                                                            <input
-                                                                                type="radio"
-                                                                                name="dialect"
-                                                                                checked=move || dialect.get() == "South"
-                                                                                on:change=move |_| set_dialect.set("South".to_string())
-                                                                            />
-                                                                            "Miền Nam (ngàn, linh)"
-                                                                        </label>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Quy chuẩn kế toán:"</label>
-                                                                    <div style="display: flex; gap: 12px; margin-top: 4px;">
-                                                                        <label class="radio-item">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked=use_dong_chan
-                                                                                on:change=move |ev| set_use_dong_chan.set(event_target_checked(&ev))
-                                                                            />
-                                                                            "Thêm hậu tố 'đồng chẵn'"
-                                                                        </label>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                }
-                                            }}
-                                        </div>
-                                    }.into_any(),
-
-                                    ToolArchetype::IdentityVerification => view! {
-                                        <div>
-                                            { move || {
-                                                let s = current_slug.get();
-                                                if s == "vietqr-napas247-generator" {
-                                                    view! {
-                                                        <div>
-                                                            <div class="form-grid-2">
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Ngân hàng thụ hưởng:"</label>
-                                                                    <select
-                                                                        class="form-input"
-                                                                        prop:value=bank_name
-                                                                        on:change=move |ev| set_bank_name.set(event_target_value(&ev))
-                                                                    >
-                                                                        <option value="Vietcombank (VCB)">"Vietcombank (VCB - 970436)"</option>
-                                                                        <option value="MBBank (MB)">"MBBank (MB - 970422)"</option>
-                                                                        <option value="Techcombank (TCB)">"Techcombank (TCB - 970407)"</option>
-                                                                        <option value="VPBank (VPB)">"VPBank (VPB - 970432)"</option>
-                                                                        <option value="ACB">"Á Châu (ACB - 970416)"</option>
-                                                                        <option value="BIDV">"BIDV (970418)"</option>
-                                                                        <option value="Agribank">"Agribank (970405)"</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Số tài khoản thụ hưởng:"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=account_number
-                                                                        on:input=move |ev| set_account_number.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="form-grid-3">
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Tên chủ tài khoản:"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=account_holder
-                                                                        on:input=move |ev| set_account_holder.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Số tiền (VND):"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=transfer_amount
-                                                                        on:input=move |ev| set_transfer_amount.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                                <div class="form-group">
-                                                                    <label class="form-label">"Nội dung chuyển khoản:"</label>
-                                                                    <input
-                                                                        class="form-input"
-                                                                        type="text"
-                                                                        prop:value=transfer_note
-                                                                        on:input=move |ev| set_transfer_note.set(event_target_value(&ev))
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="qr-preview-box">
-                                                                <div style="font-weight: 700; font-size: 14px; color: #0284C7;">
-                                                                    "Napas 247 | VietQR EMVCo"
-                                                                </div>
-                                                                <div style="background: #F1F5F9; border: 1px solid #CBD5E1; padding: 20px; border-radius: 6px; font-family: monospace; font-size: 11px; text-align: center;">
-                                                                    "[ ⬛ MÃ VIETQR CHUẨN NAPAS 247 ⬛ ]"
-                                                                </div>
-                                                                <div style="font-size: 12px; color: #475569;">
-                                                                    { move || format!("TK: {} - {}", account_number.get(), bank_name.get()) }
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                } else if s == "vn-cccd-mst-validator" {
-                                                    view! {
-                                                        <div>
-                                                            <div class="form-group">
-                                                                <label class="form-label">"Nhập số Căn cước công dân (12 số) hoặc Mã số thuế (MST):"</label>
-                                                                <input
-                                                                    class="form-input"
-                                                                    type="text"
-                                                                    prop:value=cccd_input
-                                                                    on:input=move |ev| set_cccd_input.set(event_target_value(&ev))
-                                                                    placeholder="Ví dụ: 001098012345"
-                                                                />
-                                                            </div>
-
-                                                            <div class="identity-preview-card">
-                                                                <div class="id-field">
-                                                                    <span class="id-field-label">"Nơi đăng ký khai sinh"</span>
-                                                                    <span class="id-field-value">"001 - Thành phố Hà Nội"</span>
-                                                                </div>
-                                                                <div class="id-field">
-                                                                    <span class="id-field-label">"Giới tính & Thế kỷ"</span>
-                                                                    <span class="id-field-value">"Nam (Thế kỷ 20)"</span>
-                                                                </div>
-                                                                <div class="id-field">
-                                                                    <span class="id-field-label">"Năm sinh"</span>
-                                                                    <span class="id-field-value">"1998"</span>
-                                                                </div>
-                                                                <div class="id-field">
-                                                                    <span class="id-field-label">"Độ hợp lệ thuật toán Modulo 11"</span>
-                                                                    <span class="id-field-value" style="color: #34D399;">"✓ Hợp lệ 100%"</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    }.into_any()
-                                                } else {
-                                                    view! {
-                                                        <div class="form-group">
-                                                            <label class="form-label">"Nhập chuỗi địa chỉ hành chính cần chuẩn hóa:"</label>
-                                                            <input
-                                                                class="form-input"
-                                                                type="text"
-                                                                prop:value=address_raw
-                                                                on:input=move |ev| set_address_raw.set(event_target_value(&ev))
-                                                            />
-                                                        </div>
-                                                    }.into_any()
-                                                }
-                                            }}
-                                        </div>
-                                    }.into_any(),
-
-                                    ToolArchetype::TextCodeConversion => view! {
-                                        <div>
-                                            <div style="display: flex; gap: 16px; margin-bottom: 10px;">
-                                                <div class="form-group" style="flex: 1;">
-                                                    <label class="form-label">"Bảng mã nguồn (Font):"</label>
-                                                    <select
-                                                        class="form-input"
-                                                        prop:value=font_source_encoding
-                                                        on:change=move |ev| set_font_source_encoding.set(event_target_value(&ev))
-                                                    >
-                                                        <option value="TCVN3">"TCVN3 (ABC) -> Unicode"</option>
-                                                        <option value="VNI">"VNI-Windows -> Unicode"</option>
-                                                        <option value="VIQR">"VIQR -> Unicode"</option>
-                                                    </select>
-                                                </div>
-                                                <div class="form-group" style="flex: 1;">
-                                                    <label class="form-label">"Phương ngữ SQL (SQL Linter):"</label>
-                                                    <select
-                                                        class="form-input"
-                                                        prop:value=sql_dialect
-                                                        on:change=move |ev| set_sql_dialect.set(event_target_value(&ev))
-                                                    >
-                                                        <option value="PostgreSQL">"PostgreSQL"</option>
-                                                        <option value="MySQL">"MySQL"</option>
-                                                        <option value="SQLite">"SQLite"</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div class="dual-pane-container" style="margin-top: 0;">
-                                                <div class="pane-box">
-                                                    <div class="pane-label">
-                                                        <span>"VĂN BẢN ĐẦU VÀO"</span>
-                                                        <span>"(Hỗ trợ gõ trực tiếp hoặc Ctrl + V)"</span>
-                                                    </div>
-                                                    <textarea
-                                                        class="pane-textarea"
-                                                        prop:value=text_source
-                                                        on:input=move |ev| set_text_source.set(event_target_value(&ev))
-                                                    ></textarea>
-                                                </div>
-
-                                                <div class="pane-box">
-                                                    <div class="pane-label">
-                                                        <span>"KẾT QUẢ ĐÃ CHUYỂN ĐỔI / ĐỐI SOÁT"</span>
-                                                        <span style="color: #10B981;">"100% On-Device"</span>
-                                                    </div>
-                                                    <textarea
-                                                        class="pane-textarea"
-                                                        readonly=true
-                                                        prop:value=move || {
-                                                            let r = output_result.get();
-                                                            if r.is_empty() {
-                                                                text_source.get()
-                                                            } else {
-                                                                r
-                                                            }
-                                                        }
-                                                    ></textarea>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    }.into_any(),
-
-                                    ToolArchetype::SpreadsheetData => view! {
-                                        <div>
-                                            <div
-                                                class="dropzone"
-                                                on:click=move |_| {
-                                                    set_selected_files.update(|f| {
-                                                        f.push("bang_ke_hoa_don_thang_11.xlsx".to_string());
-                                                    });
-                                                }
-                                            >
-                                                <div style="font-size: 28px; margin-bottom: 6px;">"📊"</div>
-                                                <div class="dropzone-title">"KÉO THẢ TỆP EXCEL / CSV VÀO ĐÂY ĐỂ LÀM SẠCH VÀ CHUYỂN ĐỔI"</div>
-                                                <div class="dropzone-sub">
-                                                    "(Xử lý nhanh qua Calamine & XlsxWriter thuần Rust không cần cài Microsoft Office)"
-                                                </div>
-                                            </div>
-
-                                            <div class="form-grid-2">
-                                                <div class="form-group">
-                                                    <label class="form-label">"Tên cột khóa (Key Column):"</label>
-                                                    <input
-                                                        class="form-input"
-                                                        type="text"
-                                                        prop:value=excel_key_column
-                                                        on:input=move |ev| set_excel_key_column.set(event_target_value(&ev))
-                                                    />
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="form-label">"Định dạng xuất kết quả:"</label>
-                                                    <select
-                                                        class="form-input"
-                                                        prop:value=excel_export_format
-                                                        on:change=move |ev| set_excel_export_format.set(event_target_value(&ev))
-                                                    >
-                                                        <option value="xlsx">"Excel Workbook (.xlsx)"</option>
-                                                        <option value="csv">"CSV tiêu chuẩn (UTF-8)"</option>
-                                                        <option value="json">"JSON Array of Objects"</option>
-                                                        <option value="sql">"SQL INSERT Statements"</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div style="display: flex; gap: 16px; margin-top: 10px;">
-                                                <label class="radio-item">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked=excel_clean_names
-                                                        on:change=move |ev| set_excel_clean_names.set(event_target_checked(&ev))
-                                                    />
-                                                    "Chuẩn hóa viết hoa Họ Tên Việt"
-                                                </label>
-                                                <label class="radio-item">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked=excel_clean_dates
-                                                        on:change=move |ev| set_excel_clean_dates.set(event_target_checked(&ev))
-                                                    />
-                                                    "Đồng bộ ngày tháng DD/MM/YYYY"
-                                                </label>
-                                                <label class="radio-item">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked=excel_remove_duplicates
-                                                        on:change=move |ev| set_excel_remove_duplicates.set(event_target_checked(&ev))
-                                                    />
-                                                    "Loại bỏ dòng trùng lặp"
-                                                </label>
-                                            </div>
-                                        </div>
-                                    }.into_any(),
-                                }
-                            }}
-
-                            { move || {
-                                if let Some(err_val) = error_message.get() {
-                                    view! {
-                                        <div class="result-box result-box-error">
-                                            <div class="result-header">
-                                                <span class="result-label" style="color: #F43F5E;">"⚠️ LỖI THỰC THI TÁC VỤ:"</span>
-                                                <button
-                                                    class="copy-btn"
-                                                    style="background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #FDA4AF;"
-                                                    title="Đóng thông báo lỗi"
-                                                    on:click=move |_| set_error_message.set(None)
-                                                >
-                                                    "✕ Đóng"
-                                                </button>
-                                            </div>
-                                            <div class="result-content selectable-text" style="color: #FDA4AF; white-space: pre-wrap;">
-                                                {err_val}
-                                            </div>
-                                        </div>
-                                    }.into_any()
-                                } else {
-                                    let res = output_result.get();
-                                    if !res.is_empty() {
-                                        let res_val = res.clone();
-                                        view! {
-                                            <div class="result-box">
-                                                <div class="result-header">
-                                                    <span class="result-label">"KẾT QUẢ XỬ LÝ CHUẨN:"</span>
-                                                    <button
-                                                        class="copy-btn"
-                                                        title="Sao chép kết quả vào bộ nhớ tạm"
-                                                        on:click=move |_| copy_result_to_clipboard()
-                                                    >
-                                                        "📋 Sao chép"
-                                                    </button>
-                                                </div>
-                                                <div class="result-content selectable-text">{res_val}</div>
-                                            </div>
-                                        }.into_any()
-                                    } else {
-                                        view! { <div></div> }.into_any()
-                                    }
-                                }
-                            }}
-                        </section>
-
-                        <section class="zone-3">
-                            {move || {
-                                if is_running.get() || (progress_percent.get() > 0.0 && progress_percent.get() < 100.0) {
-                                    view! {
-                                        <div class="progress-container">
-                                            <div class="progress-track">
-                                                <div
-                                                    class="progress-bar"
-                                                    style=move || format!("width: {}%", progress_percent.get())
-                                                ></div>
-                                            </div>
-
-                                            <div class="progress-meta">
-                                                <span>{ move || progress_message.get() }</span>
-                                                <span>{ move || format!("{:.0}%", progress_percent.get()) }</span>
-                                            </div>
-                                        </div>
-                                    }.into_any()
-                                } else {
-                                    view! { <div></div> }.into_any()
-                                }
-                            }}
-
-                            <div class="action-bar">
-                                {move || {
-                                    let running = is_running.get();
-                                    let has_result = !output_result.get().is_empty() && error_message.get().is_none();
-                                    let slug = current_slug.get();
-                                    let domain = current_tool().domain;
-                                    let archetype = get_tool_archetype(&slug, &domain);
-
-                                    if running {
-                                        view! {
-                                            <div class="action-bar-running">
-                                                <button
-                                                    class="btn-primary"
-                                                    prop:disabled=true
-                                                >
-                                                    <span>"⏳ ĐANG XỬ LÝ..."</span>
-                                                </button>
-                                                <button
-                                                    class="btn-danger"
-                                                    on:click=move |_| cancel_current_task()
-                                                >
-                                                    <span>"🛑 HỦY (Esc)"</span>
-                                                </button>
-                                            </div>
-                                        }.into_any()
-                                    } else if has_result {
-                                        match archetype {
-                                            ToolArchetype::FileBatch | ToolArchetype::SpreadsheetData | ToolArchetype::UniversalConverter => {
-                                                view! {
-                                                    <div class="action-bar-completed">
-                                                        <button
-                                                            class="btn-success"
-                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
-                                                            on:click=move |_| open_output_dir()
-                                                        >
-                                                            <span>"📂 MỞ THƯ MỤC KẾT QUẢ (Ctrl + O)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ XỬ LÝ TIẾP (Ctrl + Enter)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Xóa kết quả cũ và chuẩn bị tác vụ mới"
-                                                            on:click=move |_| reset_task()
-                                                        >
-                                                            <span>"↺ Làm mới"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::FinancialAccounting => {
-                                                view! {
-                                                    <div class="action-bar-completed">
-                                                        <button
-                                                            class="btn-success"
-                                                            title="Sao chép kết quả tính toán vào bộ nhớ tạm"
-                                                            on:click=move |_| copy_result_to_clipboard()
-                                                        >
-                                                            <span>"📋 SAO CHÉP KẾT QUẢ"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ TÍNH LẠI (Enter)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Đặt lại các trường nhập liệu"
-                                                            on:click=move |_| reset_task()
-                                                        >
-                                                            <span>"↺ Đặt lại"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::IdentityVerification => {
-                                                let is_vietqr = slug == "vietqr-napas247-generator";
-                                                let copy_label = if is_vietqr { "📋 SAO CHÉP MÃ VIETQR" } else { "📋 SAO CHÉP THÔNG TIN" };
-                                                let rerun_label = if is_vietqr { "⚡ TẠO MÃ MỚI" } else { "⚡ XÁC THỰC LẠI" };
-                                                view! {
-                                                    <div class="action-bar-completed">
-                                                        <button
-                                                            class="btn-success"
-                                                            title="Sao chép kết quả xác thực / mã QR vào bộ nhớ tạm"
-                                                            on:click=move |_| copy_result_to_clipboard()
-                                                        >
-                                                            <span>{copy_label}</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>{rerun_label}</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Đặt lại thông tin nhập"
-                                                            on:click=move |_| reset_task()
-                                                        >
-                                                            <span>"↺ Đặt lại"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::TextCodeConversion => {
-                                                view! {
-                                                    <div class="action-bar-completed">
-                                                        <button
-                                                            class="btn-success"
-                                                            title="Sao chép toàn bộ văn bản sau chuyển đổi vào bộ nhớ tạm"
-                                                            on:click=move |_| copy_result_to_clipboard()
-                                                        >
-                                                            <span>"📋 SAO CHÉP KẾT QUẢ"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ CHUYỂN ĐỔI TIẾP (Ctrl + Enter)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Làm mới nội dung"
-                                                            on:click=move |_| reset_task()
-                                                        >
-                                                            <span>"↺ Làm mới"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                        }
-                                    } else {
-                                        match archetype {
-                                            ToolArchetype::UniversalConverter => {
-                                                view! {
-                                                    <div class="action-bar-idle">
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ BẮT ĐẦU CHUYỂN ĐỔI (Ctrl + Enter)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
-                                                            on:click=move |_| open_output_dir()
-                                                        >
-                                                            <span>"📂 Thư mục xuất (Ctrl + O)"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::FileBatch => {
-                                                view! {
-                                                    <div class="action-bar-idle">
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ BẮT ĐẦU XỬ LÝ (Ctrl + Enter)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
-                                                            on:click=move |_| open_output_dir()
-                                                        >
-                                                            <span>"📂 Thư mục xuất (Ctrl + O)"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::SpreadsheetData => {
-                                                view! {
-                                                    <div class="action-bar-idle">
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ XỬ LÝ DỮ LIỆU (Ctrl + Enter)"</span>
-                                                        </button>
-                                                        <button
-                                                            class="btn-secondary"
-                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
-                                                            on:click=move |_| open_output_dir()
-                                                        >
-                                                            <span>"📂 Thư mục xuất (Ctrl + O)"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::FinancialAccounting => {
-                                                view! {
-                                                    <div class="action-bar-idle">
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ TÍNH TOÁN NGAY (Enter)"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::IdentityVerification => {
-                                                let is_vietqr = slug == "vietqr-napas247-generator";
-                                                let btn_label = if is_vietqr { "⚡ TẠO MÃ VIETQR (Enter)" } else { "⚡ TRA CỨU & XÁC THỰC (Enter)" };
-                                                view! {
-                                                    <div class="action-bar-idle">
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>{btn_label}</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                            ToolArchetype::TextCodeConversion => {
-                                                view! {
-                                                    <div class="action-bar-idle">
-                                                        <button
-                                                            class="btn-primary"
-                                                            on:click=move |_| run_task()
-                                                        >
-                                                            <span>"⚡ CHUYỂN ĐỔI NGAY (Ctrl + Enter)"</span>
-                                                        </button>
-                                                    </div>
-                                                }.into_any()
-                                            }
-                                        }
-                                    }
-                                }}
-                            </div>
-                        </section>
-                    </main>
-                }.into_any(),
-
-                AppView::WorkflowDag => view! {
-                    <div class="workflow-workspace">
-                        <div class="workflow-header">
-                            <div>
-                                <h2 style="font-size: 18px; color: #F8FAFC; margin-bottom: 4px;">
-                                    "⚡ Thiết kế Chuỗi Tự động hóa: Chuẩn hóa Ảnh Bài viết Web"
-                                </h2>
-                                <p style="font-size: 12px; color: var(--text-muted);">
-                                    "Ghép nối các công cụ độc lập thành chuỗi Macro DAG với kiểm tra tương thích cổng MIME-Type trực quan."
-                                </p>
-                            </div>
-
-                            <div style="display: flex; gap: 8px;">
-                                <button
-                                    class="btn-primary"
-                                    prop:disabled=move || is_running_workflow.get()
-                                    on:click=move |_| run_dag_pipeline()
-                                >
-                                    { move || if is_running_workflow.get() { "⏳ Đang chạy..." } else { "▶ Chạy Chuỗi Pipeline (3 Bước)" } }
-                                </button>
-                            </div>
-                        </div>
-
-                        { move || {
-                            let msg = workflow_message.get();
-                            if !msg.is_empty() {
-                                view! {
-                                    <div style="padding: 12px; margin-bottom: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; color: #34D399; font-weight: 600;">
-                                        {msg}
-                                    </div>
-                                }.into_any()
-                            } else {
-                                view! { <div></div> }.into_any()
-                            }
-                        }}
-
-                        <div class="dag-pipeline-track">
-                            <div class="dag-node-card">
-                                <div class="dag-node-header">
-                                    <span class="dag-node-title">"1. Đổi Định dạng Ảnh"</span>
-                                    <span style="font-size: 11px; color: #10B981;">"Bước 1"</span>
-                                </div>
-                                <div class="dag-node-ports">
-                                    <div><span class="dag-port-badge in">"In: image/*"</span></div>
-                                    <div><span class="dag-port-badge out">"Out: image/webp"</span></div>
-                                </div>
-                            </div>
-
-                            <div class="dag-connector">
-                                <span>"======>"</span>
-                            </div>
-
-                            <div class="dag-node-card">
-                                <div class="dag-node-header">
-                                    <span class="dag-node-title">"2. Đóng dấu Watermark"</span>
-                                    <span style="font-size: 11px; color: #10B981;">"Bước 2"</span>
-                                </div>
-                                <div class="dag-node-ports">
-                                    <div><span class="dag-port-badge in">"In: image/webp, png"</span></div>
-                                    <div><span class="dag-port-badge out">"Out: image/webp"</span></div>
-                                </div>
-                            </div>
-
-                            <div class="dag-connector">
-                                <span>"======>"</span>
-                            </div>
-
-                            <div class="dag-node-card">
-                                <div class="dag-node-header">
-                                    <span class="dag-node-title">"3. Xóa sạch EXIF / GPS"</span>
-                                    <span style="font-size: 11px; color: #10B981;">"Bước 3"</span>
-                                </div>
-                                <div class="dag-node-ports">
-                                    <div><span class="dag-port-badge in">"In: image/webp, jpg"</span></div>
-                                    <div><span class="dag-port-badge out">"Out: image/webp"</span></div>
-                                </div>
-                            </div>
-
-                            <button class="add-node-btn" title="Thêm công cụ tương thích vào cuối chuỗi">
-                                "+ Thêm bước công cụ..."
-                            </button>
-                        </div>
-                    </div>
-                }.into_any(),
-
-                AppView::History => view! {
-                    <div class="history-workspace">
-                        <div class="history-header">
-                            <div>
-                                <h2 style="font-size: 18px; color: #F8FAFC; margin-bottom: 4px;">
-                                    "⏱️ Nhật ký Lịch sử Tác vụ Cục bộ (SQLite)"
-                                </h2>
-                                <p style="font-size: 12px; color: var(--text-muted);">
-                                    "Toàn bộ tác vụ và nhật ký thực thi được ghi nhận an toàn 100% trong cơ sở dữ liệu cục bộ."
-                                </p>
-                            </div>
-
-                            <div style="display: flex; gap: 8px;">
-                                <button
-                                    class="nav-tab-btn"
-                                    prop:disabled=move || is_loading_history.get()
-                                    on:click=move |_| load_history()
-                                >
-                                    { move || if is_loading_history.get() { "⏳ Đang tải..." } else { "🔄 Làm mới" } }
-                                </button>
-                                <button
-                                    class="nav-tab-btn"
-                                    style="color: #F87171;"
-                                    on:click=move |_| clear_all_history()
-                                >
-                                    "🗑️ Xóa lịch sử"
-                                </button>
-                            </div>
-                        </div>
-
-                        { move || {
-                            let recs = history_records.get();
-                            if recs.is_empty() {
-                                view! {
-                                    <div style="text-align: center; padding: 48px; color: var(--text-muted); background: #1E293B; border-radius: 8px; border: 1px solid #334155;">
-                                        <div style="font-size: 32px; margin-bottom: 8px;">"📭"</div>
-                                        <div style="font-size: 14px; font-weight: 600;">"Chưa có bản ghi tác vụ nào"</div>
-                                        <div style="font-size: 12px; margin-top: 4px;">"Hãy chọn một công cụ và thực thi tác vụ đầu tiên để xem nhật ký tại đây."</div>
-                                    </div>
-                                }.into_any()
-                            } else {
-                                view! {
-                                    <table class="history-table">
-                                        <thead>
-                                            <tr>
-                                                <th>"Mã tác vụ"</th>
-                                                <th>"Công cụ / Workflow"</th>
-                                                <th>"Thời gian xử lý"</th>
-                                                <th>"Trạng thái"</th>
-                                                <th>"Thời điểm"</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            { recs.into_iter().map(|item| {
-                                                let is_ok = item.status == "SUCCESS";
-                                                view! {
-                                                    <tr>
-                                                        <td style="font-family: monospace;">{item.id}</td>
-                                                        <td>{item.tool_slug.unwrap_or_else(|| item.workflow_id.unwrap_or_else(|| "Tác vụ hệ thống".to_string()))}</td>
-                                                        <td style="font-family: monospace;">{format!("{} ms", item.elapsed_ms)}</td>
-                                                        <td>
-                                                            <span class=if is_ok { "history-badge success" } else { "history-badge failed" }>
-                                                                {item.status}
-                                                            </span>
-                                                        </td>
-                                                        <td style="color: var(--text-muted);">{item.created_at}</td>
-                                                    </tr>
-                                                }
-                                            }).collect::<Vec<_>>() }
-                                        </tbody>
-                                    </table>
-                                }.into_any()
-                            }
-                        }}
-                    </div>
-                }.into_any(),
-            }}
-                </div>
-            </div>
-
-            { move || if palette_open.get() {
-                view! {
-                    <div class="modal-overlay" on:click=move |_| set_palette_open.set(false)>
-                        <div class="command-palette" on:click=move |ev: MouseEvent| ev.stop_propagation()>
-                            <div class="palette-input-box">
-                                <span style="font-size: 18px;">"🔍"</span>
-                                <input
-                                    class="palette-input"
-                                    type="text"
-                                    placeholder="Tìm kiếm công cụ theo tên, chức năng hoặc miền nghiệp vụ..."
-                                    autofocus=true
-                                    prop:value=search_query
-                                    on:input=move |ev| set_search_query.set(event_target_value(&ev))
-                                />
-                                <span style="font-size: 11px; color: var(--text-muted); background: #334155; padding: 2px 6px; border-radius: 4px;">"Esc để đóng"</span>
-                            </div>
-
-                            <div class="palette-list">
-                                { move || {
-                                    let q = search_query.get().trim().to_string();
-                                    let pinned = pinned_tool_items();
-                                    let pinned_list = pinned_slugs.get();
-
-                                    if q.is_empty() {
-                                        if pinned.is_empty() {
-                                            view! {
-                                                <div>
-                                                    <div class="palette-section-header">
-                                                        <span>"📌 TẤT CẢ CÔNG CỤ"</span>
-                                                        <span style="font-size: 10px; opacity: 0.7;">{format!("{} công cụ", ALL_TOOLS.len())}</span>
-                                                    </div>
-                                                    {
-                                                        ALL_TOOLS.iter().map(|tool| {
-                                                            let slug_copy = tool.slug.to_string();
-                                                            view! {
-                                                                <div
-                                                                    class="palette-item"
-                                                                    on:click=move |_| select_tool(slug_copy.clone())
-                                                                >
-                                                                    <div>
-                                                                        <div style="font-weight: 600;">{tool.name}</div>
-                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
-                                                                    </div>
-                                                                    <span class="palette-item-badge">{tool.domain}</span>
-                                                                </div>
-                                                            }
-                                                        }).collect::<Vec<_>>()
-                                                    }
-                                                </div>
-                                            }.into_any()
-                                        } else {
-                                            let remaining = non_pinned_tools();
-                                            view! {
-                                                <div>
-                                                    <div class="palette-section-header">
-                                                        <span>"📌 CÔNG CỤ ĐÃ GHIM"</span>
-                                                        <span style="font-size: 10px; opacity: 0.7;">"Ưu tiên gợi ý"</span>
-                                                    </div>
-                                                    {
-                                                        pinned.into_iter().map(|tool| {
-                                                            let slug_copy = tool.slug.to_string();
-                                                            view! {
-                                                                <div
-                                                                    class="palette-item"
-                                                                    on:click=move |_| select_tool(slug_copy.clone())
-                                                                >
-                                                                    <div>
-                                                                        <div style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
-                                                                            <span>{tool.name}</span>
-                                                                            <span class="palette-item-badge pinned">"📌 Đã ghim"</span>
-                                                                        </div>
-                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
-                                                                    </div>
-                                                                    <span class="palette-item-badge">{tool.domain}</span>
-                                                                </div>
-                                                            }
-                                                        }).collect::<Vec<_>>()
-                                                    }
-
-                                                    <div class="palette-section-header" style="margin-top: 10px;">
-                                                        <span>"🛠️ CÁC CÔNG CỤ KHÁC"</span>
-                                                        <span style="font-size: 10px; opacity: 0.7;">{format!("{} công cụ", remaining.len())}</span>
-                                                    </div>
-                                                    {
-                                                        remaining.into_iter().map(|tool| {
-                                                            let slug_copy = tool.slug.to_string();
-                                                            view! {
-                                                                <div
-                                                                    class="palette-item"
-                                                                    on:click=move |_| select_tool(slug_copy.clone())
-                                                                >
-                                                                    <div>
-                                                                        <div style="font-weight: 600;">{tool.name}</div>
-                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
-                                                                    </div>
-                                                                    <span class="palette-item-badge">{tool.domain}</span>
-                                                                </div>
-                                                            }
-                                                        }).collect::<Vec<_>>()
-                                                    }
-                                                </div>
-                                            }.into_any()
-                                        }
-                                    } else {
-                                        let filtered = filtered_tools();
-                                        if filtered.is_empty() {
-                                            view! {
-                                                <div style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
-                                                    <div style="font-size: 24px; margin-bottom: 6px;">"🔍"</div>
-                                                    <div style="font-weight: 600;">"Không tìm thấy công cụ phù hợp"</div>
-                                                    <div style="font-size: 12px; margin-top: 4px;">"Hãy thử gõ từ khóa khác (ví dụ: pdf, vietqr, excel, lương...)"</div>
-                                                </div>
-                                            }.into_any()
-                                        } else {
-                                            view! {
-                                                <div>
-                                                    <div class="palette-section-header">
-                                                        <span>"KẾT QUẢ TÌM KIẾM"</span>
-                                                        <span style="font-size: 10px; opacity: 0.7;">{format!("{} kết quả", filtered.len())}</span>
-                                                    </div>
-                                                    {
-                                                        filtered.into_iter().map(|tool| {
-                                                            let slug_copy = tool.slug.to_string();
-                                                            let is_pinned = pinned_list.contains(&slug_copy);
-                                                            view! {
-                                                                <div
-                                                                    class="palette-item"
-                                                                    on:click=move |_| select_tool(slug_copy.clone())
-                                                                >
-                                                                    <div>
-                                                                        <div style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
-                                                                            <span>{tool.name}</span>
-                                                                            {if is_pinned {
-                                                                                view! { <span class="palette-item-badge pinned">"📌 Đã ghim"</span> }.into_any()
-                                                                            } else {
-                                                                                view! { <span></span> }.into_any()
-                                                                            }}
-                                                                        </div>
-                                                                        <div style="font-size: 11px; opacity: 0.8;">{tool.description}</div>
-                                                                    </div>
-                                                                    <span class="palette-item-badge">{tool.domain}</span>
-                                                                </div>
-                                                            }
-                                                        }).collect::<Vec<_>>()
-                                                    }
-                                                </div>
-                                            }.into_any()
-                                        }
-                                    }
-                                }}
-                            </div>
-                        </div>
-                    </div>
-                }.into_any()
-            } else {
-                view! { <div></div> }.into_any()
-            }}
-
-            { move || if save_preset_modal_open.get() {
-                view! {
-                    <div class="modal-overlay" on:click=move |_| set_save_preset_modal_open.set(false)>
-                        <div class="preset-modal" on:click=move |ev: MouseEvent| ev.stop_propagation()>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                                <div style="font-weight: 700; font-size: 16px; color: #F8FAFC;">"💾 Lưu Mẫu Cấu hình (Preset)"</div>
-                                <button class="window-control-btn close" on:click=move |_| set_save_preset_modal_open.set(false)>"✕"</button>
-                            </div>
-
-                            <div class="form-group" style="margin-bottom: 16px;">
-                                <label class="form-label">"Tên mẫu Preset mới:"</label>
-                                <input
-                                    class="form-input"
-                                    type="text"
-                                    placeholder="Ví dụ: Kế toán thuế tháng 11"
-                                    prop:value=preset_name_input
-                                    on:input=move |ev| set_preset_name_input.set(event_target_value(&ev))
-                                    autofocus=true
-                                />
-                            </div>
-
-                            <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                                <button class="btn-secondary" on:click=move |_| set_save_preset_modal_open.set(false)>
-                                    "Hủy"
-                                </button>
-                                <button class="btn-primary" on:click=move |_| save_current_preset()>
-                                    "Lưu vào SQLite"
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                }.into_any()
-            } else {
-                view! { <div></div> }.into_any()
-            }}
-
-            { move || {
-                if let Some(msg) = clipboard_toast.get() {
-                    view! {
-                        <div class="clipboard-toast">
-                            <span>"📋"</span>
-                            <span>{msg}</span>
-                        </div>
-                    }.into_any()
-                } else {
-                    view! { <div></div> }.into_any()
-                }
-            }}
-
+            <main class="app-main-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                { move || match (app_state.current_view.get(), app_state.deep_link_tool.get()) {
+                    (AppView::Launcher, _) => view! {
+                        <LauncherView
+                            on_select_app=Callback::new(move |app_id| app_state.navigate_to(app_id))
+                            on_deep_link=Callback::new(move |(app_id, slug)| app_state.deep_link(app_id, slug))
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::VnOffice), Some(slug)) => view! {
+                        <VnOfficeApp
+                            state=app_state.vn_office_state
+                            initial_tool=slug
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::VnOffice), None) => view! {
+                        <VnOfficeApp
+                            state=app_state.vn_office_state
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::PdfStudio), Some(slug)) => view! {
+                        <PdfStudioApp
+                            state=app_state.pdf_studio_state
+                            initial_tool=slug
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::PdfStudio), None) => view! {
+                        <PdfStudioApp
+                            state=app_state.pdf_studio_state
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::MediaStudio), Some(slug)) => view! {
+                        <MediaStudioApp
+                            state=app_state.media_studio_state
+                            initial_tool=slug
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::MediaStudio), None) => view! {
+                        <MediaStudioApp
+                            state=app_state.media_studio_state
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::DataLab), Some(slug)) => view! {
+                        <DataLabApp
+                            state=app_state.data_lab_state
+                            initial_tool=slug
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                    (AppView::MicroApp(MicroAppId::DataLab), None) => view! {
+                        <DataLabApp
+                            state=app_state.data_lab_state
+                            on_back=move || app_state.current_view.set(AppView::Launcher)
+                        />
+                    }.into_any(),
+                }}
+            </main>
+
+            // Update Dialog Modal
             { move || if update_modal_open.get() {
                 if let Some(info) = available_update.get() {
                     let notes = info.release_notes.unwrap_or_else(|| "Bản cập nhật tối ưu hóa hiệu năng, sửa lỗi và cải tiến trải nghiệm người dùng.".to_string());
@@ -3091,6 +830,7 @@ pub fn App() -> impl IntoView {
                 view! { <div></div> }.into_any()
             }}
 
+            // Update Toast
             { move || {
                 if let Some(msg) = update_toast.get() {
                     view! {
