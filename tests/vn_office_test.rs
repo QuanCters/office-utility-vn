@@ -215,3 +215,31 @@ fn test_vn_office_calculation_history() {
     assert!(state.latest_calculation().is_none());
 }
 
+#[test]
+fn test_vn_office_state_inputs_retention() {
+    let state = VnOfficeState::new();
+
+    // 1. Giá trị khởi tạo mặc định
+    assert_eq!(state.tool_inputs.num_input.0.get(), "1250000");
+    assert_eq!(state.tool_inputs.salary_input.0.get(), "25000000");
+    assert_eq!(state.tool_inputs.qr_amount.0.get(), "500000");
+
+    // 2. Thay đổi giá trị nhập liệu
+    state.tool_inputs.num_input.1.set("999999999".to_string());
+    state.tool_inputs.salary_input.1.set("50000000".to_string());
+    state.tool_inputs.salary_dependents.1.set(2);
+    state.tool_inputs.qr_amount.1.set("1200000".to_string());
+
+    // 3. Giả lập người dùng chuyển công cụ hoặc điều hướng ra Launcher rồi quay lại
+    state.select_tool("gross-net-salary-calculator");
+    state.open_workflow();
+    state.close_workflow();
+    state.select_tool("vietnamese-number-to-words");
+
+    // 4. Các giá trị nhập liệu vẫn được lưu giữ trọn vẹn trong in-memory state
+    assert_eq!(state.tool_inputs.num_input.0.get(), "999999999");
+    assert_eq!(state.tool_inputs.salary_input.0.get(), "50000000");
+    assert_eq!(state.tool_inputs.salary_dependents.0.get(), 2);
+    assert_eq!(state.tool_inputs.qr_amount.0.get(), "1200000");
+}
+

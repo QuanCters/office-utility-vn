@@ -458,4 +458,9 @@ impl MediaStudioState {
     pub fn toggle_queue_expanded(&self) {
         self.is_queue_expanded.update(|exp| *exp = !*exp);
     }
+
+    /// Danh sách tĩnh 9 công cụ thuộc phạm vi Media Studio.
+    pub fn tools(&self) -> &'static [ToolItem] {
+        crate::micro_apps::MEDIA_STUDIO_TOOLS
+    }
 }

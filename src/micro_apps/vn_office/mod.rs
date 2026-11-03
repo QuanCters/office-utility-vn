@@ -4,7 +4,7 @@ pub mod state;
 
 pub use layout::{VnOfficeLayout, VnOfficeLegalPanel};
 pub use sidebar::VnOfficeSidebar;
-pub use state::{BankReference, VnCalculationRecord, VnLegalRegulations, VnOfficeState, POPULAR_VN_BANKS};
+pub use state::{BankReference, VnCalculationRecord, VnLegalRegulations, VnOfficeState, VnToolInputs, POPULAR_VN_BANKS};
 
 use leptos::prelude::*;
 
@@ -28,7 +28,10 @@ pub fn VnOfficeApp(
     #[prop(into, optional)] initial_tool: Option<String>,
     #[prop(into)] on_back: Callback<()>,
 ) -> impl IntoView {
-    let app_state = state.unwrap_or_else(|| VnOfficeState::with_initial_tool(initial_tool));
+    let app_state = state.unwrap_or_else(|| VnOfficeState::with_initial_tool(initial_tool.clone()));
+    if let Some(ref slug) = initial_tool {
+        app_state.select_tool(slug);
+    }
 
     view! {
         <layout::VnOfficeLayout state=app_state on_back=on_back />

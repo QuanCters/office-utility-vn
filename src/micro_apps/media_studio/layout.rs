@@ -1,10 +1,11 @@
 use leptos::prelude::*;
+use crate::launcher::CommandPalette;
 use crate::micro_apps::media_studio::batch_queue::MediaStudioBatchQueue;
 use crate::micro_apps::media_studio::gallery_panel::MediaStudioGalleryPanel;
 use crate::micro_apps::media_studio::state::{category_for_tool, media_studio_tool_icon, MediaStudioState};
 use crate::micro_apps::media_studio::toolbar::MediaStudioToolbar;
 use crate::micro_apps::MEDIA_STUDIO_TOOLS;
-use crate::shared_ui::{BackButton, WorkflowRunner};
+use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     AudioSilenceTrimmerView, DocScannerPerspectiveView, ImageBatchView, ImageBgRedactView,
     ImageExifInspectorView, PhotoIdCropView, ScreenshotBeautifierView, VideoToGifWebpView,
@@ -20,19 +21,64 @@ pub fn MediaStudioLayout(
     // Cung cấp context cho toàn bộ cây con nếu các view cần truy cập MediaStudioState
     provide_context(state);
 
-    // Callbacks xử lý thực thi chuỗi quy trình Workflow Macro DAG
+    let palette_open = RwSignal::new(false);
+
+    // Callbacks xử lý thực thi chuỗi quy trình Workflow Macro DAG qua IPC
     let on_run_workflow = Callback::new(move |dag: crate::shared_ui::workflow_runner::WorkflowDag| {
-        state.is_running.set(true);
-        state.status_message.set(format!(
-            "Đang thực thi chuỗi đa phương tiện '{}' gồm {} bước...",
-            dag.title,
-            dag.steps.len()
-        ));
+        execute_workflow_ipc(dag, state.loaded_files.get(), state.is_running, state.status_message);
     });
 
     let on_cancel_workflow = Callback::new(move |_| {
+        cancel_task_ipc("");
         state.is_running.set(false);
         state.status_message.set("Đã dừng thực thi chuỗi quy trình đa phương tiện.".to_string());
+    });
+
+    // Options builder cho từng công cụ Media Studio
+    let options_builder = Callback::new(move |_| {
+        let slug = state.active_tool.get();
+        match slug.as_str() {
+            "image-batch" => serde_json::json!({
+                "target_format": state.img_batch_target_format.get(),
+                "quality": state.img_batch_quality.get(),
+                "max_width": state.img_batch_max_width.get(),
+                "strip_exif": state.img_batch_strip_exif.get(),
+            }),
+            "photo-id-crop" => serde_json::json!({
+                "id_size": state.photo_id_size.get(),
+                "sheet_layout": state.photo_id_sheet_layout.get(),
+            }),
+            "image-bg-redact" => serde_json::json!({
+                "redact_type": state.redact_type.get(),
+                "auto_detect": state.redact_auto_detect.get(),
+            }),
+            "image-exif-inspector" => serde_json::json!({
+                "strip_all": state.exif_strip_all.get(),
+            }),
+            "watermark-batch-studio" => serde_json::json!({
+                "watermark_type": state.watermark_type.get(),
+                "opacity": state.watermark_opacity.get(),
+                "text": state.watermark_text.get(),
+            }),
+            "screenshot-beautifier" => serde_json::json!({
+                "theme": state.beautifier_theme.get(),
+                "background": state.beautifier_background.get(),
+                "shadow_blur": state.beautifier_shadow_blur.get(),
+            }),
+            "doc-scanner-perspective" => serde_json::json!({
+                "auto_enhance": state.scanner_auto_enhance.get(),
+            }),
+            "audio-silence-trimmer" => serde_json::json!({
+                "silence_threshold_db": state.audio_silence_threshold_db.get(),
+                "min_silence_duration_ms": state.audio_min_silence_duration_ms.get(),
+            }),
+            "video-to-gif-webp" => serde_json::json!({
+                "fps": state.video_fps.get(),
+                "max_width": state.video_max_width.get(),
+                "output_format": state.video_output_format.get(),
+            }),
+            _ => serde_json::json!({}),
+        }
     });
 
     // Callback xử lý khi nhấn nút Đưa vào Batch Queue
@@ -131,6 +177,7 @@ pub fn MediaStudioLayout(
                                             if let Some(active_name) = state.active_file_name() {
                                                 let total = state.loaded_files_count();
                                                 let current_idx = state.active_file_index.get().map(|i| i + 1).unwrap_or(0);
+                                                let bound_path = state.active_file_path().unwrap_or_default();
                                                 view! {
                                                     <div class="context-banner-active">
                                                         <span class="context-icon" aria-hidden="true">"📁"</span>
@@ -142,6 +189,12 @@ pub fn MediaStudioLayout(
                                                             <span class="context-subtitle">
                                                                 {format!("(Tệp {}/{} trong thư viện media)", current_idx, total)}
                                                             </span>
+                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 11px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
+                                                                <span>"🔗 Đường dẫn liên kết:"</span>
+                                                                <code style="background: rgba(15, 23, 42, 0.6); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">
+                                                                    {bound_path}
+                                                                </code>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 }.into_any()
@@ -245,6 +298,23 @@ pub fn MediaStudioLayout(
                                                 <span>"⚡ Đưa vào Batch Queue"</span>
                                             </button>
                                         </div>
+
+                                        // Thanh thực thi tác vụ Media Studio On-Device
+                                        <TaskExecutor
+                                            tool_slug=Signal::derive(move || state.active_tool.get())
+                                            input_files=Signal::derive(move || {
+                                                let mut files = state.loaded_files.get();
+                                                if let Some(ref p) = state.active_file_path() {
+                                                    if let Some(pos) = files.iter().position(|f| f == p) {
+                                                        let active = files.remove(pos);
+                                                        files.insert(0, active);
+                                                    }
+                                                }
+                                                files
+                                            })
+                                            options_builder=options_builder
+                                            external_is_running=state.is_running
+                                        />
                                     </div>
                                 </div>
                             }.into_any()
@@ -255,6 +325,14 @@ pub fn MediaStudioLayout(
 
             // Khu vực đáy: Collapsible Batch Processing Queue
             <MediaStudioBatchQueue state=state />
+
+            // Scoped Command Palette (Ctrl+K) trong Media Studio
+            <CommandPalette
+                open=palette_open
+                tools=state.tools()
+                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.select_tool(&slug))
+                on_back=on_back
+            />
         </div>
     }
 }

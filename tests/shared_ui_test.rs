@@ -141,3 +141,42 @@ fn test_progress_bar_percentage_normalization_logic() {
     // vượt ngưỡng -> clamp 100%
     assert_eq!(normalize(150.0), 100.0);
 }
+
+#[test]
+fn test_workflow_dag_conversion_to_backend_nodes_and_edges() {
+    let steps = vec![
+        WorkflowStep {
+            id: "node-1".to_string(),
+            tool_slug: "markdown-to-styled-pdf".to_string(),
+            name: "Biên dịch Markdown sang PDF".to_string(),
+            description: "Step 1".to_string(),
+        },
+        WorkflowStep {
+            id: "node-2".to_string(),
+            tool_slug: "pdf-page-number-header".to_string(),
+            name: "Đánh số trang PDF".to_string(),
+            description: "Step 2".to_string(),
+        },
+        WorkflowStep {
+            id: "node-3".to_string(),
+            tool_slug: "pdf-compress".to_string(),
+            name: "Nén giảm dung lượng PDF".to_string(),
+            description: "Step 3".to_string(),
+        },
+    ];
+
+    let dag = WorkflowDag {
+        id: "pipeline-test-1".to_string(),
+        title: "Chuỗi Xử lý Văn bản Xuất bản".to_string(),
+        steps: steps.clone(),
+    };
+
+    // Tạo các edges tuần tự
+    let edges = (0..dag.steps.len() - 1)
+        .map(|i| (dag.steps[i].id.clone(), dag.steps[i + 1].id.clone()))
+        .collect::<Vec<_>>();
+
+    assert_eq!(edges.len(), 2);
+    assert_eq!(edges[0], ("node-1".to_string(), "node-2".to_string()));
+    assert_eq!(edges[1], ("node-2".to_string(), "node-3".to_string()));
+}

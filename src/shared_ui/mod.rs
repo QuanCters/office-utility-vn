@@ -1,6 +1,7 @@
 pub mod back_button;
 pub mod keyboard_shortcuts;
 pub mod progress_bar;
+pub mod task_executor;
 pub mod workflow_runner;
 
 pub use back_button::BackButton;
@@ -10,6 +11,9 @@ pub use keyboard_shortcuts::{
     use_scoped_keyboard_shortcuts, ScopedShortcutAction, ScopedShortcutsHandlers,
 };
 pub use progress_bar::ProgressBar;
+pub use task_executor::{
+    cancel_task_ipc, execute_workflow_ipc, open_output_folder_ipc, TaskExecutor,
+};
 pub use workflow_runner::{WorkflowDag, WorkflowRunner, WorkflowStep};
 
 #[cfg(test)]

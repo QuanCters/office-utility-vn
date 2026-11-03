@@ -2208,3 +2208,82 @@ input, textarea, .selectable-text {
   background: rgba(244, 63, 94, 0.2);
 }
 
+/* Task Executor Bar */
+.task-executor-bar {
+  margin-top: 18px;
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-executor-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.task-run-btn {
+  font-size: 14px;
+}
+
+.task-run-btn .kbd-hint,
+.task-cancel-btn .kbd-hint {
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+.task-executor-result {
+  padding: 12px 14px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-executor-result.success {
+  background: rgba(5, 150, 105, 0.12);
+  border: 1px solid rgba(5, 150, 105, 0.4);
+}
+
+.task-executor-result.error {
+  background: rgba(225, 29, 72, 0.12);
+  border: 1px solid rgba(225, 29, 72, 0.4);
+}
+
+.task-executor-result .result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.task-executor-result.success .result-header {
+  color: #10B981;
+}
+
+.task-executor-result.error .result-header {
+  color: #F43F5E;
+}
+
+.task-executor-result .result-body {
+  font-family: inherit;
+  font-size: 13px;
+  color: #F8FAFC;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.task-executor-result .result-actions {
+  margin-top: 4px;
+}
+
+

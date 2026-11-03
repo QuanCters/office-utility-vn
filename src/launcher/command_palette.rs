@@ -101,10 +101,11 @@ pub fn scroll_active_item_into_view() {
 }
 
 /// Global Command Palette (Ctrl+K):
-/// - Tìm kiếm nhanh trên toàn bộ công cụ (51 công cụ)
+/// - Tìm kiếm nhanh trên toàn bộ công cụ (51 công cụ) hoặc phạm vi Micro-App
 /// - Hỗ trợ gõ tiếng Việt có dấu và không dấu
 /// - Điều hướng bằng phím mũi tên Lên/Xuống
 /// - Enter để chọn công cụ và kích hoạt `on_deep_link(micro_app_id, tool_slug)`
+/// - Hỗ trợ tùy chọn quay về Launcher (`on_back`) khi chạy trong ngữ cảnh Micro-App
 /// - Phím `Esc` hoặc bấm vùng ngoài để đóng
 #[component]
 pub fn CommandPalette(
@@ -116,6 +117,9 @@ pub fn CommandPalette(
     /// Danh sách công cụ tùy chọn (mặc định ALL_TOOLS)
     #[prop(into, optional)]
     tools: Option<&'static [ToolItem]>,
+    /// Callback quay về Launcher (nếu có)
+    #[prop(into, optional)]
+    on_back: Option<Callback<()>>,
 ) -> impl IntoView {
     let search_query = RwSignal::new(String::new());
     let selected_index = RwSignal::new(0usize);
@@ -147,16 +151,52 @@ pub fn CommandPalette(
         });
     }
 
-    let filtered = move || {
+    #[derive(Clone, Copy)]
+    enum PaletteItem<'a> {
+        Back,
+        Tool(&'a ToolItem),
+    }
+
+    let filtered_items = move || -> Vec<PaletteItem<'static>> {
         let q = search_query.get();
-        filter_tools(tool_list, &q)
+        let q_trimmed = q.trim();
+        let q_lower = q_trimmed.to_lowercase();
+        let q_unaccented = remove_vietnamese_diacritics(&q_lower);
+
+        let mut items = Vec::new();
+
+        if on_back.is_some() {
+            let matches_back = q_trimmed.is_empty()
+                || "trang chính launcher quay lại về home back".contains(&q_lower)
+                || "trang chinh launcher quay lai ve home back".contains(&q_unaccented);
+            if matches_back {
+                items.push(PaletteItem::Back);
+            }
+        }
+
+        let tools_matched = filter_tools(tool_list, &q);
+        for t in tools_matched {
+            items.push(PaletteItem::Tool(t));
+        }
+
+        items
     };
 
-    let select_tool = {
-        move |slug: &str| {
-            if let Some(app_id) = tool_slug_to_micro_app(slug) {
-                open.set(false);
-                on_deep_link.run((app_id, slug.to_string()));
+    let select_item = {
+        move |item: PaletteItem| {
+            match item {
+                PaletteItem::Back => {
+                    open.set(false);
+                    if let Some(cb) = on_back {
+                        cb.run(());
+                    }
+                }
+                PaletteItem::Tool(t) => {
+                    if let Some(app_id) = tool_slug_to_micro_app(t.slug) {
+                        open.set(false);
+                        on_deep_link.run((app_id, t.slug.to_string()));
+                    }
+                }
             }
         }
     };
@@ -176,7 +216,7 @@ pub fn CommandPalette(
             return;
         }
 
-        let items = filtered();
+        let items = filtered_items();
         let total = items.len();
         if total == 0 {
             return;
@@ -199,8 +239,8 @@ pub fn CommandPalette(
             if !is_ime_composing.get() && !ev.is_composing() {
                 ev.prevent_default();
                 let current_idx = selected_index.get();
-                if let Some(tool) = items.get(current_idx) {
-                    select_tool(tool.slug);
+                if let Some(item) = items.get(current_idx) {
+                    select_item(*item);
                 }
             }
         }
@@ -242,7 +282,7 @@ pub fn CommandPalette(
 
                         <div class="palette-list" role="listbox">
                             {move || {
-                                let results = filtered();
+                                let results = filtered_items();
                                 let total = results.len();
                                 let current_idx = selected_index.get();
 
@@ -261,54 +301,80 @@ pub fn CommandPalette(
                                         <div>
                                             <div class="palette-section-header">
                                                 <span>"KẾT QUẢ TÌM KIẾM"</span>
-                                                <span class="palette-result-count">{format!("{} công cụ", total)}</span>
+                                                <span class="palette-result-count">{format!("{} mục", total)}</span>
                                             </div>
-                                            {results.into_iter().enumerate().map(|(idx, tool)| {
-                                                let slug = tool.slug;
-                                                let app_opt = tool_slug_to_micro_app(slug);
+                                            {results.into_iter().enumerate().map(|(idx, item)| {
                                                 let is_active = idx == current_idx;
-
                                                 let item_class = format!(
                                                     "palette-item {}",
                                                     if is_active { "active" } else { "" }
                                                 );
 
-                                                view! {
-                                                    <div
-                                                        class=item_class
-                                                        role="option"
-                                                        aria-selected=is_active.to_string()
-                                                        on:click=move |_| select_tool(slug)
-                                                        on:mouseenter=move |_| selected_index.set(idx)
-                                                    >
-                                                        <div class="palette-item-content">
-                                                            <div class="palette-item-name">
+                                                match item {
+                                                    PaletteItem::Back => view! {
+                                                        <div
+                                                            class=item_class
+                                                            role="option"
+                                                            aria-selected=is_active.to_string()
+                                                            on:click=move |_| select_item(PaletteItem::Back)
+                                                            on:mouseenter=move |_| selected_index.set(idx)
+                                                        >
+                                                            <div class="palette-item-content">
+                                                                <div class="palette-item-name">
+                                                                    <span class="palette-item-app-icon">"🏠"</span>
+                                                                    <span>"← Về trang chính (Launcher)"</span>
+                                                                </div>
+                                                                <div class="palette-item-desc">
+                                                                    "Quay trở lại trung tâm điều phối tổng thể"
+                                                                </div>
+                                                            </div>
+                                                            <span class="palette-item-badge app-badge" style="background: rgba(79, 70, 229, 0.2); color: #818CF8;">
+                                                                "Launcher"
+                                                            </span>
+                                                        </div>
+                                                    }.into_any(),
+                                                    PaletteItem::Tool(tool) => {
+                                                        let slug = tool.slug;
+                                                        let app_opt = tool_slug_to_micro_app(slug);
+
+                                                        view! {
+                                                            <div
+                                                                class=item_class
+                                                                role="option"
+                                                                aria-selected=is_active.to_string()
+                                                                on:click=move |_| select_item(PaletteItem::Tool(tool))
+                                                                on:mouseenter=move |_| selected_index.set(idx)
+                                                            >
+                                                                <div class="palette-item-content">
+                                                                    <div class="palette-item-name">
+                                                                        {if let Some(app) = app_opt {
+                                                                            view! {
+                                                                                <span class="palette-item-app-icon" title=app.name()>
+                                                                                    {app.icon()}
+                                                                                </span>
+                                                                            }.into_any()
+                                                                        } else {
+                                                                            view! { <span class="palette-item-app-icon">"⚡"</span> }.into_any()
+                                                                        }}
+                                                                        <span>{tool.name}</span>
+                                                                    </div>
+                                                                    <div class="palette-item-desc">{tool.description}</div>
+                                                                </div>
+
                                                                 {if let Some(app) = app_opt {
                                                                     view! {
-                                                                        <span class="palette-item-app-icon" title=app.name()>
-                                                                            {app.icon()}
+                                                                        <span class="palette-item-badge app-badge">
+                                                                            {app.name()}
                                                                         </span>
                                                                     }.into_any()
                                                                 } else {
-                                                                    view! { <span class="palette-item-app-icon">"⚡"</span> }.into_any()
+                                                                    view! {
+                                                                        <span class="palette-item-badge">{tool.domain}</span>
+                                                                    }.into_any()
                                                                 }}
-                                                                <span>{tool.name}</span>
                                                             </div>
-                                                            <div class="palette-item-desc">{tool.description}</div>
-                                                        </div>
-
-                                                        {if let Some(app) = app_opt {
-                                                            view! {
-                                                                <span class="palette-item-badge app-badge">
-                                                                    {app.name()}
-                                                                </span>
-                                                            }.into_any()
-                                                        } else {
-                                                            view! {
-                                                                <span class="palette-item-badge">{tool.domain}</span>
-                                                            }.into_any()
-                                                        }}
-                                                    </div>
+                                                        }.into_any()
+                                                    }
                                                 }
                                             }).collect_view()}
                                         </div>

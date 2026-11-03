@@ -320,4 +320,9 @@ impl DataLabState {
         };
         DATA_LAB_TOOLS.iter().find(|t| t.slug == lookup_slug)
     }
+
+    /// Danh sách tĩnh 13 công cụ thuộc phạm vi Data Lab.
+    pub fn tools(&self) -> &'static [ToolItem] {
+        DATA_LAB_TOOLS
+    }
 }

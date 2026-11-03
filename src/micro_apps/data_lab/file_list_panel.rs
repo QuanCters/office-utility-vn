@@ -20,7 +20,7 @@ pub fn DataLabFileListPanel(
     let on_file_input_change = move |_| {
         #[cfg(target_arch = "wasm32")]
         {
-            if let Ok(js_val) = js_sys::eval("Array.from(document.getElementById('data-lab-native-picker')?.files || []).map(f => f.name)") {
+            if let Ok(js_val) = js_sys::eval("Array.from(document.getElementById('data-lab-native-picker')?.files || []).map(f => f.path || f.name)") {
                 if let Ok(names) = serde_wasm_bindgen::from_value::<Vec<String>>(js_val) {
                     if !names.is_empty() {
                         state.add_files(names);

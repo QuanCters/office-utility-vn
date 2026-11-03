@@ -1,9 +1,10 @@
 use leptos::prelude::*;
+use crate::launcher::CommandPalette;
 use crate::micro_apps::data_lab::file_list_panel::DataLabFileListPanel;
 use crate::micro_apps::data_lab::state::{category_for_tool, DataLabState};
 use crate::micro_apps::data_lab::toolbar::{data_lab_tool_icon, DataLabToolbar};
 use crate::micro_apps::DATA_LAB_TOOLS;
-use crate::shared_ui::{BackButton, WorkflowRunner};
+use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     Base64FileCodecView, DataStructureConverterView, DiffCheckerTextSheetsView,
     DocxTemplateMailmergeView, ExcelCleanerNormalizerView, ExcelMultiMergerView,
@@ -21,17 +22,15 @@ pub fn DataLabLayout(
     // Cung cấp context cho toàn bộ cây con nếu các view cần truy cập DataLabState
     provide_context(state);
 
-    // Callbacks xử lý thực thi chuỗi quy trình Workflow Macro DAG
+    let palette_open = RwSignal::new(false);
+
+    // Callbacks xử lý thực thi chuỗi quy trình Workflow Macro DAG qua IPC
     let on_run_workflow = Callback::new(move |dag: crate::shared_ui::workflow_runner::WorkflowDag| {
-        state.is_running.set(true);
-        state.status_message.set(format!(
-            "Đang thực thi chuỗi dữ liệu '{}' gồm {} bước...",
-            dag.title,
-            dag.steps.len()
-        ));
+        execute_workflow_ipc(dag, state.loaded_files.get(), state.is_running, state.status_message);
     });
 
     let on_cancel_workflow = Callback::new(move |_| {
+        cancel_task_ipc("");
         state.is_running.set(false);
         state.status_message.set("Đã dừng thực thi chuỗi quy trình dữ liệu.".to_string());
     });
@@ -129,6 +128,7 @@ pub fn DataLabLayout(
                                                 } else {
                                                     String::new()
                                                 };
+                                                let bound_path = state.active_file_path().unwrap_or_default();
 
                                                 view! {
                                                     <div class="context-banner-active">
@@ -142,6 +142,12 @@ pub fn DataLabLayout(
                                                             <span class="context-subtitle">
                                                                 {format!("(Tệp {}/{} trong danh sách dùng chung)", current_idx, total)}
                                                             </span>
+                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 11px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
+                                                                <span>"🔗 Đường dẫn liên kết:"</span>
+                                                                <code style="background: rgba(15, 23, 42, 0.6); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">
+                                                                    {bound_path}
+                                                                </code>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 }.into_any()
@@ -220,12 +226,36 @@ pub fn DataLabLayout(
                                             }.into_any(),
                                         }}
                                     </div>
+
+                                    // Thanh thực thi tác vụ Data Lab On-Device
+                                    <TaskExecutor
+                                        tool_slug=Signal::derive(move || state.active_tool.get())
+                                        input_files=Signal::derive(move || {
+                                            let mut files = state.loaded_files.get();
+                                            if let Some(ref p) = state.active_file_path() {
+                                                if let Some(pos) = files.iter().position(|f| f == p) {
+                                                    let active = files.remove(pos);
+                                                    files.insert(0, active);
+                                                }
+                                            }
+                                            files
+                                        })
+                                        external_is_running=state.is_running
+                                    />
                                 </div>
                             }.into_any()
                         }
                     }}
                 </main>
             </div>
+
+            // Scoped Command Palette (Ctrl+K) trong Data Lab
+            <CommandPalette
+                open=palette_open
+                tools=state.tools()
+                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.select_tool(&slug))
+                on_back=on_back
+            />
         </div>
     }
 }

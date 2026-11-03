@@ -117,6 +117,122 @@ pub const POPULAR_VN_BANKS: &[BankReference] = &[
     BankReference { bin: "546035", short_name: "VDB", full_name: "NH Phát triển Việt Nam", swift: "VDBKVNVX" },
 ];
 
+/// Tập hợp các tín hiệu lưu giữ giá trị nhập liệu và kết quả tính toán
+/// cho toàn bộ 11 công cụ của VN Office, đảm bảo không bị mất trạng thái khi điều hướng qua lại Launcher.
+#[derive(Clone, Copy, Debug)]
+pub struct VnToolInputs {
+    // 1. vietnamese-number-to-words
+    pub num_input: (ReadSignal<String>, WriteSignal<String>),
+    pub num_dialect: (ReadSignal<String>, WriteSignal<String>),
+    pub num_dong_chan: (ReadSignal<bool>, WriteSignal<bool>),
+    pub num_result: (ReadSignal<String>, WriteSignal<String>),
+    pub is_ime_composing: (ReadSignal<bool>, WriteSignal<bool>),
+
+    // 2. gross-net-salary-calculator
+    pub salary_input: (ReadSignal<String>, WriteSignal<String>),
+    pub salary_region: (ReadSignal<u8>, WriteSignal<u8>),
+    pub salary_dependents: (ReadSignal<u32>, WriteSignal<u32>),
+    pub salary_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 3. vietqr-napas247-generator
+    pub qr_bank_bin: (ReadSignal<String>, WriteSignal<String>),
+    pub qr_account: (ReadSignal<String>, WriteSignal<String>),
+    pub qr_amount: (ReadSignal<String>, WriteSignal<String>),
+    pub qr_message: (ReadSignal<String>, WriteSignal<String>),
+    pub qr_payload: (ReadSignal<String>, WriteSignal<String>),
+
+    // 4. vn-einvoice-xml-reader
+    pub xml_content: (ReadSignal<String>, WriteSignal<String>),
+    pub xml_verify: (ReadSignal<bool>, WriteSignal<bool>),
+    pub xml_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 5. vn-cccd-mst-validator
+    pub cccd_input: (ReadSignal<String>, WriteSignal<String>),
+    pub cccd_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 6. vn-address-normalizer
+    pub addr_input: (ReadSignal<String>, WriteSignal<String>),
+    pub addr_model: (ReadSignal<String>, WriteSignal<String>),
+    pub addr_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 7. vn-working-days-calc
+    pub wd_start: (ReadSignal<String>, WriteSignal<String>),
+    pub wd_end: (ReadSignal<String>, WriteSignal<String>),
+    pub wd_exclude_sat: (ReadSignal<bool>, WriteSignal<bool>),
+    pub wd_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 8. vn-loan-amortization
+    pub loan_principal: (ReadSignal<String>, WriteSignal<String>),
+    pub loan_rate: (ReadSignal<String>, WriteSignal<String>),
+    pub loan_term: (ReadSignal<u32>, WriteSignal<u32>),
+    pub loan_method: (ReadSignal<String>, WriteSignal<String>),
+    pub loan_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 9. vn-bank-bin-mapper
+    pub bank_query: (ReadSignal<String>, WriteSignal<String>),
+    pub bank_result: (ReadSignal<String>, WriteSignal<String>),
+
+    // 10. vietnamese-font-converter
+    pub font_source: (ReadSignal<String>, WriteSignal<String>),
+    pub font_target: (ReadSignal<String>, WriteSignal<String>),
+
+    // 11. encoding-mojibake-fixer
+    pub mojibake_auto: (ReadSignal<bool>, WriteSignal<bool>),
+}
+
+impl Default for VnToolInputs {
+    fn default() -> Self {
+        Self {
+            num_input: signal("1250000".to_string()),
+            num_dialect: signal("North".to_string()),
+            num_dong_chan: signal(true),
+            num_result: signal("Một triệu hai trăm năm mươi nghìn đồng chẵn.".to_string()),
+            is_ime_composing: signal(false),
+
+            salary_input: signal("25000000".to_string()),
+            salary_region: signal(1u8),
+            salary_dependents: signal(0u32),
+            salary_result: signal(String::new()),
+
+            qr_bank_bin: signal("970436".to_string()),
+            qr_account: signal("0011001234567".to_string()),
+            qr_amount: signal("500000".to_string()),
+            qr_message: signal("Chuyen khoan thanh toan".to_string()),
+            qr_payload: signal(String::new()),
+
+            xml_content: signal(String::new()),
+            xml_verify: signal(true),
+            xml_result: signal(String::new()),
+
+            cccd_input: signal(String::new()),
+            cccd_result: signal(String::new()),
+
+            addr_input: signal(String::new()),
+            addr_model: signal("ThreeTier".to_string()),
+            addr_result: signal(String::new()),
+
+            wd_start: signal("2026-01-01".to_string()),
+            wd_end: signal("2026-01-31".to_string()),
+            wd_exclude_sat: signal(true),
+            wd_result: signal(String::new()),
+
+            loan_principal: signal("100000000".to_string()),
+            loan_rate: signal("8.5".to_string()),
+            loan_term: signal(12u32),
+            loan_method: signal("ReducingBalance".to_string()),
+            loan_result: signal(String::new()),
+
+            bank_query: signal(String::new()),
+            bank_result: signal(String::new()),
+
+            font_source: signal("auto".to_string()),
+            font_target: signal("unicode".to_string()),
+
+            mojibake_auto: signal(true),
+        }
+    }
+}
+
 /// Trạng thái hoạt động của Micro-App VN Office.
 #[derive(Clone, Copy, Debug)]
 pub struct VnOfficeState {
@@ -136,6 +252,8 @@ pub struct VnOfficeState {
     pub is_legal_panel_open: RwSignal<bool>,
     /// Lịch sử các kết quả tính toán gần nhất của micro-app.
     pub calculation_history: RwSignal<Vec<VnCalculationRecord>>,
+    /// Dữ liệu nhập liệu và kết quả in-memory cho toàn bộ 11 công cụ.
+    pub tool_inputs: VnToolInputs,
 }
 
 impl Default for VnOfficeState {
@@ -165,6 +283,7 @@ impl VnOfficeState {
             sidebar_filter: RwSignal::new(String::new()),
             is_legal_panel_open: RwSignal::new(true),
             calculation_history: RwSignal::new(Vec::new()),
+            tool_inputs: VnToolInputs::default(),
         }
     }
 

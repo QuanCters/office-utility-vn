@@ -704,65 +704,89 @@ pub fn App() -> impl IntoView {
             </header>
 
             <main class="app-main-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
-                { move || match (app_state.current_view.get(), app_state.deep_link_tool.get()) {
-                    (AppView::Launcher, _) => view! {
+                { move || match app_state.current_view.get() {
+                    AppView::Launcher => view! {
                         <LauncherView
                             on_select_app=Callback::new(move |app_id| app_state.navigate_to(app_id))
                             on_deep_link=Callback::new(move |(app_id, slug)| app_state.deep_link(app_id, slug))
                         />
                     }.into_any(),
-                    (AppView::MicroApp(MicroAppId::VnOffice), Some(slug)) => view! {
-                        <VnOfficeApp
-                            state=app_state.vn_office_state
-                            initial_tool=slug
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::VnOffice), None) => view! {
-                        <VnOfficeApp
-                            state=app_state.vn_office_state
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::PdfStudio), Some(slug)) => view! {
-                        <PdfStudioApp
-                            state=app_state.pdf_studio_state
-                            initial_tool=slug
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::PdfStudio), None) => view! {
-                        <PdfStudioApp
-                            state=app_state.pdf_studio_state
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::MediaStudio), Some(slug)) => view! {
-                        <MediaStudioApp
-                            state=app_state.media_studio_state
-                            initial_tool=slug
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::MediaStudio), None) => view! {
-                        <MediaStudioApp
-                            state=app_state.media_studio_state
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::DataLab), Some(slug)) => view! {
-                        <DataLabApp
-                            state=app_state.data_lab_state
-                            initial_tool=slug
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
-                    (AppView::MicroApp(MicroAppId::DataLab), None) => view! {
-                        <DataLabApp
-                            state=app_state.data_lab_state
-                            on_back=move || app_state.current_view.set(AppView::Launcher)
-                        />
-                    }.into_any(),
+                    AppView::MicroApp(MicroAppId::VnOffice) => {
+                        let deep = app_state.deep_link_tool.get_untracked();
+                        if let Some(slug) = deep {
+                            view! {
+                                <VnOfficeApp
+                                    state=app_state.vn_office_state
+                                    initial_tool=slug
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        } else {
+                            view! {
+                                <VnOfficeApp
+                                    state=app_state.vn_office_state
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        }
+                    },
+                    AppView::MicroApp(MicroAppId::PdfStudio) => {
+                        let deep = app_state.deep_link_tool.get_untracked();
+                        if let Some(slug) = deep {
+                            view! {
+                                <PdfStudioApp
+                                    state=app_state.pdf_studio_state
+                                    initial_tool=slug
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        } else {
+                            view! {
+                                <PdfStudioApp
+                                    state=app_state.pdf_studio_state
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        }
+                    },
+                    AppView::MicroApp(MicroAppId::MediaStudio) => {
+                        let deep = app_state.deep_link_tool.get_untracked();
+                        if let Some(slug) = deep {
+                            view! {
+                                <MediaStudioApp
+                                    state=app_state.media_studio_state
+                                    initial_tool=slug
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        } else {
+                            view! {
+                                <MediaStudioApp
+                                    state=app_state.media_studio_state
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        }
+                    },
+                    AppView::MicroApp(MicroAppId::DataLab) => {
+                        let deep = app_state.deep_link_tool.get_untracked();
+                        if let Some(slug) = deep {
+                            view! {
+                                <DataLabApp
+                                    state=app_state.data_lab_state
+                                    initial_tool=slug
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        } else {
+                            view! {
+                                <DataLabApp
+                                    state=app_state.data_lab_state
+                                    on_back=move || app_state.back_to_launcher()
+                                />
+                            }.into_any()
+                        }
+                    },
                 }}
             </main>
 

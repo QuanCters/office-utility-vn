@@ -1,8 +1,9 @@
 use leptos::prelude::*;
+use crate::launcher::CommandPalette;
 use crate::micro_apps::vn_office::sidebar::{vn_office_tool_icon, VnOfficeSidebar};
 use crate::micro_apps::vn_office::state::{BankReference, VnOfficeState, POPULAR_VN_BANKS};
 use crate::micro_apps::VN_OFFICE_TOOLS;
-use crate::shared_ui::{BackButton, WorkflowRunner};
+use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     EncodingMojibakeFixerView, GrossNetSalaryCalculatorView, VietnameseFontConverterView,
     VietnameseNumberToWordsView, VietQrNapas247GeneratorView, VnAddressNormalizerView,
@@ -266,82 +267,238 @@ pub fn VnOfficeLayout(
     state: VnOfficeState,
     #[prop(into)] on_back: Callback<()>,
 ) -> impl IntoView {
-    // Tín hiệu nội bộ cho các công cụ (đáp ứng trọn vẹn signature của 11 view components)
+    // Tín hiệu từ VnToolInputs (in-memory state persistence trên VnOfficeState)
     // 1. vietnamese-number-to-words
-    let (num_input, set_num_input) = signal("1250000".to_string());
-    let (num_dialect, set_num_dialect) = signal("North".to_string());
-    let (num_dong_chan, set_num_dong_chan) = signal(true);
-    let (num_result, _set_num_result) = signal("Một triệu hai trăm năm mươi nghìn đồng chẵn.".to_string());
-    let (_is_ime_composing, set_is_ime_composing) = signal(false);
+    let (num_input, set_num_input) = state.tool_inputs.num_input;
+    let (num_dialect, set_num_dialect) = state.tool_inputs.num_dialect;
+    let (num_dong_chan, set_num_dong_chan) = state.tool_inputs.num_dong_chan;
+    let (num_result, set_num_result) = state.tool_inputs.num_result;
+    let (_is_ime_composing, set_is_ime_composing) = state.tool_inputs.is_ime_composing;
 
     // 2. gross-net-salary-calculator
-    let (salary_input, set_salary_input) = signal("25000000".to_string());
-    let (salary_region, set_salary_region) = signal(1u8);
-    let (salary_dependents, set_salary_dependents) = signal(0u32);
-    let (salary_result, _set_salary_result) = signal(String::new());
+    let (salary_input, set_salary_input) = state.tool_inputs.salary_input;
+    let (salary_region, set_salary_region) = state.tool_inputs.salary_region;
+    let (salary_dependents, set_salary_dependents) = state.tool_inputs.salary_dependents;
+    let (salary_result, set_salary_result) = state.tool_inputs.salary_result;
 
     // 3. vietqr-napas247-generator
-    let (qr_bank_bin, set_qr_bank_bin) = signal("970436".to_string());
-    let (qr_account, set_qr_account) = signal("0011001234567".to_string());
-    let (qr_amount, set_qr_amount) = signal("500000".to_string());
-    let (qr_message, set_qr_message) = signal("Chuyen khoan thanh toan".to_string());
-    let (qr_payload, _set_qr_payload) = signal(String::new());
+    let (qr_bank_bin, set_qr_bank_bin) = state.tool_inputs.qr_bank_bin;
+    let (qr_account, set_qr_account) = state.tool_inputs.qr_account;
+    let (qr_amount, set_qr_amount) = state.tool_inputs.qr_amount;
+    let (qr_message, set_qr_message) = state.tool_inputs.qr_message;
+    let (qr_payload, set_qr_payload) = state.tool_inputs.qr_payload;
 
     // 4. vn-einvoice-xml-reader
-    let (xml_content, set_xml_content) = signal(String::new());
-    let (xml_verify, set_xml_verify) = signal(true);
-    let (xml_result, _set_xml_result) = signal(String::new());
+    let (xml_content, set_xml_content) = state.tool_inputs.xml_content;
+    let (xml_verify, set_xml_verify) = state.tool_inputs.xml_verify;
+    let (xml_result, set_xml_result) = state.tool_inputs.xml_result;
 
     // 5. vn-cccd-mst-validator
-    let (cccd_input, set_cccd_input) = signal(String::new());
-    let (cccd_result, _set_cccd_result) = signal(String::new());
+    let (cccd_input, set_cccd_input) = state.tool_inputs.cccd_input;
+    let (cccd_result, set_cccd_result) = state.tool_inputs.cccd_result;
 
     // 6. vn-address-normalizer
-    let (addr_input, set_addr_input) = signal(String::new());
-    let (addr_model, set_addr_model) = signal("ThreeTier".to_string());
-    let (addr_result, _set_addr_result) = signal(String::new());
+    let (addr_input, set_addr_input) = state.tool_inputs.addr_input;
+    let (addr_model, set_addr_model) = state.tool_inputs.addr_model;
+    let (addr_result, set_addr_result) = state.tool_inputs.addr_result;
 
     // 7. vn-working-days-calc
-    let (wd_start, set_wd_start) = signal("2026-01-01".to_string());
-    let (wd_end, set_wd_end) = signal("2026-01-31".to_string());
-    let (wd_exclude_sat, set_wd_exclude_sat) = signal(true);
-    let (wd_result, _set_wd_result) = signal(String::new());
+    let (wd_start, set_wd_start) = state.tool_inputs.wd_start;
+    let (wd_end, set_wd_end) = state.tool_inputs.wd_end;
+    let (wd_exclude_sat, set_wd_exclude_sat) = state.tool_inputs.wd_exclude_sat;
+    let (wd_result, set_wd_result) = state.tool_inputs.wd_result;
 
     // 8. vn-loan-amortization
-    let (loan_principal, set_loan_principal) = signal("100000000".to_string());
-    let (loan_rate, set_loan_rate) = signal("8.5".to_string());
-    let (loan_term, set_loan_term) = signal(12u32);
-    let (loan_method, set_loan_method) = signal("ReducingBalance".to_string());
-    let (loan_result, _set_loan_result) = signal(String::new());
+    let (loan_principal, set_loan_principal) = state.tool_inputs.loan_principal;
+    let (loan_rate, set_loan_rate) = state.tool_inputs.loan_rate;
+    let (loan_term, set_loan_term) = state.tool_inputs.loan_term;
+    let (loan_method, set_loan_method) = state.tool_inputs.loan_method;
+    let (loan_result, set_loan_result) = state.tool_inputs.loan_result;
 
     // 9. vn-bank-bin-mapper
-    let (bank_query, set_bank_query) = signal(String::new());
-    let (bank_result, _set_bank_result) = signal(String::new());
+    let (bank_query, set_bank_query) = state.tool_inputs.bank_query;
+    let (bank_result, set_bank_result) = state.tool_inputs.bank_result;
 
     // 10. vietnamese-font-converter
-    let (font_source, set_font_source) = signal("auto".to_string());
-    let (font_target, set_font_target) = signal("unicode".to_string());
+    let (font_source, set_font_source) = state.tool_inputs.font_source;
+    let (font_target, set_font_target) = state.tool_inputs.font_target;
 
     // 11. encoding-mojibake-fixer
-    let (mojibake_auto, set_mojibake_auto) = signal(true);
+    let (mojibake_auto, set_mojibake_auto) = state.tool_inputs.mojibake_auto;
 
-    // Xử lý thực thi chạy quy trình Workflow DAG
+    let palette_open = RwSignal::new(false);
+
+    // Xây dựng options JSON tương ứng cho từng công cụ nghiệp vụ
+    let options_builder = Callback::new(move |_| {
+        let slug = state.active_tool_slug();
+        match slug.as_str() {
+            "vietnamese-number-to-words" => {
+                serde_json::json!({
+                    "number": num_input.get(),
+                    "dialect": num_dialect.get(),
+                    "currency": "VND",
+                    "use_dong_chan": num_dong_chan.get(),
+                    "capitalize_first": true,
+                    "negative_prefix": "âm"
+                })
+            }
+            "gross-net-salary-calculator" => {
+                serde_json::json!({
+                    "salary_gross": salary_input.get(),
+                    "dependents": salary_dependents.get(),
+                    "region": salary_region.get()
+                })
+            }
+            "vietqr-napas247-generator" => {
+                serde_json::json!({
+                    "bank": qr_bank_bin.get(),
+                    "account": qr_account.get(),
+                    "amount": qr_amount.get(),
+                    "note": qr_message.get()
+                })
+            }
+            "vn-einvoice-xml-reader" => {
+                serde_json::json!({
+                    "xml_content": xml_content.get(),
+                    "verify_signature": xml_verify.get()
+                })
+            }
+            "vn-cccd-mst-validator" => {
+                serde_json::json!({
+                    "cccd": cccd_input.get()
+                })
+            }
+            "vn-address-normalizer" => {
+                serde_json::json!({
+                    "address": addr_input.get(),
+                    "model": addr_model.get()
+                })
+            }
+            "vn-working-days-calc" => {
+                serde_json::json!({
+                    "start_date": wd_start.get(),
+                    "end_date": wd_end.get(),
+                    "exclude_saturday": wd_exclude_sat.get()
+                })
+            }
+            "vn-loan-amortization" => {
+                serde_json::json!({
+                    "principal": loan_principal.get(),
+                    "annual_rate": loan_rate.get(),
+                    "months": loan_term.get(),
+                    "method": loan_method.get()
+                })
+            }
+            "vn-bank-bin-mapper" => {
+                serde_json::json!({
+                    "query": bank_query.get()
+                })
+            }
+            "vietnamese-font-converter" => {
+                serde_json::json!({
+                    "source_encoding": font_source.get(),
+                    "target_encoding": font_target.get()
+                })
+            }
+            "encoding-mojibake-fixer" => {
+                serde_json::json!({
+                    "auto_detect": mojibake_auto.get()
+                })
+            }
+            _ => serde_json::json!({}),
+        }
+    });
+
+    // Callback khi tác vụ thực thi thành công: ghi nhận kết quả và lưu lịch sử
+    let on_task_success = Callback::new(move |res: serde_json::Value| {
+        let slug = state.active_tool_slug();
+        let output_str = res.get("output_paths")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.as_str())
+            .unwrap_or("Tác vụ xử lý hoàn tất thành công!");
+
+        match slug.as_str() {
+            "vietnamese-number-to-words" => {
+                set_num_result.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Đọc Số Tiền Thành Chữ Chuẩn",
+                    &format!("{} ({})", num_input.get(), num_dialect.get()),
+                    output_str,
+                );
+            }
+            "gross-net-salary-calculator" => {
+                set_salary_result.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Tính Lương Gross - Net & Thuế",
+                    &format!("Lương {} đ, Vùng {}, Phụ thuộc {}", salary_input.get(), salary_region.get(), salary_dependents.get()),
+                    output_str,
+                );
+            }
+            "vietqr-napas247-generator" => {
+                set_qr_payload.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Tạo Mã VietQR Napas 247",
+                    &format!("Bank {}, STK {}, Tiền {}", qr_bank_bin.get(), qr_account.get(), qr_amount.get()),
+                    output_str,
+                );
+            }
+            "vn-einvoice-xml-reader" => {
+                set_xml_result.set(output_str.to_string());
+            }
+            "vn-cccd-mst-validator" => {
+                set_cccd_result.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Kiểm tra CCCD & MST",
+                    &cccd_input.get(),
+                    output_str,
+                );
+            }
+            "vn-address-normalizer" => {
+                set_addr_result.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Chuẩn hóa Địa chỉ",
+                    &addr_input.get(),
+                    output_str,
+                );
+            }
+            "vn-working-days-calc" => {
+                set_wd_result.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Tính Ngày Làm Việc",
+                    &format!("Từ {} đến {}", wd_start.get(), wd_end.get()),
+                    output_str,
+                );
+            }
+            "vn-loan-amortization" => {
+                set_loan_result.set(output_str.to_string());
+                state.record_calculation(
+                    &slug,
+                    "Bảng Tính Trả Nợ Vay",
+                    &format!("Gốc {}, Lãi {}%, {} tháng", loan_principal.get(), loan_rate.get(), loan_term.get()),
+                    output_str,
+                );
+            }
+            "vn-bank-bin-mapper" => {
+                set_bank_result.set(output_str.to_string());
+            }
+            _ => {}
+        }
+    });
+
+    // Xử lý thực thi chạy quy trình Workflow DAG qua Tauri IPC execute_workflow_pipeline
     let on_run_workflow = Callback::new(move |dag: crate::shared_ui::WorkflowDag| {
-        state.is_running.set(true);
-        state.status_message.set(format!(
-            "Đang thực thi chuỗi tự động hóa '{}' ({} bước hoàn toàn On-Device)...",
-            dag.title,
-            dag.steps.len()
-        ));
-        state.is_running.set(false);
-        state.status_message.set(format!(
-            "✓ Đã hoàn tất thành công chuỗi quy trình '{}' ({} bước)!",
-            dag.title,
-            dag.steps.len()
-        ));
+        execute_workflow_ipc(dag, vec![], state.is_running, state.status_message);
     });
 
     let on_cancel_workflow = Callback::new(move |_| {
+        cancel_task_ipc("");
         state.is_running.set(false);
         state.status_message.set("Đã dừng thực thi chuỗi quy trình.".to_string());
     });
@@ -560,6 +717,14 @@ pub fn VnOfficeLayout(
                                             }.into_any(),
                                         }}
                                     </div>
+
+                                    // Thanh thực thi tác vụ On-Device
+                                    <TaskExecutor
+                                        tool_slug=Signal::derive(move || state.active_tool_slug())
+                                        options_builder=options_builder
+                                        external_is_running=state.is_running
+                                        on_success=on_task_success
+                                    />
                                 </div>
                             }.into_any()
                         }
@@ -577,6 +742,14 @@ pub fn VnOfficeLayout(
                     }
                 }}
             </div>
+
+            // Scoped Command Palette (Ctrl+K) trong VN Office
+            <CommandPalette
+                open=palette_open
+                tools=state.tools()
+                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.select_tool(&slug))
+                on_back=on_back
+            />
         </div>
     }
 }

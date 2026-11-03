@@ -118,3 +118,39 @@ fn test_deep_link_by_unknown_slug() {
     // View should remain Launcher
     assert_eq!(state.current_view.get_untracked(), AppView::Launcher);
 }
+
+#[test]
+fn test_initial_tool_selection_when_state_already_supplied() {
+    let app_state = AppState::new();
+
+    // 1. VN Office: state ban đầu đang ở default tool ("vietnamese-number-to-words")
+    assert_eq!(app_state.vn_office_state.active_tool_slug(), "vietnamese-number-to-words");
+
+    let initial_tool = Some("gross-net-salary-calculator".to_string());
+    if let Some(ref slug) = initial_tool {
+        app_state.vn_office_state.select_tool(slug);
+    }
+    assert_eq!(app_state.vn_office_state.active_tool_slug(), "gross-net-salary-calculator");
+
+    // 2. PDF Studio
+    assert_eq!(app_state.pdf_studio_state.active_tool.get_untracked(), "pdf-merge-split");
+    let pdf_initial = Some("pdf-protect-sign".to_string());
+    if let Some(ref slug) = pdf_initial {
+        app_state.pdf_studio_state.select_tool(slug);
+    }
+    assert_eq!(app_state.pdf_studio_state.active_tool.get_untracked(), "pdf-protect-sign");
+
+    // 3. Media Studio
+    let media_initial = Some("photo-id-crop".to_string());
+    if let Some(ref slug) = media_initial {
+        app_state.media_studio_state.select_tool(slug);
+    }
+    assert_eq!(app_state.media_studio_state.active_tool.get_untracked(), "photo-id-crop");
+
+    // 4. Data Lab
+    let data_initial = Some("excel-split-by-column".to_string());
+    if let Some(ref slug) = data_initial {
+        app_state.data_lab_state.select_tool(slug);
+    }
+    assert_eq!(app_state.data_lab_state.active_tool.get_untracked(), "excel-split-by-column");
+}
