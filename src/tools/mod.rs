@@ -19,6 +19,25 @@ pub mod pdf_visual_diff_view;
 pub mod pdf_watermark_stamp_view;
 pub mod vietnamese_ocr_view;
 
+pub use markdown_to_styled_pdf_view::MarkdownToStyledPdfView;
+pub use pdf_booklet_imposition_view::PdfBookletImpositionView;
+pub use pdf_bookmark_toc_view::PdfBookmarkTocView;
+pub use pdf_compress_view::PdfCompressView;
+pub use pdf_crop_margin_view::PdfCropMarginView;
+pub use pdf_flatten_forms_view::PdfFlattenFormsView;
+pub use pdf_grayscale_print_view::PdfGrayscalePrintView;
+pub use pdf_merge_split_view::PdfMergeSplitView;
+pub use pdf_metadata_scrubber_view::PdfMetadataScrubberView;
+pub use pdf_page_number_header_view::PdfPageNumberHeaderView;
+pub use pdf_protect_sign_view::PdfProtectSignView;
+pub use pdf_repair_corrupt_view::PdfRepairCorruptView;
+pub use pdf_table_extractor_view::PdfTableExtractorView;
+pub use pdf_to_long_image_view::PdfToLongImageView;
+pub use pdf_to_markdown_view::PdfToMarkdownView;
+pub use pdf_visual_diff_view::PdfVisualDiffView;
+pub use pdf_watermark_stamp_view::PdfWatermarkStampView;
+pub use vietnamese_ocr_view::VietnameseOcrView;
+
 // Media Studio (9 tools)
 pub mod audio_silence_trimmer_view;
 pub mod doc_scanner_perspective_view;

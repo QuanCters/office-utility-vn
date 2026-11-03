@@ -52,6 +52,10 @@ path = "tests/launcher_test.rs"
 name = "vn_office_test"
 path = "tests/vn_office_test.rs"
 
+[[test]]
+name = "pdf_studio_test"
+path = "tests/pdf_studio_test.rs"
+
 [workspace]
 members = [
     "src-tauri",

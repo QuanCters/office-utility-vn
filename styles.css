@@ -3478,6 +3478,745 @@ input, textarea, .selectable-text {
   padding: 12px;
 }
 
+/* ==============================================================================
+   PDF Studio Micro-App Styling (Phase 2 Micro-App Architecture)
+   ============================================================================== */
+
+.pdf-studio-app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #0F172A;
+  color: #F8FAFC;
+  overflow: hidden;
+}
+
+/* Header */
+.pdf-studio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #1E293B;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.pdf-studio-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.pdf-studio-header-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pdf-studio-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.pdf-studio-header-tagline {
+  font-size: 11px;
+  color: #94A3B8;
+  white-space: nowrap;
+}
+
+.pdf-studio-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pdf-studio-header-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.pdf-studio-privacy-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+/* Toolbar */
+.pdf-studio-toolbar {
+  display: flex;
+  flex-direction: column;
+  background: #1E293B;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.pdf-studio-toolbar-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #182234;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 12px;
+}
+
+.pdf-studio-category-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pdf-studio-category-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pdf-studio-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pdf-studio-tab-btn:hover {
+  background: #334155;
+  color: #F8FAFC;
+}
+
+.pdf-studio-tab-btn.active {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #F87171;
+  font-weight: 600;
+}
+
+.pdf-tab-icon {
+  font-size: 13px;
+}
+
+.pdf-tab-label {
+  font-size: 12px;
+}
+
+.pdf-tab-count {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #CBD5E1;
+}
+
+.pdf-studio-tab-btn.active .pdf-tab-count {
+  background: rgba(239, 68, 68, 0.3);
+  color: #FECACA;
+}
+
+.pdf-studio-toolbar-tabs-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pdf-studio-workflow-tab-btn {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #FBBF24;
+}
+
+.pdf-studio-workflow-tab-btn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #FDE68A;
+}
+
+.pdf-studio-workflow-tab-btn.active {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #F59E0B;
+  color: #FDE68A;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.pdf-tab-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #F59E0B;
+  color: #0F172A;
+  text-transform: uppercase;
+}
+
+/* Sub-row với Tool Chips */
+.pdf-studio-toolbar-subrow {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #1E293B;
+  overflow-x: auto;
+  min-height: 44px;
+}
+
+.pdf-studio-subrow-workflow-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.workflow-info-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.workflow-info-text {
+  color: #94A3B8;
+}
+
+.pdf-studio-tool-chips-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.pdf-studio-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #0F172A;
+  border: 1px solid #334155;
+  border-radius: 9999px;
+  color: #CBD5E1;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pdf-studio-tool-chip:hover {
+  background: #334155;
+  color: #F8FAFC;
+  border-color: #475569;
+}
+
+.pdf-studio-tool-chip.active {
+  background: #EF4444;
+  border-color: #EF4444;
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+.tool-chip-icon {
+  font-size: 12px;
+}
+
+.tool-chip-name {
+  font-size: 11px;
+}
+
+/* Workspace Body (2 cột: Left Panel + Center) */
+.pdf-studio-workspace-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left File List Panel */
+.pdf-studio-file-panel {
+  width: 280px;
+  background: #1E293B;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.pdf-panel-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid #334155;
+  background: #182234;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pdf-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pdf-panel-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-panel-icon {
+  font-size: 14px;
+}
+
+.pdf-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin: 0;
+}
+
+.pdf-panel-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pdf-panel-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-panel-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  padding: 6px 12px;
+  background: #EF4444;
+  border: 1px solid #DC2626;
+  border-radius: 6px;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdf-panel-add-btn:hover {
+  background: #DC2626;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.pdf-panel-clear-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #94A3B8;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdf-panel-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #F87171;
+}
+
+.pdf-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  min-height: 0;
+}
+
+.pdf-panel-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  gap: 8px;
+}
+
+.empty-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #0F172A;
+  border: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.empty-icon {
+  font-size: 24px;
+}
+
+.empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #E2E8F0;
+  margin: 0;
+}
+
+.empty-desc {
+  font-size: 11px;
+  color: #64748B;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.empty-add-btn {
+  margin-top: 8px;
+  padding: 6px 14px;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #F8FAFC;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.empty-add-btn:hover {
+  background: #475569;
+  border-color: #64748B;
+}
+
+.pdf-panel-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdf-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #0F172A;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pdf-file-item:hover {
+  background: #182234;
+  border-color: #475569;
+}
+
+.pdf-file-item.active {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.pdf-file-idx {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+  min-width: 18px;
+}
+
+.pdf-file-item.active .pdf-file-idx {
+  color: #F87171;
+}
+
+.pdf-file-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.pdf-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pdf-file-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #E2E8F0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pdf-file-active-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: #F87171;
+}
+
+.pdf-file-remove-btn {
+  background: transparent;
+  border: none;
+  color: #64748B;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+
+.pdf-file-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+}
+
+.pdf-panel-footer {
+  padding: 10px 14px;
+  background: #182234;
+  border-top: 1px solid #334155;
+}
+
+.pdf-panel-active-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.active-label {
+  font-size: 10px;
+  color: #94A3B8;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.active-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.active-file-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #F87171;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.active-file-pos {
+  font-size: 10px;
+  color: #64748B;
+  flex-shrink: 0;
+}
+
+/* Center Workspace */
+.pdf-studio-center-workspace {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 24px;
+  background: #0F172A;
+}
+
+.pdf-studio-workflow-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.pdf-studio-tool-workspace {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pdf-studio-tool-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  gap: 16px;
+}
+
+.pdf-studio-tool-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.pdf-studio-tool-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.pdf-studio-tool-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin: 0 0 4px 0;
+}
+
+.pdf-studio-tool-description {
+  font-size: 12px;
+  color: #94A3B8;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pdf-studio-tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pdf-studio-cat-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pdf-studio-slug-badge {
+  font-size: 10px;
+  font-family: monospace;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: #0F172A;
+  color: #94A3B8;
+  border: 1px solid #334155;
+}
+
+.pdf-studio-privacy-chip {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Context Banner */
+.pdf-studio-context-banner {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.context-banner-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+}
+
+.context-banner-active .context-icon {
+  font-size: 16px;
+}
+
+.context-text-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.context-title {
+  font-size: 12px;
+  color: #F8FAFC;
+}
+
+.context-title strong {
+  color: #F87171;
+}
+
+.context-subtitle {
+  font-size: 11px;
+  color: #94A3B8;
+}
+
+.context-banner-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #1E293B;
+  border: 1px dashed #334155;
+  border-radius: 8px;
+}
+
+.context-hint-text {
+  font-size: 11px;
+  color: #94A3B8;
+}
+
+.pdf-studio-tool-view-body {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.pdf-studio-not-found {
+  padding: 32px;
+  text-align: center;
+  color: #94A3B8;
+  font-size: 13px;
+}
+
+
 
 
 
