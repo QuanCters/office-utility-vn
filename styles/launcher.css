@@ -1,0 +1,574 @@
+/* ==========================================================================
+   Launcher Dashboard & Command Palette (src/launcher/)
+   ========================================================================== */
+
+.launcher-view-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 32px;
+  gap: 24px;
+}
+
+.launcher-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.launcher-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(5, 150, 105, 0.12);
+  border: 1px solid rgba(5, 150, 105, 0.3);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #10B981;
+  width: fit-content;
+}
+
+.launcher-pulse-dot {
+  font-size: 10px;
+}
+
+.launcher-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.launcher-main-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #F8FAFC;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -0.5px;
+}
+
+.launcher-title-icon {
+  color: #F59E0B;
+}
+
+.launcher-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Quick Search Trigger (Ctrl+K) */
+.launcher-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 16px;
+  min-width: 280px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.launcher-search-trigger:hover {
+  border-color: var(--primary);
+  background: #243048;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.2);
+}
+
+.launcher-search-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.launcher-search-icon {
+  font-size: 14px;
+  color: #94A3B8;
+}
+
+.launcher-search-placeholder {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.launcher-search-kbd {
+  font-size: 11px;
+  background: #334155;
+  color: #E2E8F0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  border: 1px solid #475569;
+}
+
+/* Sections */
+.launcher-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.launcher-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.launcher-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #94A3B8;
+  text-transform: uppercase;
+}
+
+.launcher-section-desc {
+  font-size: 12px;
+  color: #64748B;
+}
+
+/* Micro-App Cards Grid */
+.launcher-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1100px) {
+  .launcher-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.launcher-app-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.launcher-app-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--primary);
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.35);
+}
+
+.launcher-app-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Card Accents */
+.launcher-card-vn-office:hover {
+  border-color: #F59E0B;
+  box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.2);
+}
+
+.launcher-card-pdf-studio:hover {
+  border-color: #EF4444;
+  box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.2);
+}
+
+.launcher-card-media-studio:hover {
+  border-color: #8B5CF6;
+  box-shadow: 0 10px 20px -5px rgba(139, 92, 246, 0.2);
+}
+
+.launcher-card-data-lab:hover {
+  border-color: #10B981;
+  box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.2);
+}
+
+.launcher-app-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.launcher-app-card-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  transition: transform 0.2s ease;
+}
+
+.launcher-app-card:hover .launcher-app-card-icon-wrap {
+  transform: scale(1.08);
+}
+
+.launcher-app-card-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+  background: rgba(51, 65, 85, 0.8);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.launcher-app-card-body {
+  flex: 1;
+  margin-bottom: 14px;
+}
+
+.launcher-app-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin-bottom: 6px;
+}
+
+.launcher-app-card-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94A3B8;
+}
+
+.launcher-app-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #38BDF8;
+  padding-top: 10px;
+  border-top: 1px solid rgba(71, 85, 105, 0.4);
+}
+
+.launcher-app-card-arrow {
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.launcher-app-card:hover .launcher-app-card-arrow {
+  transform: translateX(4px);
+}
+
+/* History Feed */
+.launcher-history-container {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.launcher-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.launcher-history-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.launcher-history-icon {
+  font-size: 15px;
+}
+
+.launcher-history-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #CBD5E1;
+}
+
+.launcher-history-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: #334155;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.launcher-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.launcher-history-empty-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.launcher-history-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #E2E8F0;
+  margin-bottom: 4px;
+}
+
+.launcher-history-empty-desc {
+  font-size: 12px;
+  color: #94A3B8;
+  max-width: 420px;
+}
+
+.launcher-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.launcher-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.launcher-history-item.clickable {
+  cursor: pointer;
+}
+
+.launcher-history-item.clickable:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: #475569;
+  transform: translateX(2px);
+}
+
+.launcher-history-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.launcher-history-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.launcher-history-app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #475569;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: #E2E8F0;
+  white-space: nowrap;
+}
+
+.launcher-history-app-badge.neutral {
+  border-color: #334155;
+  color: #94A3B8;
+}
+
+.launcher-history-tool-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #F1F5F9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-history-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.launcher-history-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.launcher-history-badge.status-success {
+  background: rgba(5, 150, 105, 0.2);
+  color: #34D399;
+  border: 1px solid rgba(5, 150, 105, 0.4);
+}
+
+.launcher-history-badge.status-failed {
+  background: rgba(225, 29, 72, 0.2);
+  color: #FB7185;
+  border: 1px solid rgba(225, 29, 72, 0.4);
+}
+
+.launcher-history-badge.status-running {
+  background: rgba(2, 132, 199, 0.2);
+  color: #38BDF8;
+  border: 1px solid rgba(2, 132, 199, 0.4);
+}
+
+.launcher-history-badge.status-other {
+  background: #334155;
+  color: #94A3B8;
+}
+
+.launcher-history-time {
+  font-size: 11px;
+  color: #94A3B8;
+  min-width: 48px;
+  text-align: right;
+}
+
+.launcher-history-arrow {
+  font-size: 13px;
+  color: #64748B;
+  transition: transform 0.15s ease;
+}
+
+.launcher-history-item:hover .launcher-history-arrow {
+  transform: translateX(2px);
+  color: #38BDF8;
+}
+
+.launcher-history-arrow-placeholder {
+  width: 13px;
+}
+
+/* Footer Shortcuts */
+.launcher-shortcuts-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(71, 85, 105, 0.3);
+  font-size: 12px;
+  color: #64748B;
+  flex-wrap: wrap;
+}
+
+.launcher-shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.launcher-shortcut-item .kbd {
+  font-size: 11px;
+  background: #1E293B;
+  border: 1px solid #334155;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #94A3B8;
+}
+
+/* Command Palette overrides */
+.palette-search-icon {
+  font-size: 16px;
+  color: #94A3B8;
+}
+
+.palette-esc-hint {
+  font-size: 11px;
+  color: #94A3B8;
+  background: #334155;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.palette-result-count {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.palette-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+}
+
+.palette-empty-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.palette-empty-title {
+  font-weight: 600;
+  color: #E2E8F0;
+}
+
+.palette-empty-desc {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.palette-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.palette-item-name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #F8FAFC;
+}
+
+.palette-item-app-icon {
+  font-size: 14px;
+}
+
+.palette-item-desc {
+  font-size: 11px;
+  opacity: 0.8;
+  color: #94A3B8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-item.active .palette-item-desc {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.palette-item-badge.app-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #E2E8F0;
+}
+
