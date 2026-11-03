@@ -3,7 +3,9 @@ pub mod command_palette;
 pub mod history_feed;
 
 pub use app_card::AppCard;
-pub use command_palette::{filter_tools, remove_vietnamese_diacritics, CommandPalette};
+pub use command_palette::{
+    filter_tools, remove_vietnamese_diacritics, scroll_active_item_into_view, CommandPalette,
+};
 pub use history_feed::{format_elapsed_time, format_history_status, HistoryFeed};
 
 use leptos::prelude::*;
@@ -28,20 +30,6 @@ pub fn LauncherView(
     history: Option<Signal<Vec<TaskHistoryUi>>>,
 ) -> impl IntoView {
     let palette_open = RwSignal::new(false);
-
-    // Bắt phím tắt Ctrl+K trên Launcher để mở Command Palette
-    #[cfg(target_arch = "wasm32")]
-    {
-        use leptos::ev::keydown;
-        let _ = window_event_listener(keydown, move |ev: web_sys::KeyboardEvent| {
-            let ctrl_or_meta = ev.ctrl_key() || ev.meta_key();
-            let key = ev.key();
-            if ctrl_or_meta && (key == "k" || key == "K") {
-                ev.prevent_default();
-                palette_open.update(|is_open| *is_open = !*is_open);
-            }
-        });
-    }
 
     view! {
         <div class="launcher-view-container">

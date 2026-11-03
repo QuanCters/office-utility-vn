@@ -65,6 +65,41 @@ pub fn filter_tools<'a>(tools: &'a [ToolItem], query: &str) -> Vec<&'a ToolItem>
         .collect()
 }
 
+/// Tự động cuộn phần tử active trong Command Palette vào vùng nhìn thấy (nearest block).
+pub fn scroll_active_item_into_view() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        leptos::task::spawn_local(async {
+            if let Some(win) = web_sys::window() {
+                if let Some(doc) = win.document() {
+                    if let Ok(Some(elem)) = doc.query_selector(".palette-item.active") {
+                        let obj = js_sys::Object::new();
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("block"),
+                            &wasm_bindgen::JsValue::from_str("nearest"),
+                        );
+                        let scroll_fn = js_sys::Reflect::get(
+                            &elem,
+                            &wasm_bindgen::JsValue::from_str("scrollIntoView"),
+                        )
+                        .unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+
+                        if scroll_fn.is_function() {
+                            if let Ok(func) = scroll_fn.dyn_into::<js_sys::Function>() {
+                                let _ = func.call1(&elem, &obj);
+                                return;
+                            }
+                        }
+                        elem.scroll_into_view();
+                    }
+                }
+            }
+        });
+    }
+}
+
 /// Global Command Palette (Ctrl+K):
 /// - Tìm kiếm nhanh trên toàn bộ công cụ (51 công cụ)
 /// - Hỗ trợ gõ tiếng Việt có dấu và không dấu
@@ -126,6 +161,12 @@ pub fn CommandPalette(
         }
     };
 
+    // Tự động cuộn theo dõi khi selected_index thay đổi
+    Effect::new(move |_| {
+        let _ = selected_index.get();
+        scroll_active_item_into_view();
+    });
+
     // Xử lý phím điều hướng khi đang mở palette
     let on_palette_keydown = move |ev: web_sys::KeyboardEvent| {
         let key = ev.key();
@@ -146,11 +187,13 @@ pub fn CommandPalette(
             selected_index.update(|idx| {
                 *idx = (*idx + 1) % total;
             });
+            scroll_active_item_into_view();
         } else if key == "ArrowUp" {
             ev.prevent_default();
             selected_index.update(|idx| {
                 *idx = if *idx == 0 { total - 1 } else { *idx - 1 };
             });
+            scroll_active_item_into_view();
         } else if key == "Enter" {
             // Không kích hoạt chọn nếu người dùng đang trong phiên gõ dấu Tiếng Việt (IME composition)
             if !is_ime_composing.get() && !ev.is_composing() {
