@@ -48,6 +48,10 @@ path = "tests/shared_ui_test.rs"
 name = "launcher_test"
 path = "tests/launcher_test.rs"
 
+[[test]]
+name = "vn_office_test"
+path = "tests/vn_office_test.rs"
+
 [workspace]
 members = [
     "src-tauri",

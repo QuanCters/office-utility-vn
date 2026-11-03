@@ -1,6 +1,9 @@
 use crate::app::ToolItem;
 use serde::{Deserialize, Serialize};
 
+pub mod vn_office;
+pub use vn_office::{VnOfficeApp, VnOfficeState};
+
 /// Định danh cho 4 Micro-Apps độc lập của Office Utility VN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MicroAppId {

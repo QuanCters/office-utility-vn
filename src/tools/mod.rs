@@ -69,3 +69,13 @@ pub mod vn_cccd_mst_validator_view;
 pub mod vn_einvoice_xml_reader_view;
 pub mod vn_loan_amortization_view;
 pub mod vn_working_days_calc_view;
+
+pub use gross_net_salary_calculator_view::GrossNetSalaryCalculatorView;
+pub use vietnamese_number_to_words_view::VietnameseNumberToWordsView;
+pub use vietqr_napas247_generator_view::VietQrNapas247GeneratorView;
+pub use vn_address_normalizer_view::VnAddressNormalizerView;
+pub use vn_bank_bin_mapper_view::VnBankBinMapperView;
+pub use vn_cccd_mst_validator_view::VnCccdMstValidatorView;
+pub use vn_einvoice_xml_reader_view::VnEinvoiceXmlReaderView;
+pub use vn_loan_amortization_view::VnLoanAmortizationView;
+pub use vn_working_days_calc_view::VnWorkingDaysCalcView;
