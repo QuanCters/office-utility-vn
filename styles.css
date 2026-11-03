@@ -302,7 +302,7 @@ input, textarea, .selectable-text {
   cursor: pointer;
 }
 
-/* Zone 3: Progress & Action Bar */
+/* Zone 3: Dynamic Progress & Contextual Action Bar */
 .zone-3 {
   display: flex;
   flex-direction: column;
@@ -311,6 +311,14 @@ input, textarea, .selectable-text {
   background: var(--bg-surface);
   border: 1px solid #334155;
   border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .progress-track {
@@ -340,6 +348,15 @@ input, textarea, .selectable-text {
   gap: 12px;
 }
 
+.action-bar-running,
+.action-bar-completed,
+.action-bar-idle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .btn-primary {
   background: var(--primary);
   border: none;
@@ -354,8 +371,32 @@ input, textarea, .selectable-text {
   transition: background 0.15s ease;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--primary-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.btn-success {
+  background: #059669;
+  border: none;
+  color: #FFF;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.btn-success:hover {
+  background: #10B981;
 }
 
 .btn-danger {
@@ -366,6 +407,9 @@ input, textarea, .selectable-text {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .btn-danger:hover {
@@ -380,6 +424,10 @@ input, textarea, .selectable-text {
   padding: 8px 14px;
   border-radius: 6px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
 }
 
 .btn-secondary:hover {

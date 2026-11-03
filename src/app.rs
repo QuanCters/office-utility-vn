@@ -702,11 +702,20 @@ pub fn App() -> impl IntoView {
     let is_workflow_active = Signal::derive(move || active_view.get() == AppView::WorkflowDag);
     let is_history_active = Signal::derive(move || active_view.get() == AppView::History);
 
+    // Đặt lại trạng thái tác vụ khi đổi công cụ hoặc làm mới
+    let reset_task = move || {
+        set_is_running.set(false);
+        set_output_result.set(String::new());
+        set_progress_percent.set(0.0);
+        set_progress_message.set("Sẵn sàng".to_string());
+    };
+
     // Hàm chọn công cụ dùng chung: cập nhật slug, đóng palette, chuyển sang Tool view
     let select_tool = move |slug: String| {
         set_current_slug.set(slug.clone());
         set_palette_open.set(false);
         set_active_view.set(AppView::Tool);
+        reset_task();
         load_presets_for_current_tool();
     };
 
@@ -1743,42 +1752,244 @@ pub fn App() -> impl IntoView {
                         </section>
 
                         <section class="zone-3">
-                            <div class="progress-track">
-                                <div
-                                    class="progress-bar"
-                                    style=move || format!("width: {}%", progress_percent.get())
-                                ></div>
-                            </div>
+                            {move || {
+                                if is_running.get() || (progress_percent.get() > 0.0 && progress_percent.get() < 100.0) {
+                                    view! {
+                                        <div class="progress-container">
+                                            <div class="progress-track">
+                                                <div
+                                                    class="progress-bar"
+                                                    style=move || format!("width: {}%", progress_percent.get())
+                                                ></div>
+                                            </div>
 
-                            <div class="progress-meta">
-                                <span>{ move || progress_message.get() }</span>
-                                <span>{ move || format!("{:.0}%", progress_percent.get()) }</span>
-                            </div>
+                                            <div class="progress-meta">
+                                                <span>{ move || progress_message.get() }</span>
+                                                <span>{ move || format!("{:.0}%", progress_percent.get()) }</span>
+                                            </div>
+                                        </div>
+                                    }.into_any()
+                                } else {
+                                    view! { <div></div> }.into_any()
+                                }
+                            }}
 
                             <div class="action-bar">
-                                <button
-                                    class="btn-primary"
-                                    prop:disabled=move || is_running.get()
-                                    on:click=move |_| run_task()
-                                >
-                                    <span>"⚡ THỰC THI NGAY (Ctrl + Enter)"</span>
-                                </button>
+                                {move || {
+                                    let running = is_running.get();
+                                    let has_result = !output_result.get().is_empty();
+                                    let slug = current_slug.get();
+                                    let domain = current_tool().domain;
+                                    let archetype = get_tool_archetype(&slug, &domain);
 
-                                <button
-                                    class="btn-danger"
-                                    prop:disabled=move || !is_running.get()
-                                    on:click=move |_| cancel_current_task()
-                                >
-                                    <span>"🛑 HỦY (Esc)"</span>
-                                </button>
-
-                                <button
-                                    class="btn-secondary"
-                                    title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
-                                    on:click=move |_| open_output_dir()
-                                >
-                                    <span>"📂 MỞ THƯ MỤC KẾT QUẢ (Ctrl + O)"</span>
-                                </button>
+                                    if running {
+                                        view! {
+                                            <div class="action-bar-running">
+                                                <button
+                                                    class="btn-primary"
+                                                    prop:disabled=true
+                                                >
+                                                    <span>"⏳ ĐANG XỬ LÝ..."</span>
+                                                </button>
+                                                <button
+                                                    class="btn-danger"
+                                                    on:click=move |_| cancel_current_task()
+                                                >
+                                                    <span>"🛑 HỦY (Esc)"</span>
+                                                </button>
+                                            </div>
+                                        }.into_any()
+                                    } else if has_result {
+                                        match archetype {
+                                            ToolArchetype::FileBatch | ToolArchetype::SpreadsheetData => {
+                                                view! {
+                                                    <div class="action-bar-completed">
+                                                        <button
+                                                            class="btn-success"
+                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
+                                                            on:click=move |_| open_output_dir()
+                                                        >
+                                                            <span>"📂 MỞ THƯ MỤC KẾT QUẢ (Ctrl + O)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ XỬ LÝ TIẾP (Ctrl + Enter)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Xóa kết quả cũ và chuẩn bị tác vụ mới"
+                                                            on:click=move |_| reset_task()
+                                                        >
+                                                            <span>"↺ Làm mới"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::FinancialAccounting => {
+                                                view! {
+                                                    <div class="action-bar-completed">
+                                                        <button
+                                                            class="btn-success"
+                                                            title="Sao chép kết quả tính toán vào bộ nhớ tạm"
+                                                            on:click=move |_| copy_result_to_clipboard()
+                                                        >
+                                                            <span>"📋 SAO CHÉP KẾT QUẢ"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ TÍNH LẠI (Enter)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Đặt lại các trường nhập liệu"
+                                                            on:click=move |_| reset_task()
+                                                        >
+                                                            <span>"↺ Đặt lại"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::IdentityVerification => {
+                                                let is_vietqr = slug == "vietqr-napas247-generator";
+                                                let copy_label = if is_vietqr { "📋 SAO CHÉP MÃ VIETQR" } else { "📋 SAO CHÉP THÔNG TIN" };
+                                                let rerun_label = if is_vietqr { "⚡ TẠO MÃ MỚI" } else { "⚡ XÁC THỰC LẠI" };
+                                                view! {
+                                                    <div class="action-bar-completed">
+                                                        <button
+                                                            class="btn-success"
+                                                            title="Sao chép kết quả xác thực / mã QR vào bộ nhớ tạm"
+                                                            on:click=move |_| copy_result_to_clipboard()
+                                                        >
+                                                            <span>{copy_label}</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>{rerun_label}</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Đặt lại thông tin nhập"
+                                                            on:click=move |_| reset_task()
+                                                        >
+                                                            <span>"↺ Đặt lại"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::TextCodeConversion => {
+                                                view! {
+                                                    <div class="action-bar-completed">
+                                                        <button
+                                                            class="btn-success"
+                                                            title="Sao chép toàn bộ văn bản sau chuyển đổi vào bộ nhớ tạm"
+                                                            on:click=move |_| copy_result_to_clipboard()
+                                                        >
+                                                            <span>"📋 SAO CHÉP KẾT QUẢ"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ CHUYỂN ĐỔI TIẾP (Ctrl + Enter)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Làm mới nội dung"
+                                                            on:click=move |_| reset_task()
+                                                        >
+                                                            <span>"↺ Làm mới"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                        }
+                                    } else {
+                                        match archetype {
+                                            ToolArchetype::FileBatch => {
+                                                view! {
+                                                    <div class="action-bar-idle">
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ BẮT ĐẦU XỬ LÝ (Ctrl + Enter)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
+                                                            on:click=move |_| open_output_dir()
+                                                        >
+                                                            <span>"📂 Thư mục xuất (Ctrl + O)"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::SpreadsheetData => {
+                                                view! {
+                                                    <div class="action-bar-idle">
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ XỬ LÝ DỮ LIỆU (Ctrl + Enter)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
+                                                            on:click=move |_| open_output_dir()
+                                                        >
+                                                            <span>"📂 Thư mục xuất (Ctrl + O)"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::FinancialAccounting => {
+                                                view! {
+                                                    <div class="action-bar-idle">
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ TÍNH TOÁN NGAY (Enter)"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::IdentityVerification => {
+                                                let is_vietqr = slug == "vietqr-napas247-generator";
+                                                let btn_label = if is_vietqr { "⚡ TẠO MÃ VIETQR (Enter)" } else { "⚡ TRA CỨU & XÁC THỰC (Enter)" };
+                                                view! {
+                                                    <div class="action-bar-idle">
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>{btn_label}</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                            ToolArchetype::TextCodeConversion => {
+                                                view! {
+                                                    <div class="action-bar-idle">
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ CHUYỂN ĐỔI NGAY (Ctrl + Enter)"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
+                                        }
+                                    }
+                                }}
                             </div>
                         </section>
                     </main>
