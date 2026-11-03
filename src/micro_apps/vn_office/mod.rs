@@ -4,7 +4,7 @@ pub mod state;
 
 pub use layout::{VnOfficeLayout, VnOfficeLegalPanel};
 pub use sidebar::VnOfficeSidebar;
-pub use state::{BankReference, VnLegalRegulations, VnOfficeState, POPULAR_VN_BANKS};
+pub use state::{BankReference, VnCalculationRecord, VnLegalRegulations, VnOfficeState, POPULAR_VN_BANKS};
 
 use leptos::prelude::*;
 

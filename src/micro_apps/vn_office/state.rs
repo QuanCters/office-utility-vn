@@ -53,6 +53,17 @@ pub struct BankReference {
     pub swift: &'static str,
 }
 
+/// Bản ghi lịch sử tính toán và đối soát dữ liệu gần nhất của VN Office.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct VnCalculationRecord {
+    pub id: String,
+    pub tool_slug: String,
+    pub tool_name: String,
+    pub input_summary: String,
+    pub output_result: String,
+    pub timestamp: String,
+}
+
 /// Danh sách hơn 50 ngân hàng Việt Nam phục vụ tra cứu nhanh NAPAS 247 và mã BIN.
 pub const POPULAR_VN_BANKS: &[BankReference] = &[
     BankReference { bin: "970436", short_name: "VCB", full_name: "Vietcombank (Ngoại thương VN)", swift: "BFTVVNVX" },
@@ -123,6 +134,8 @@ pub struct VnOfficeState {
     pub sidebar_filter: RwSignal<String>,
     /// Cờ hiển thị / ẩn panel tra cứu quy định pháp lý bên phải.
     pub is_legal_panel_open: RwSignal<bool>,
+    /// Lịch sử các kết quả tính toán gần nhất của micro-app.
+    pub calculation_history: RwSignal<Vec<VnCalculationRecord>>,
 }
 
 impl Default for VnOfficeState {
@@ -151,6 +164,7 @@ impl VnOfficeState {
             regulations: RwSignal::new(VnLegalRegulations::default()),
             sidebar_filter: RwSignal::new(String::new()),
             is_legal_panel_open: RwSignal::new(true),
+            calculation_history: RwSignal::new(Vec::new()),
         }
     }
 
@@ -213,5 +227,43 @@ impl VnOfficeState {
     /// Lấy danh sách ngân hàng mẫu.
     pub fn bank_references(&self) -> &'static [BankReference] {
         POPULAR_VN_BANKS
+    }
+
+    /// Ghi nhận một kết quả tính toán vào lịch sử gần nhất (tối đa lưu 50 mục).
+    pub fn record_calculation(&self, tool_slug: &str, tool_name: &str, input_summary: &str, output_result: &str) {
+        let record = VnCalculationRecord {
+            id: format!("calc-{}", self.calculation_history.with(|h| h.len() + 1)),
+            tool_slug: tool_slug.to_string(),
+            tool_name: tool_name.to_string(),
+            input_summary: input_summary.to_string(),
+            output_result: output_result.to_string(),
+            timestamp: "Vừa xong".to_string(),
+        };
+        self.record_calculation_item(record);
+    }
+
+    /// Thêm trực tiếp một bản ghi tính toán vào lịch sử.
+    pub fn record_calculation_item(&self, record: VnCalculationRecord) {
+        self.calculation_history.update(|h| {
+            h.insert(0, record);
+            if h.len() > 50 {
+                h.truncate(50);
+            }
+        });
+    }
+
+    /// Lấy danh sách các bản ghi tính toán gần nhất.
+    pub fn calculation_history(&self) -> Vec<VnCalculationRecord> {
+        self.calculation_history.get()
+    }
+
+    /// Lấy bản ghi tính toán mới nhất (nếu có).
+    pub fn latest_calculation(&self) -> Option<VnCalculationRecord> {
+        self.calculation_history.with(|h| h.first().cloned())
+    }
+
+    /// Xóa toàn bộ lịch sử tính toán.
+    pub fn clear_calculation_history(&self) {
+        self.calculation_history.set(Vec::new());
     }
 }

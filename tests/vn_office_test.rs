@@ -173,3 +173,45 @@ fn test_vn_office_tool_icon_mapping() {
     // Icon fallback cho slug lạ
     assert_eq!(vn_office_tool_icon("unknown-slug"), "💼");
 }
+
+#[test]
+fn test_vn_office_calculation_history() {
+    let state = VnOfficeState::new();
+
+    // 1. Ban đầu lịch sử phải rỗng
+    assert_eq!(state.calculation_history().len(), 0);
+    assert!(state.latest_calculation().is_none());
+
+    // 2. Ghi nhận tính toán đầu tiên: đọc số thành chữ
+    state.record_calculation(
+        "vietnamese-number-to-words",
+        "Đọc Số Tiền Thành Chữ Chuẩn",
+        "1.250.000 VND",
+        "Một triệu hai trăm năm mươi nghìn đồng chẵn.",
+    );
+
+    assert_eq!(state.calculation_history().len(), 1);
+    let latest = state.latest_calculation().expect("phải có latest");
+    assert_eq!(latest.tool_slug, "vietnamese-number-to-words");
+    assert_eq!(latest.output_result, "Một triệu hai trăm năm mươi nghìn đồng chẵn.");
+
+    // 3. Ghi nhận tính toán thứ hai: tính lương
+    state.record_calculation(
+        "gross-net-salary-calculator",
+        "Tính Lương Gross - Net & Thuế",
+        "Gross: 30.000.000 VND, 1 người phụ thuộc",
+        "Net: 25.425.000 VND, Thuế TNCN: 1.425.000 VND",
+    );
+
+    assert_eq!(state.calculation_history().len(), 2);
+    // Bản ghi mới nhất được đưa lên đầu danh sách (LIFO)
+    let new_latest = state.latest_calculation().expect("phải có new latest");
+    assert_eq!(new_latest.tool_slug, "gross-net-salary-calculator");
+    assert_eq!(state.calculation_history()[1].tool_slug, "vietnamese-number-to-words");
+
+    // 4. Xóa toàn bộ lịch sử
+    state.clear_calculation_history();
+    assert_eq!(state.calculation_history().len(), 0);
+    assert!(state.latest_calculation().is_none());
+}
+

@@ -10,14 +10,21 @@ use crate::tools::{
     VnLoanAmortizationView, VnWorkingDaysCalcView,
 };
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["navigator", "clipboard"])]
+    fn writeText(text: &str) -> js_sys::Promise;
+}
+
 /// Hàm tiện ích sao chép văn bản vào Clipboard an toàn (hỗ trợ cả WASM và Non-WASM target).
 fn copy_to_clipboard(text: &str) {
     #[cfg(target_arch = "wasm32")]
     {
-        if let Some(window) = web_sys::window() {
-            let clipboard = window.navigator().clipboard();
-            let _ = clipboard.write_text(text);
-        }
+        let _ = writeText(text);
     }
     let _ = text;
 }
