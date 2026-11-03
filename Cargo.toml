@@ -56,6 +56,10 @@ path = "tests/vn_office_test.rs"
 name = "pdf_studio_test"
 path = "tests/pdf_studio_test.rs"
 
+[[test]]
+name = "media_studio_test"
+path = "tests/media_studio_test.rs"
+
 [workspace]
 members = [
     "src-tauri",

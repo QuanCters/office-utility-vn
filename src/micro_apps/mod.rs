@@ -7,6 +7,9 @@ pub use vn_office::{VnCalculationRecord, VnOfficeApp, VnOfficeState};
 pub mod pdf_studio;
 pub use pdf_studio::{PdfStudioApp, PdfStudioState};
 
+pub mod media_studio;
+pub use media_studio::{MediaStudioApp, MediaStudioState};
+
 /// Định danh cho 4 Micro-Apps độc lập của Office Utility VN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MicroAppId {

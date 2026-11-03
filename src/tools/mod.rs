@@ -49,6 +49,16 @@ pub mod screenshot_beautifier_view;
 pub mod video_to_gif_webp_view;
 pub mod watermark_batch_studio_view;
 
+pub use audio_silence_trimmer_view::AudioSilenceTrimmerView;
+pub use doc_scanner_perspective_view::DocScannerPerspectiveView;
+pub use image_batch_view::ImageBatchView;
+pub use image_bg_redact_view::ImageBgRedactView;
+pub use image_exif_inspector_view::ImageExifInspectorView;
+pub use photo_id_crop_view::PhotoIdCropView;
+pub use screenshot_beautifier_view::ScreenshotBeautifierView;
+pub use video_to_gif_webp_view::VideoToGifWebpView;
+pub use watermark_batch_studio_view::WatermarkBatchStudioView;
+
 // Data Lab (13 tools)
 pub mod base64_file_codec_view;
 pub mod data_structure_converter_view;
