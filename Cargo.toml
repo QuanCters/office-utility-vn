@@ -40,6 +40,10 @@ path = "tests/e2e/main.rs"
 name = "micro_app_routing_test"
 path = "tests/micro_app_routing_test.rs"
 
+[[test]]
+name = "shared_ui_test"
+path = "tests/shared_ui_test.rs"
+
 [workspace]
 members = [
     "src-tauri",

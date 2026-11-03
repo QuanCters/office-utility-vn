@@ -2140,6 +2140,75 @@ input, textarea, .selectable-text {
   font-size: 11px;
 }
 
+/* ==========================================================================
+   Shared UI Components (src/shared_ui/)
+   ========================================================================== */
+
+/* Back Button */
+.back-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #1E293B;
+  color: #94A3B8;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.back-nav-btn:hover {
+  background: #334155;
+  color: #F8FAFC;
+  border-color: #475569;
+  transform: translateX(-2px);
+}
+
+.back-nav-btn:active {
+  transform: translateX(0);
+}
+
+.back-nav-icon {
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+
+.back-nav-btn:hover .back-nav-icon {
+  transform: translateX(-2px);
+}
+
+/* Shared Progress Bar enhancements */
+.shared-progress-bar {
+  background: #1E293B;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.btn-cancel-task {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* Shared Workflow Runner */
+.dag-picker-item:hover {
+  background: #1E293B !important;
+}
+
+.dag-reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.dag-remove-btn:hover {
+  background: rgba(244, 63, 94, 0.2);
+}
+
+
 
 
 
