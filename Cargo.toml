@@ -36,6 +36,10 @@ harness = false
 name = "e2e"
 path = "tests/e2e/main.rs"
 
+[[test]]
+name = "micro_app_routing_test"
+path = "tests/micro_app_routing_test.rs"
+
 [workspace]
 members = [
     "src-tauri",
