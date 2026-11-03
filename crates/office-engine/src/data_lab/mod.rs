@@ -4,6 +4,7 @@ pub mod diff_checker_text_sheets;
 pub mod encoding_mojibake_fixer;
 pub mod excel_cleaner_normalizer;
 pub mod excel_multi_merger;
+pub mod excel_reader;
 pub mod excel_sheet_unlocker;
 pub mod excel_split_by_column;
 pub mod excel_visual_joiner;
@@ -32,6 +33,7 @@ pub use excel_cleaner_normalizer::{
 pub use excel_multi_merger::{
     merge_append_rows, ExcelMergeOptions, ExcelMultiMergerTool, MergeMode,
 };
+pub use excel_reader::{format_table_to_csv, read_tabular_rows};
 pub use excel_sheet_unlocker::{
     strip_protection_tags, unlock_excel_bytes, ExcelSheetUnlockerTool, ExcelUnlockOptions,
 };

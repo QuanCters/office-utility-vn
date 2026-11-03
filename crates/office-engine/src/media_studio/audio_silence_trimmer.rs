@@ -43,6 +43,54 @@ pub struct PcmAudio {
     pub samples: Vec<i16>, // Interleaved samples
 }
 
+/// Đọc và giải mã luồng âm thanh (WAV PCM hoặc MP3 qua Symphonia pure-Rust)
+pub fn decode_audio(bytes: &[u8]) -> Result<PcmAudio, CommandError> {
+    if bytes.len() < 4 {
+        return Err(CommandError::InvalidFileSignature {
+            expected: "WAV (RIFF) hoặc MP3 (ID3)".to_string(),
+            actual: "Tệp quá nhỏ".to_string(),
+        });
+    }
+
+    if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WAVE" {
+        decode_wav(bytes)
+    } else if bytes.starts_with(b"ID3") || bytes.starts_with(&[0xFF, 0xFB]) || bytes.starts_with(&[0xFF, 0xF3]) {
+        decode_mp3(bytes)
+    } else {
+        Err(CommandError::InvalidFileSignature {
+            expected: "WAV (RIFF) hoặc MP3 (ID3)".to_string(),
+            actual: format!("{:02X?}", &bytes[0..bytes.len().min(4)]),
+        })
+    }
+}
+
+/// Giải mã MP3 thuần Rust 100% qua puremp3 crate
+pub fn decode_mp3(bytes: &[u8]) -> Result<PcmAudio, CommandError> {
+    let (header, sample_iter) = puremp3::read_mp3(bytes).map_err(|e| CommandError::ValidationFailed {
+        reason: format!("Lỗi giải mã MP3: {e:?}"),
+    })?;
+
+    let is_mono = matches!(header.channels, puremp3::Channels::Mono);
+    let channels = if is_mono { 1 } else { 2 };
+    let sample_rate = header.sample_rate.hz();
+
+    let mut samples = Vec::new();
+    for (l, r) in sample_iter {
+        let left_i16 = (l.clamp(-1.0, 1.0) * 32767.0) as i16;
+        samples.push(left_i16);
+        if !is_mono {
+            let right_i16 = (r.clamp(-1.0, 1.0) * 32767.0) as i16;
+            samples.push(right_i16);
+        }
+    }
+
+    Ok(PcmAudio {
+        channels,
+        sample_rate,
+        samples,
+    })
+}
+
 /// Đọc và xác thực tệp WAV PCM 16-bit
 pub fn decode_wav(bytes: &[u8]) -> Result<PcmAudio, CommandError> {
     if bytes.len() < 44 {
@@ -53,17 +101,8 @@ pub fn decode_wav(bytes: &[u8]) -> Result<PcmAudio, CommandError> {
     }
 
     if &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
-        // Hỗ trợ kiểm tra chữ ký MP3 ID3
-        if bytes.starts_with(b"ID3") {
-            // Giả lập đọc PCM 44.1kHz cho MP3
-            return Ok(PcmAudio {
-                channels: 1,
-                sample_rate: 44100,
-                samples: vec![0; 44100],
-            });
-        }
         return Err(CommandError::InvalidFileSignature {
-            expected: "WAV (RIFF) hoặc MP3 (ID3)".to_string(),
+            expected: "WAV (RIFF....WAVE)".to_string(),
             actual: format!("{:02X?}", &bytes[0..bytes.len().min(4)]),
         });
     }
@@ -363,7 +402,7 @@ impl OfficeTool for AudioSilenceTrimmerTool {
                 }
             };
 
-            let audio = match decode_wav(&bytes) {
+            let audio = match decode_audio(&bytes) {
                 Ok(a) => a,
                 Err(err) => {
                     if total_files == 1 {

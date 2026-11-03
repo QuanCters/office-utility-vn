@@ -326,48 +326,24 @@ pub fn load_and_validate_image(bytes: &[u8]) -> Result<RawImage, CommandError> {
         decode_bmp(bytes)
     } else if bytes.starts_with(b"P6") {
         decode_ppm(bytes)
-    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        // JPEG: Kiểm tra marker SOF0 / SOF2 để lấy kích thước
-        let mut cursor = 2;
-        let mut width = 0u32;
-        let mut height = 0u32;
-
-        while cursor + 8 < bytes.len() {
-            if bytes[cursor] != 0xFF {
-                cursor += 1;
-                continue;
-            }
-            let marker = bytes[cursor + 1];
-            let len = u16::from_be_bytes([bytes[cursor + 2], bytes[cursor + 3]]) as usize;
-            if marker == 0xC0 || marker == 0xC2 {
-                // SOF marker
-                height = u16::from_be_bytes([bytes[cursor + 5], bytes[cursor + 6]]) as u32;
-                width = u16::from_be_bytes([bytes[cursor + 7], bytes[cursor + 8]]) as u32;
-                break;
-            }
-            cursor += 2 + len;
-        }
-
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF])
+        || (bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WEBP")
+    {
+        let dyn_img = image::load_from_memory(bytes).map_err(|e| CommandError::ValidationFailed {
+            reason: format!("Lỗi giải mã ảnh: {e}"),
+        })?;
+        let width = dyn_img.width();
+        let height = dyn_img.height();
         if width > 16384 || height > 16384 {
             return Err(CommandError::ValidationFailed {
-                reason: format!("Kích thước JPEG ({width}x{height}) vượt quá giới hạn 16384x16384"),
+                reason: format!("Kích thước ảnh ({width}x{height}) vượt quá giới hạn 16384x16384"),
             });
         }
-
-        // Với định dạng JPEG giả lập đọc cấu trúc
-        let actual_w = if width == 0 { 800 } else { width };
-        let actual_h = if height == 0 { 600 } else { height };
+        let rgb = dyn_img.to_rgb8();
         Ok(RawImage {
-            width: actual_w,
-            height: actual_h,
-            pixels: vec![128; (actual_w * actual_h * 3) as usize],
-        })
-    } else if bytes.starts_with(b"RIFF") && bytes.len() >= 12 && &bytes[8..12] == b"WEBP" {
-        // WebP
-        Ok(RawImage {
-            width: 800,
-            height: 600,
-            pixels: vec![160; (800 * 600 * 3) as usize],
+            width,
+            height,
+            pixels: rgb.into_raw(),
         })
     } else {
         Err(CommandError::InvalidFileSignature {
@@ -375,6 +351,23 @@ pub fn load_and_validate_image(bytes: &[u8]) -> Result<RawImage, CommandError> {
             actual: format!("{:02X?}", &bytes[0..bytes.len().min(8)]),
         })
     }
+}
+
+/// Xuất ảnh ra định dạng JPEG chuẩn (có nén DCT theo tỷ lệ chất lượng 1-100)
+pub fn encode_jpeg(img: &RawImage, quality: u8) -> Result<Vec<u8>, CommandError> {
+    let mut out = Vec::new();
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality.clamp(1, 100));
+    encoder
+        .encode(
+            &img.pixels,
+            img.width,
+            img.height,
+            image::ExtendedColorType::Rgb8,
+        )
+        .map_err(|e| CommandError::IoError {
+            details: format!("Lỗi mã hóa JPEG: {e}"),
+        })?;
+    Ok(out)
 }
 
 /// Xuất ảnh ra định dạng PNG chuẩn (có hỗ trợ strip metadata)
@@ -613,13 +606,10 @@ impl OfficeTool for ImageBatchTool {
                         Ok(b) => b,
                         Err(e) => return Err((file_path_str.clone(), e)),
                     },
-                    "jpeg" | "jpg" => {
-                        // Xuất BMP giả lập định dạng nén tương đương
-                        match encode_bmp(&processed_img) {
-                            Ok(b) => b,
-                            Err(e) => return Err((file_path_str.clone(), e)),
-                        }
-                    }
+                    "jpeg" | "jpg" => match encode_jpeg(&processed_img, options.quality) {
+                        Ok(b) => b,
+                        Err(e) => return Err((file_path_str.clone(), e)),
+                    },
                     _ => match encode_png(&processed_img, options.strip_exif) {
                         Ok(b) => b,
                         Err(e) => return Err((file_path_str.clone(), e)),
@@ -879,5 +869,19 @@ mod tests {
             }
             other => panic!("Kỳ vọng chặn Image Bomb nhưng nhận được: {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_image_batch_real_jpeg_encode_decode() {
+        let raw = RawImage {
+            width: 16,
+            height: 16,
+            pixels: vec![200; 16 * 16 * 3],
+        };
+        let jpeg_bytes = encode_jpeg(&raw, 85).expect("encode jpeg");
+        assert!(jpeg_bytes.starts_with(&[0xFF, 0xD8, 0xFF]));
+        let decoded = load_and_validate_image(&jpeg_bytes).expect("decode real jpeg");
+        assert_eq!(decoded.width, 16);
+        assert_eq!(decoded.height, 16);
     }
 }

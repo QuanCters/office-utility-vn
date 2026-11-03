@@ -156,7 +156,8 @@ impl OfficeTool for ExcelMultiMergerTool {
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| "unknown.csv".to_string());
 
-                let text = String::from_utf8_lossy(&raw_bytes).to_string();
+                let rows = super::excel_reader::read_tabular_rows(&raw_bytes, cancel_flag)?;
+                let text = super::excel_reader::format_table_to_csv(&rows);
                 file_entries.push((filename, text));
             }
         } else if let Some(files_json) = request.options.get("files").and_then(|v| v.as_array()) {

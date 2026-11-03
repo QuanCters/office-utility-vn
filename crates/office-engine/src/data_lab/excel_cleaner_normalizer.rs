@@ -172,36 +172,22 @@ pub fn normalize_date_string(date_str: &str) -> String {
     trimmed.to_string()
 }
 
-/// Làm sạch một dòng CSV/bảng tính
-pub fn clean_csv_content(
-    content: &str,
+/// Làm sạch dữ liệu dạng bảng từ danh sách dòng và cột
+pub fn clean_tabular_rows(
+    rows: &[Vec<String>],
     options: &ExcelCleanOptions,
     cancel_flag: &AtomicBool,
-) -> Result<String, CommandError> {
+) -> Result<Vec<Vec<String>>, CommandError> {
     let mut seen_rows = HashSet::new();
-    let mut output_lines = Vec::new();
+    let mut output_rows = Vec::new();
 
-    for line in content.lines() {
+    for row in rows {
         if cancel_flag.load(Ordering::Relaxed) {
             return Err(CommandError::TaskCancelled);
         }
 
-        let raw_line = line.trim();
-        if raw_line.is_empty() {
-            continue;
-        }
-
-        // Tách các cột theo dấu phẩy hoặc tab hoặc chấm phẩy
-        let delimiter = if raw_line.contains('\t') {
-            '\t'
-        } else if raw_line.contains(';') {
-            ';'
-        } else {
-            ','
-        };
-
-        let mut columns: Vec<String> = raw_line
-            .split(delimiter)
+        let mut columns: Vec<String> = row
+            .iter()
             .map(|col| {
                 let mut c = col.trim().to_string();
                 if options.trim_spaces {
@@ -226,19 +212,30 @@ pub fn clean_csv_content(
             }
         }
 
-        let formatted_line = columns.join(&delimiter.to_string());
-
+        let row_key = columns.join("\t");
         if options.deduplicate {
-            if seen_rows.contains(&formatted_line) {
+            if seen_rows.contains(&row_key) {
                 continue;
             }
-            seen_rows.insert(formatted_line.clone());
+            seen_rows.insert(row_key);
         }
 
-        output_lines.push(formatted_line);
+        output_rows.push(columns);
     }
 
-    Ok(output_lines.join("\n"))
+    Ok(output_rows)
+}
+
+/// Làm sạch một chuỗi CSV/bảng tính
+pub fn clean_csv_content(
+    content: &str,
+    options: &ExcelCleanOptions,
+    cancel_flag: &AtomicBool,
+) -> Result<String, CommandError> {
+    let raw_rows = super::excel_reader::read_tabular_rows(content.as_bytes(), cancel_flag)?;
+    let cleaned_rows = clean_tabular_rows(&raw_rows, options, cancel_flag)?;
+    let csv_out = super::excel_reader::format_table_to_csv(&cleaned_rows);
+    Ok(csv_out.trim_end_matches('\n').to_string())
 }
 
 impl OfficeTool for ExcelCleanerNormalizerTool {
@@ -341,9 +338,10 @@ impl OfficeTool for ExcelCleanerNormalizerTool {
                 });
             }
 
-            // Xử lý nội dung văn bản CSV hoặc Excel
-            let content = String::from_utf8_lossy(&raw_bytes);
-            let cleaned = clean_csv_content(&content, &options, cancel_flag)?;
+            // Đọc bảng tính thực tế (hỗ trợ .xlsx, .xls, .ods, .csv)
+            let raw_rows = super::excel_reader::read_tabular_rows(&raw_bytes, cancel_flag)?;
+            let cleaned_rows = clean_tabular_rows(&raw_rows, &options, cancel_flag)?;
+            let cleaned = super::excel_reader::format_table_to_csv(&cleaned_rows);
 
             let filename = in_path
                 .file_name()

@@ -273,7 +273,12 @@ impl OfficeTool for ExcelVisualJoinerTool {
                 });
             }
 
-            (String::from_utf8_lossy(&bytes_a).to_string(), String::from_utf8_lossy(&bytes_b).to_string())
+            let rows_a = super::excel_reader::read_tabular_rows(&bytes_a, cancel_flag)?;
+            let rows_b = super::excel_reader::read_tabular_rows(&bytes_b, cancel_flag)?;
+            (
+                super::excel_reader::format_table_to_csv(&rows_a),
+                super::excel_reader::format_table_to_csv(&rows_b),
+            )
         } else {
             let t_a = request.options.get("table_a").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let t_b = request.options.get("table_b").and_then(|v| v.as_str()).unwrap_or("").to_string();

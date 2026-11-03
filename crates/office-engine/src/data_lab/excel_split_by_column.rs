@@ -160,7 +160,8 @@ impl OfficeTool for ExcelSplitByColumnTool {
                 });
             }
 
-            String::from_utf8_lossy(&raw_bytes).to_string()
+            let rows = super::excel_reader::read_tabular_rows(&raw_bytes, cancel_flag)?;
+            super::excel_reader::format_table_to_csv(&rows)
         } else if let Some(text_val) = request.options.get("text").and_then(|v| v.as_str()) {
             text_val.to_string()
         } else {
