@@ -763,6 +763,11 @@ input, textarea, .selectable-text {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
+.result-box-error {
+  background: rgba(225, 29, 72, 0.08);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
 .result-header {
   display: flex;
   align-items: center;
@@ -1919,6 +1924,222 @@ input, textarea, .selectable-text {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================================
+   Smart Morphing Canvas for Universal Converter
+   ========================================================================= */
+.morphing-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-detection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detection-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #E2E8F0;
+}
+
+.detection-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detection-badge-pdf {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #F87171;
+}
+
+.detection-badge-docx {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60A5FA;
+}
+
+.detection-badge-xlsx {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34D399;
+}
+
+.detection-badge-csv {
+  background: rgba(20, 184, 166, 0.15);
+  border: 1px solid rgba(20, 184, 166, 0.4);
+  color: #2DD4BF;
+}
+
+.detection-badge-markdown {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #C084FC;
+}
+
+.detection-badge-image {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #FBBF24;
+}
+
+.detection-badge-text {
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #CBD5E1;
+}
+
+.target-matrix-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.target-matrix-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.target-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.target-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.target-card:hover {
+  border-color: var(--primary);
+  background: rgba(79, 70, 229, 0.08);
+  transform: translateY(-1px);
+}
+
+.target-card.active {
+  border-color: #6366F1;
+  background: rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 1px #6366F1, 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.target-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.target-card-ext {
+  font-size: 11px;
+  font-weight: 700;
+  color: #818CF8;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.target-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #F1F5F9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.target-card-desc {
+  font-size: 11px;
+  color: #94A3B8;
+  line-height: 1.4;
+}
+
+/* Empty State Interactive Matrix Guide */
+.matrix-empty-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px dashed #334155;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.matrix-guide-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.matrix-routes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.matrix-route-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid #1E293B;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.route-src {
+  font-weight: 700;
+  color: #E2E8F0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.route-arrow {
+  color: #6366F1;
+  font-weight: 700;
+}
+
+.route-dest {
+  color: #94A3B8;
+  font-size: 11px;
+}
+
 
 
 

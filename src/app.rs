@@ -37,6 +37,49 @@ pub enum ToolArchetype {
     IdentityVerification,
     TextCodeConversion,
     SpreadsheetData,
+    UniversalConverter,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DetectedFormatCategory {
+    None,
+    Pdf,
+    Docx,
+    Xlsx,
+    Csv,
+    Markdown,
+    Image,
+    Text,
+    Other,
+}
+
+fn detect_primary_category(files: &[String]) -> DetectedFormatCategory {
+    if files.is_empty() {
+        return DetectedFormatCategory::None;
+    }
+    let first = files[0].to_lowercase();
+    if first.ends_with(".pdf") {
+        DetectedFormatCategory::Pdf
+    } else if first.ends_with(".docx") {
+        DetectedFormatCategory::Docx
+    } else if first.ends_with(".xlsx") || first.ends_with(".xls") {
+        DetectedFormatCategory::Xlsx
+    } else if first.ends_with(".csv") {
+        DetectedFormatCategory::Csv
+    } else if first.ends_with(".md") || first.ends_with(".markdown") {
+        DetectedFormatCategory::Markdown
+    } else if first.ends_with(".png")
+        || first.ends_with(".jpg")
+        || first.ends_with(".jpeg")
+        || first.ends_with(".webp")
+        || first.ends_with(".bmp")
+    {
+        DetectedFormatCategory::Image
+    } else if first.ends_with(".txt") {
+        DetectedFormatCategory::Text
+    } else {
+        DetectedFormatCategory::Other
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -430,6 +473,9 @@ pub const ALL_TOOLS: &[ToolItem] = &[
 ];
 
 fn get_tool_archetype(slug: &str, domain: &str) -> ToolArchetype {
+    if slug == "universal-file-converter-hub" || slug == "universal-converter" {
+        return ToolArchetype::UniversalConverter;
+    }
     match domain {
         "doc-suite" | "media-studio" | "sys-hub" => ToolArchetype::FileBatch,
         "data-lab" => {
@@ -594,6 +640,8 @@ pub fn App() -> impl IntoView {
     // Trạng thái công cụ hiện tại
     let (current_slug, set_current_slug) = signal("vietnamese-number-to-words".to_string());
     let (output_result, set_output_result) = signal(String::new());
+    let (error_message, set_error_message) = signal(None::<String>);
+    let (active_task_id, set_active_task_id) = signal(None::<String>);
 
     // Trạng thái Presets (Mẫu cấu hình)
     let (tool_presets, set_tool_presets) = signal(Vec::<ToolPresetUi>::new());
@@ -705,6 +753,8 @@ pub fn App() -> impl IntoView {
     // Đặt lại trạng thái tác vụ khi đổi công cụ hoặc làm mới
     let reset_task = move || {
         set_is_running.set(false);
+        set_active_task_id.set(None);
+        set_error_message.set(None);
         set_output_result.set(String::new());
         set_progress_percent.set(0.0);
         set_progress_message.set("Sẵn sàng".to_string());
@@ -886,6 +936,9 @@ pub fn App() -> impl IntoView {
             return;
         }
 
+        let task_id_str = format!("task-{}", js_sys::Date::now() as u64);
+        set_active_task_id.set(Some(task_id_str.clone()));
+        set_error_message.set(None);
         set_is_running.set(true);
         set_progress_percent.set(10.0);
         set_progress_message.set("Đang chuẩn bị tác vụ...".to_string());
@@ -900,6 +953,11 @@ pub fn App() -> impl IntoView {
             let mut request_options = serde_json::Map::new();
 
             match archetype {
+                ToolArchetype::UniversalConverter => {
+                    request_options.insert("target_extension".to_string(), serde_json::json!(target_format.get()));
+                    request_options.insert("target_format".to_string(), serde_json::json!(target_format.get()));
+                    request_options.insert("quality".to_string(), serde_json::json!(quality_percent.get()));
+                }
                 ToolArchetype::FinancialAccounting => {
                     if slug == "vietnamese-number-to-words" {
                         request_options.insert("number".to_string(), serde_json::json!(input_value.get()));
@@ -950,9 +1008,15 @@ pub fn App() -> impl IntoView {
                 }
             }
 
+            let backend_slug = if slug == "universal-file-converter-hub" {
+                "universal-converter".to_string()
+            } else {
+                slug.clone()
+            };
+
             let request_payload = serde_json::json!({
-                "task_id": format!("task-{}", js_sys::Date::now() as u64),
-                "tool_slug": slug,
+                "task_id": task_id_str,
+                "tool_slug": backend_slug,
                 "input_paths": selected_files.get(),
                 "output_directory": null,
                 "options": request_options
@@ -964,21 +1028,41 @@ pub fn App() -> impl IntoView {
             .unwrap();
 
             let resp = invoke("dispatch_tool_task", args).await;
-            if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp) {
-                if let Some(first) = res_obj
-                    .get("output_paths")
-                    .and_then(|v| v.as_array())
-                    .and_then(|outputs| outputs.first())
-                    .and_then(|v| v.as_str())
-                {
-                    set_output_result.set(first.to_string());
+            if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp.clone()) {
+                let status = res_obj.get("status").and_then(|v| v.as_str()).unwrap_or("SUCCESS");
+                let failed_items = res_obj.get("failed_items").and_then(|v| v.as_array());
+
+                if status == "FAILED" || (failed_items.is_some() && !failed_items.unwrap().is_empty() && res_obj.get("output_paths").and_then(|v| v.as_array()).map_or(true, |a| a.is_empty())) {
+                    let err_reason = failed_items
+                        .and_then(|arr| arr.first())
+                        .and_then(|item| item.get("reason"))
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("Không thể hoàn tất chuyển đổi định dạng này.");
+                    set_error_message.set(Some(err_reason.to_string()));
+                    set_output_result.set(String::new());
+                    set_progress_percent.set(0.0);
+                    set_progress_message.set("Thực thi thất bại".to_string());
                 } else {
-                    set_output_result.set("Tác vụ xử lý hoàn tất thành công!".to_string());
+                    if let Some(first) = res_obj
+                        .get("output_paths")
+                        .and_then(|v| v.as_array())
+                        .and_then(|outputs| outputs.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        set_output_result.set(first.to_string());
+                    } else {
+                        set_output_result.set("Tác vụ xử lý hoàn tất thành công!".to_string());
+                    }
+                    set_error_message.set(None);
+                    set_progress_percent.set(100.0);
+                    set_progress_message.set("Đã hoàn thành xuất sắc 100%".to_string());
                 }
-                set_progress_percent.set(100.0);
-                set_progress_message.set("Đã hoàn thành xuất sắc 100%".to_string());
             } else {
-                set_output_result.set("Lỗi thực thi tác vụ".to_string());
+                let err_str = serde_wasm_bindgen::from_value::<String>(resp)
+                    .unwrap_or_else(|_| "Lỗi thực thi tác vụ: định dạng tệp không tương thích hoặc bị từ chối.".to_string());
+                set_error_message.set(Some(err_str));
+                set_output_result.set(String::new());
+                set_progress_percent.set(0.0);
                 set_progress_message.set("Có lỗi phát sinh".to_string());
             }
 
@@ -989,6 +1073,12 @@ pub fn App() -> impl IntoView {
     // Hủy tác vụ (Esc)
     let cancel_current_task = move || {
         if is_running.get() {
+            if let Some(tid) = active_task_id.get() {
+                spawn_local(async move {
+                    let args = serde_wasm_bindgen::to_value(&serde_json::json!({ "task_id": tid })).unwrap();
+                    let _ = invoke("cancel_task", args).await;
+                });
+            }
             set_is_running.set(false);
             set_progress_percent.set(0.0);
             set_progress_message.set("Đã dừng tác vụ".to_string());
@@ -1140,15 +1230,546 @@ pub fn App() -> impl IntoView {
                                 let slug = current_slug.get();
                                 let archetype = get_tool_archetype(&slug, &current_tool().domain);
                                 match archetype {
-                                    ToolArchetype::FileBatch => view! {
-                                        <div>
+                                    ToolArchetype::UniversalConverter => view! {
+                                        <div class="morphing-canvas">
+                                            <input
+                                                type="file"
+                                                id="universal-native-picker"
+                                                multiple=true
+                                                style="display: none;"
+                                                on:change=move |_| {
+                                                    if let Ok(js_val) = js_sys::eval("Array.from(document.getElementById('universal-native-picker')?.files || []).map(f => f.name)") {
+                                                        if let Ok(names) = serde_wasm_bindgen::from_value::<Vec<String>>(js_val) {
+                                                            if !names.is_empty() {
+                                                                set_selected_files.update(|list| {
+                                                                    list.extend(names);
+                                                                });
+                                                                let new_list = selected_files.get();
+                                                                match detect_primary_category(&new_list) {
+                                                                    DetectedFormatCategory::Pdf => set_target_format.set("xlsx".to_string()),
+                                                                    DetectedFormatCategory::Docx => set_target_format.set("md".to_string()),
+                                                                    DetectedFormatCategory::Xlsx => set_target_format.set("csv".to_string()),
+                                                                    DetectedFormatCategory::Csv => set_target_format.set("json".to_string()),
+                                                                    DetectedFormatCategory::Markdown | DetectedFormatCategory::Text => set_target_format.set("pdf".to_string()),
+                                                                    DetectedFormatCategory::Image => set_target_format.set("webp".to_string()),
+                                                                    _ => {}
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            />
+
                                             <div
                                                 class="dropzone"
+                                                role="button"
+                                                tabindex="0"
+                                                aria-label="Kéo thả tệp hoặc nhấn Enter để chọn tệp từ máy tính"
                                                 on:click=move |_| {
-                                                    set_selected_files.update(|f| {
-                                                        f.push("hop_dong_kinh_te_2026.pdf".to_string());
-                                                        f.push("anh_chung_tu_scan.png".to_string());
-                                                    });
+                                                    let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
+                                                }
+                                                on:keydown=move |ev: KeyboardEvent| {
+                                                    if ev.key() == "Enter" || ev.key() == " " {
+                                                        ev.prevent_default();
+                                                        let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
+                                                    }
+                                                }
+                                                on:dragover=move |ev| {
+                                                    let _ = ev;
+                                                }
+                                                on:drop=move |_| {
+                                                    let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
+                                                }
+                                            >
+                                                <div style="font-size: 32px; margin-bottom: 8px;">"⚡"</div>
+                                                <div class="dropzone-title">"KÉO THẢ TỆP VÀO ĐÂY HOẶC NHẤN ĐỂ MỞ HỘP THOẠI CHỌN TỆP"</div>
+                                                <div class="dropzone-sub">
+                                                    "(Tự động nhận diện: PDF, Word .docx, Excel .xlsx, CSV, Markdown, Ảnh và Văn bản thuần)"
+                                                </div>
+                                            </div>
+
+                                            {move || {
+                                                let current_files = selected_files.get();
+                                                if current_files.is_empty() {
+                                                    view! {
+                                                        <div class="matrix-empty-guide">
+                                                            <div class="matrix-guide-title">"📋 Ma trận Chuyển đổi Tệp Vạn năng (100% On-Device):"</div>
+                                                            <div class="matrix-routes-grid">
+                                                                <div class="matrix-route-item">
+                                                                    <span class="route-src">"📄 PDF"</span>
+                                                                    <span class="route-arrow">"➔"</span>
+                                                                    <span class="route-dest">"Excel (.xlsx), CSV, Markdown, OCR Text, Ảnh"</span>
+                                                                </div>
+                                                                <div class="matrix-route-item">
+                                                                    <span class="route-src">"📘 Word (.docx)"</span>
+                                                                    <span class="route-arrow">"➔"</span>
+                                                                    <span class="route-dest">"Markdown (.md), Văn bản thuần (.txt), PDF"</span>
+                                                                </div>
+                                                                <div class="matrix-route-item">
+                                                                    <span class="route-src">"📗 Excel (.xlsx)"</span>
+                                                                    <span class="route-arrow">"➔"</span>
+                                                                    <span class="route-dest">"Bảng CSV, JSON, SQL INSERT, Markdown"</span>
+                                                                </div>
+                                                                <div class="matrix-route-item">
+                                                                    <span class="route-src">"📊 CSV"</span>
+                                                                    <span class="route-arrow">"➔"</span>
+                                                                    <span class="route-dest">"Cấu trúc JSON, SQL INSERT, Excel .xlsx"</span>
+                                                                </div>
+                                                                <div class="matrix-route-item">
+                                                                    <span class="route-src">"📝 Markdown / TXT"</span>
+                                                                    <span class="route-arrow">"➔"</span>
+                                                                    <span class="route-dest">"PDF Chuẩn Công vụ VN (A4), Unicode NFC"</span>
+                                                                </div>
+                                                                <div class="matrix-route-item">
+                                                                    <span class="route-src">"🖼️ Hình ảnh"</span>
+                                                                    <span class="route-arrow">"➔"</span>
+                                                                    <span class="route-dest">"WebP, PNG không vỡ, JPEG, BMP"</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }.into_any()
+                                                } else {
+                                                    let cat = detect_primary_category(&current_files);
+                                                    let (cat_label, cat_class) = match cat {
+                                                        DetectedFormatCategory::Pdf => ("Tệp PDF", "detection-badge detection-badge-pdf"),
+                                                        DetectedFormatCategory::Docx => ("Tài liệu Word DOCX", "detection-badge detection-badge-docx"),
+                                                        DetectedFormatCategory::Xlsx => ("Bảng tính Excel XLSX", "detection-badge detection-badge-xlsx"),
+                                                        DetectedFormatCategory::Csv => ("Bảng dữ liệu CSV", "detection-badge detection-badge-csv"),
+                                                        DetectedFormatCategory::Markdown => ("Tài liệu Markdown", "detection-badge detection-badge-markdown"),
+                                                        DetectedFormatCategory::Image => ("Hình ảnh Đồ họa", "detection-badge detection-badge-image"),
+                                                        DetectedFormatCategory::Text => ("Văn bản thuần TXT", "detection-badge detection-badge-text"),
+                                                        _ => ("Tệp tin khác", "detection-badge"),
+                                                    };
+
+                                                    view! {
+                                                        <div class="morphing-canvas">
+                                                            <div class="file-detection-header">
+                                                                <div class="detection-tag">
+                                                                    <span>"Đã nạp " {current_files.len()} " tệp: "</span>
+                                                                    <span class=cat_class>{cat_label}</span>
+                                                                </div>
+                                                                <div style="display: flex; gap: 8px;">
+                                                                    <button
+                                                                        class="btn-secondary"
+                                                                        style="padding: 4px 10px; font-size: 11px;"
+                                                                        on:click=move |_| {
+                                                                            let _ = js_sys::eval("document.getElementById('universal-native-picker')?.click()");
+                                                                        }
+                                                                    >
+                                                                        "+ Thêm tệp"
+                                                                    </button>
+                                                                    <button
+                                                                        class="btn-danger"
+                                                                        style="padding: 4px 10px; font-size: 11px;"
+                                                                        on:click=move |_| set_selected_files.set(Vec::new())
+                                                                    >
+                                                                        "✕ Xóa danh sách"
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="file-chips-container">
+                                                                { current_files.clone().into_iter().enumerate().map(|(idx, name)| {
+                                                                    let n = name.clone();
+                                                                    view! {
+                                                                        <span class="file-chip">
+                                                                            <span>"📄"</span>
+                                                                            <span>{n.clone()}</span>
+                                                                            <button
+                                                                                class="file-chip-remove"
+                                                                                aria-label=format!("Xóa tệp {n}")
+                                                                                on:click=move |_| {
+                                                                                    set_selected_files.update(|list| {
+                                                                                        if idx < list.len() {
+                                                                                            list.remove(idx);
+                                                                                        }
+                                                                                    });
+                                                                                }
+                                                                            >
+                                                                                "✕"
+                                                                            </button>
+                                                                        </span>
+                                                                    }
+                                                                }).collect::<Vec<_>>() }
+                                                            </div>
+
+                                                            <div class="target-matrix-section">
+                                                                <div class="target-matrix-title">
+                                                                    <span>"🎯 Chọn định dạng đích chuyển đổi:"</span>
+                                                                </div>
+
+                                                                {move || {
+                                                                    let active_fmt = target_format.get();
+                                                                    match cat {
+                                                                        DetectedFormatCategory::Pdf => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "xlsx" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("xlsx".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📊 Bảng tính Excel"</span>
+                                                                                        <span class="target-card-ext">"XLSX"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Trích xuất toàn bộ bảng biểu số liệu thành trang tính Excel"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "csv" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("csv".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📄 Bảng dữ liệu CSV"</span>
+                                                                                        <span class="target-card-ext">"CSV"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Trích xuất bảng biểu thành tệp phân tách dấu phẩy UTF-8"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("md".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📝 Tài liệu Markdown"</span>
+                                                                                        <span class="target-card-ext">"MD"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Biên dịch nội dung văn bản sang Markdown cấu trúc"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "txt" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("txt".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🔍 Nhận diện OCR"</span>
+                                                                                        <span class="target-card-ext">"TXT"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Trích xuất văn bản tiếng Việt từ trang PDF scan"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "png" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("png".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🖼️ Ảnh cuộn dài"</span>
+                                                                                        <span class="target-card-ext">"PNG"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Kết xuất trang PDF thành ảnh dài chất lượng cao"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📑 Chuẩn hóa PDF"</span>
+                                                                                        <span class="target-card-ext">"PDF"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Tách trang và tái cấu trúc bảng XREF chuẩn"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+
+                                                                        DetectedFormatCategory::Docx => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("md".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📝 Tài liệu Markdown"</span>
+                                                                                        <span class="target-card-ext">"MD"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Trích xuất đề mục, đoạn văn từ OpenXML Word sang MD"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "txt" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("txt".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📄 Văn bản thuần"</span>
+                                                                                        <span class="target-card-ext">"TXT"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Trích xuất toàn bộ nội dung chữ UTF-8 không định dạng"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📑 Đóng gói PDF"</span>
+                                                                                        <span class="target-card-ext">"PDF"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Xuất định dạng PDF lưu trữ văn bản chuẩn"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+
+                                                                        DetectedFormatCategory::Xlsx => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "csv" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("csv".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📄 Bảng CSV UTF-8"</span>
+                                                                                        <span class="target-card-ext">"CSV"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Đọc sharedStrings và xuất bảng dữ liệu chuẩn UTF-8"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "json" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("json".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"💾 Cấu trúc JSON"</span>
+                                                                                        <span class="target-card-ext">"JSON"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Chuyển đổi các dòng bảng tính thành mảng đối tượng JSON"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "sql" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("sql".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🗄️ Kịch bản SQL"</span>
+                                                                                        <span class="target-card-ext">"SQL"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Tạo các câu lệnh INSERT INTO chuẩn để nạp database"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("md".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📝 Bảng Markdown"</span>
+                                                                                        <span class="target-card-ext">"MD"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Chuyển đổi bảng tính thành cú pháp Markdown Table"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+
+                                                                        DetectedFormatCategory::Csv => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "json" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("json".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"💾 Cấu trúc JSON"</span>
+                                                                                        <span class="target-card-ext">"JSON"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Chuyển bảng CSV thành danh sách bản ghi JSON"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "sql" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("sql".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🗄️ Kịch bản SQL"</span>
+                                                                                        <span class="target-card-ext">"SQL"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Sinh câu lệnh INSERT INTO bảng cơ sở dữ liệu"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("md".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📝 Bảng Markdown"</span>
+                                                                                        <span class="target-card-ext">"MD"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Tạo bảng Markdown chuẩn hóa căn chỉnh cột"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "xlsx" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("xlsx".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📊 Bảng tính Excel"</span>
+                                                                                        <span class="target-card-ext">"XLSX"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Đóng gói dữ liệu CSV thành bảng tính Excel hoàn chỉnh"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+
+                                                                        DetectedFormatCategory::Markdown | DetectedFormatCategory::Text => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📑 PDF Công Vụ VN"</span>
+                                                                                        <span class="target-card-ext">"PDF"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Biên dịch sang PDF A4 chuẩn văn bản hành chính Việt Nam"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "txt" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("txt".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🔤 Chuẩn hóa Unicode"</span>
+                                                                                        <span class="target-card-ext">"TXT"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Tự động phát hiện và chuyển đổi font TCVN3/VNI sang Unicode"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+
+                                                                        DetectedFormatCategory::Image => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "webp" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("webp".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🌐 WebP Siêu Nén"</span>
+                                                                                        <span class="target-card-ext">"WEBP"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Nén giảm 70% dung lượng mà không làm mờ hình ảnh"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "png" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("png".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"🖼️ PNG Không vỡ"</span>
+                                                                                        <span class="target-card-ext">"PNG"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Bảo toàn 100% chất lượng điểm ảnh cho sơ đồ/chứng từ"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "jpg" || active_fmt == "jpeg" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("jpg".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📷 JPEG Tiêu chuẩn"</span>
+                                                                                        <span class="target-card-ext">"JPG"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Định dạng ảnh tương thích hoàn hảo mọi thiết bị"</span>
+                                                                                </div>
+
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "bmp" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("bmp".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"💾 BMP Bitmap"</span>
+                                                                                        <span class="target-card-ext">"BMP"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Dữ liệu ảnh điểm gốc thuần túy không nén"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+
+                                                                        _ => view! {
+                                                                            <div class="target-cards-grid">
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "xlsx" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("xlsx".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📊 Bảng tính Excel"</span>
+                                                                                        <span class="target-card-ext">"XLSX"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Xuất dữ liệu sang bảng tính Excel"</span>
+                                                                                </div>
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "csv" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("csv".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📄 Bảng dữ liệu CSV"</span>
+                                                                                        <span class="target-card-ext">"CSV"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Xuất dữ liệu sang tệp CSV phân tách"</span>
+                                                                                </div>
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "md" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("md".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📝 Tài liệu Markdown"</span>
+                                                                                        <span class="target-card-ext">"MD"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Biên dịch văn bản sang Markdown"</span>
+                                                                                </div>
+                                                                                <div
+                                                                                    class=format!("target-card {}", if active_fmt == "pdf" { "active" } else { "" })
+                                                                                    on:click=move |_| set_target_format.set("pdf".to_string())
+                                                                                >
+                                                                                    <div class="target-card-header">
+                                                                                        <span class="target-card-name">"📑 Tài liệu PDF"</span>
+                                                                                        <span class="target-card-ext">"PDF"</span>
+                                                                                    </div>
+                                                                                    <span class="target-card-desc">"Xuất sang tệp tài liệu PDF"</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        }.into_any(),
+                                                                    }
+                                                                }}
+                                                            </div>
+                                                        </div>
+                                                    }.into_any()
+                                                }
+                                            }}
+                                        </div>
+                                    }.into_any(),
+
+                                    ToolArchetype::FileBatch => view! {
+                                        <div>
+                                            <input
+                                                type="file"
+                                                id="file-batch-picker"
+                                                multiple=true
+                                                style="display: none;"
+                                                on:change=move |_| {
+                                                    if let Ok(js_val) = js_sys::eval("Array.from(document.getElementById('file-batch-picker')?.files || []).map(f => f.name)") {
+                                                        if let Ok(names) = serde_wasm_bindgen::from_value::<Vec<String>>(js_val) {
+                                                            if !names.is_empty() {
+                                                                set_selected_files.update(|list| {
+                                                                    list.extend(names);
+                                                                });
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            />
+                                            <div
+                                                class="dropzone"
+                                                role="button"
+                                                tabindex="0"
+                                                aria-label="Kéo thả tệp hoặc nhấn Enter để chọn tệp từ máy tính"
+                                                on:click=move |_| {
+                                                    let _ = js_sys::eval("document.getElementById('file-batch-picker')?.click()");
+                                                }
+                                                on:keydown=move |ev: KeyboardEvent| {
+                                                    if ev.key() == "Enter" || ev.key() == " " {
+                                                        ev.prevent_default();
+                                                        let _ = js_sys::eval("document.getElementById('file-batch-picker')?.click()");
+                                                    }
+                                                }
+                                                on:dragover=move |ev| {
+                                                    let _ = ev;
+                                                }
+                                                on:drop=move |_| {
+                                                    let _ = js_sys::eval("document.getElementById('file-batch-picker')?.click()");
                                                 }
                                             >
                                                 <div style="font-size: 28px; margin-bottom: 6px;">"📥"</div>
@@ -1727,26 +2348,47 @@ pub fn App() -> impl IntoView {
                             }}
 
                             { move || {
-                                let res = output_result.get();
-                                if !res.is_empty() {
-                                    let res_val = res.clone();
+                                if let Some(err_val) = error_message.get() {
                                     view! {
-                                        <div class="result-box">
+                                        <div class="result-box result-box-error">
                                             <div class="result-header">
-                                                <span class="result-label">"KẾT QUẢ XỬ LÝ CHUẨN:"</span>
+                                                <span class="result-label" style="color: #F43F5E;">"⚠️ LỖI THỰC THI TÁC VỤ:"</span>
                                                 <button
                                                     class="copy-btn"
-                                                    title="Sao chép kết quả vào bộ nhớ tạm"
-                                                    on:click=move |_| copy_result_to_clipboard()
+                                                    style="background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #FDA4AF;"
+                                                    title="Đóng thông báo lỗi"
+                                                    on:click=move |_| set_error_message.set(None)
                                                 >
-                                                    "📋 Sao chép"
+                                                    "✕ Đóng"
                                                 </button>
                                             </div>
-                                            <div class="result-content selectable-text">{res_val}</div>
+                                            <div class="result-content selectable-text" style="color: #FDA4AF; white-space: pre-wrap;">
+                                                {err_val}
+                                            </div>
                                         </div>
                                     }.into_any()
                                 } else {
-                                    view! { <div></div> }.into_any()
+                                    let res = output_result.get();
+                                    if !res.is_empty() {
+                                        let res_val = res.clone();
+                                        view! {
+                                            <div class="result-box">
+                                                <div class="result-header">
+                                                    <span class="result-label">"KẾT QUẢ XỬ LÝ CHUẨN:"</span>
+                                                    <button
+                                                        class="copy-btn"
+                                                        title="Sao chép kết quả vào bộ nhớ tạm"
+                                                        on:click=move |_| copy_result_to_clipboard()
+                                                    >
+                                                        "📋 Sao chép"
+                                                    </button>
+                                                </div>
+                                                <div class="result-content selectable-text">{res_val}</div>
+                                            </div>
+                                        }.into_any()
+                                    } else {
+                                        view! { <div></div> }.into_any()
+                                    }
                                 }
                             }}
                         </section>
@@ -1777,7 +2419,7 @@ pub fn App() -> impl IntoView {
                             <div class="action-bar">
                                 {move || {
                                     let running = is_running.get();
-                                    let has_result = !output_result.get().is_empty();
+                                    let has_result = !output_result.get().is_empty() && error_message.get().is_none();
                                     let slug = current_slug.get();
                                     let domain = current_tool().domain;
                                     let archetype = get_tool_archetype(&slug, &domain);
@@ -1801,7 +2443,7 @@ pub fn App() -> impl IntoView {
                                         }.into_any()
                                     } else if has_result {
                                         match archetype {
-                                            ToolArchetype::FileBatch | ToolArchetype::SpreadsheetData => {
+                                            ToolArchetype::FileBatch | ToolArchetype::SpreadsheetData | ToolArchetype::UniversalConverter => {
                                                 view! {
                                                     <div class="action-bar-completed">
                                                         <button
@@ -1911,6 +2553,25 @@ pub fn App() -> impl IntoView {
                                         }
                                     } else {
                                         match archetype {
+                                            ToolArchetype::UniversalConverter => {
+                                                view! {
+                                                    <div class="action-bar-idle">
+                                                        <button
+                                                            class="btn-primary"
+                                                            on:click=move |_| run_task()
+                                                        >
+                                                            <span>"⚡ BẮT ĐẦU CHUYỂN ĐỔI (Ctrl + Enter)"</span>
+                                                        </button>
+                                                        <button
+                                                            class="btn-secondary"
+                                                            title="Mở thư mục lưu tệp kết quả (Ctrl + O)"
+                                                            on:click=move |_| open_output_dir()
+                                                        >
+                                                            <span>"📂 Thư mục xuất (Ctrl + O)"</span>
+                                                        </button>
+                                                    </div>
+                                                }.into_any()
+                                            }
                                             ToolArchetype::FileBatch => {
                                                 view! {
                                                     <div class="action-bar-idle">
