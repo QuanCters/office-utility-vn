@@ -6,7 +6,7 @@ use crate::micro_apps::pdf_studio::toolbar::{pdf_studio_tool_icon, PdfStudioTool
 use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
-    MarkdownToStyledPdfView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
+    MarkdownToStyledPdfView, PdfArchiveLinearizeView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
     PdfCropMarginView, PdfFlattenFormsView, PdfFormManagerView, PdfGrayscalePrintView, PdfMergeSplitView,
     PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfProtectSignView, PdfRedactionView, PdfRepairCorruptView,
     PdfTableExtractorView, PdfToLongImageView, PdfToMarkdownView, PdfVisualDiffView,
@@ -200,6 +200,10 @@ pub fn PdfStudioLayout(
 
                                             "pdf-redaction" => view! {
                                                 <PdfRedactionView />
+                                            }.into_any(),
+
+                                            "pdf-archive-linearize" => view! {
+                                                <PdfArchiveLinearizeView />
                                             }.into_any(),
 
                                             "pdf-repair-corrupt" => view! {

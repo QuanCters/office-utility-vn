@@ -406,6 +406,18 @@ impl ToolRegistry {
             secondary_apps: &[],
             tags: &["pdf", "redact", "bao-mat", "xoa-du-lieu", "che-den"],
         },
+        ToolRegistration {
+            tool: ToolItem {
+                slug: "pdf-archive-linearize",
+                name: "Chuẩn hóa Lưu trữ PDF/A & Fast Web View",
+                domain: "doc-suite",
+                description: "Chuyển đổi luồng siêu dữ liệu sang chuẩn quốc tế PDF/A-1b và tuyến tính hóa tải nhanh trên web.",
+                is_pinned: false,
+            },
+            primary_app: MicroAppId::PdfStudio,
+            secondary_apps: &[],
+            tags: &["pdf", "pdfa", "archive", "linearize", "fast-web-view"],
+        },
 
         // ==========================================
         // MEDIA STUDIO (9 công cụ)

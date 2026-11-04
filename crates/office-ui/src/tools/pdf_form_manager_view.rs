@@ -3,7 +3,7 @@ use leptos::prelude::*;
 #[component]
 pub fn PdfFormManagerView() -> impl IntoView {
     let (action, set_action) = signal("inspect".to_string());
-    let (export_fmt, set_export_fmt) = signal("json".to_string());
+    let (_export_fmt, set_export_fmt) = signal("json".to_string());
     let (fill_json, set_fill_json) = signal("{\n  \"HoVaTen\": \"Nguyen Van A\",\n  \"MaSoThue\": \"0101234567\"\n}".to_string());
 
     view! {

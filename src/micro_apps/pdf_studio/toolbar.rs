@@ -18,6 +18,7 @@ pub fn pdf_studio_tool_icon(slug: &str) -> &'static str {
         "pdf-flatten-forms" => "📋",
         "pdf-form-manager" => "📝",
         "pdf-redaction" => "⬛",
+        "pdf-archive-linearize" => "🏛️",
         "pdf-repair-corrupt" => "🩹",
 
         // Định dạng & Trang

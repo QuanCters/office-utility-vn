@@ -60,6 +60,7 @@ impl PdfCategory {
                 "pdf-flatten-forms",
                 "pdf-form-manager",
                 "pdf-redaction",
+                "pdf-archive-linearize",
                 "pdf-repair-corrupt",
             ],
             PdfCategory::FormatPage => &[
