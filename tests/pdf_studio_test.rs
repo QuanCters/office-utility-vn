@@ -13,6 +13,10 @@ const EXPECTED_PDF_STUDIO_SLUGS: &[&str] = &[
     "pdf-page-number-header",
     "pdf-metadata-scrubber",
     "pdf-flatten-forms",
+    "pdf-form-manager",
+    "pdf-redaction",
+    "pdf-archive-linearize",
+    "pdf-pki-sign",
     "pdf-crop-margin",
     "pdf-booklet-imposition",
     "pdf-visual-diff",
@@ -169,10 +173,10 @@ fn test_pdf_studio_clear_files() {
 }
 
 #[test]
-fn test_pdf_studio_18_tools_exact_list() {
-    // 1. Số lượng công cụ chính xác 18
-    assert_eq!(PDF_STUDIO_TOOLS.len(), 18);
-    assert_eq!(EXPECTED_PDF_STUDIO_SLUGS.len(), 18);
+fn test_pdf_studio_all_tools_exact_list() {
+    // 1. Số lượng công cụ chính xác 22
+    assert_eq!(PDF_STUDIO_TOOLS.len(), 22);
+    assert_eq!(EXPECTED_PDF_STUDIO_SLUGS.len(), 22);
 
     for slug in EXPECTED_PDF_STUDIO_SLUGS {
         // 2. Mọi slug phải tồn tại trong PDF_STUDIO_TOOLS
@@ -216,8 +220,8 @@ fn test_pdf_studio_category_grouping() {
         }
     }
 
-    // 2. Tổng số công cụ trên 4 danh mục phải đúng bằng 18
-    assert_eq!(total_slugs, 18);
+    // 2. Tổng số công cụ trên 4 danh mục phải đúng bằng 22
+    assert_eq!(total_slugs, 22);
 
     // 3. Kiểm tra cụ thể từng nhóm danh mục theo thiết kế
     assert_eq!(
@@ -238,6 +242,10 @@ fn test_pdf_studio_category_grouping() {
             "pdf-compress",
             "pdf-metadata-scrubber",
             "pdf-flatten-forms",
+            "pdf-form-manager",
+            "pdf-redaction",
+            "pdf-archive-linearize",
+            "pdf-pki-sign",
             "pdf-repair-corrupt",
         ]
     );

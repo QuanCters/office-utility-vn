@@ -418,6 +418,18 @@ impl ToolRegistry {
             secondary_apps: &[],
             tags: &["pdf", "pdfa", "archive", "linearize", "fast-web-view"],
         },
+        ToolRegistration {
+            tool: ToolItem {
+                slug: "pdf-pki-sign",
+                name: "Chữ ký số PKI & Xác thực Toàn vẹn",
+                domain: "doc-suite",
+                description: "Gắn chữ ký số chuẩn PKCS#7 với /ByteRange, kiểm tra toàn vẹn và phát hiện tài liệu bị giả mạo.",
+                is_pinned: false,
+            },
+            primary_app: MicroAppId::PdfStudio,
+            secondary_apps: &[],
+            tags: &["pdf", "pki", "chu-ky-so", "xac-thuc", "toan-veng"],
+        },
 
         // ==========================================
         // MEDIA STUDIO (9 công cụ)

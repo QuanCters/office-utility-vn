@@ -19,6 +19,7 @@ pub fn pdf_studio_tool_icon(slug: &str) -> &'static str {
         "pdf-form-manager" => "📝",
         "pdf-redaction" => "⬛",
         "pdf-archive-linearize" => "🏛️",
+        "pdf-pki-sign" => "🔏",
         "pdf-repair-corrupt" => "🩹",
 
         // Định dạng & Trang

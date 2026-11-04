@@ -81,6 +81,10 @@ pub fn resolve_tool(slug: &str) -> Option<Box<dyn OfficeTool>> {
         "pdf-repair-corrupt" => Some(Box::new(office_engine::doc_suite::PdfRepairCorruptTool)),
         "markdown-to-styled-pdf" => Some(Box::new(office_engine::doc_suite::MarkdownToPdfTool)),
         "pdf-table-extractor" => Some(Box::new(office_engine::doc_suite::PdfTableExtractorTool)),
+        "pdf-form-manager" => Some(Box::new(office_engine::doc_suite::PdfFormManagerTool)),
+        "pdf-redaction" => Some(Box::new(office_engine::doc_suite::PdfRedactionTool)),
+        "pdf-archive-linearize" => Some(Box::new(office_engine::doc_suite::PdfArchiveLinearizeTool)),
+        "pdf-pki-sign" => Some(Box::new(office_engine::doc_suite::PdfPkiSignTool)),
 
         // Subsystem 2: Media Studio (9 tools)
         "image-batch" => Some(Box::new(office_engine::media_studio::ImageBatchTool)),

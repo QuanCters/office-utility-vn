@@ -55,7 +55,7 @@ fn test_remove_vietnamese_diacritics() {
 fn test_filter_tools_empty_query() {
     let all = filter_tools(ALL_TOOLS, "");
     assert_eq!(all.len(), ALL_TOOLS.len());
-    assert_eq!(all.len(), 51);
+    assert_eq!(all.len(), 55);
 
     let whitespace = filter_tools(ALL_TOOLS, "   ");
     assert_eq!(whitespace.len(), ALL_TOOLS.len());
@@ -113,7 +113,7 @@ fn test_filter_tools_by_slug_and_domain() {
 }
 
 #[test]
-fn test_all_51_tools_have_valid_micro_app_mapping() {
+fn test_all_tools_have_valid_micro_app_mapping() {
     // Đảm bảo mọi công cụ trong ALL_TOOLS đều được ánh xạ về một MicroAppId hợp lệ
     for tool in ALL_TOOLS.iter() {
         let app_opt = tool_slug_to_micro_app(tool.slug);
@@ -138,7 +138,7 @@ fn test_micro_app_cards_metadata_consistency() {
     let pdf_studio = MicroAppId::PdfStudio.metadata();
     assert_eq!(pdf_studio.name, "PDF Studio");
     assert_eq!(pdf_studio.icon, "📄");
-    assert_eq!(pdf_studio.tool_count, 18);
+    assert_eq!(pdf_studio.tool_count, 22);
 
     let media_studio = MicroAppId::MediaStudio.metadata();
     assert_eq!(media_studio.name, "Media Studio");
@@ -151,7 +151,7 @@ fn test_micro_app_cards_metadata_consistency() {
     assert_eq!(data_lab.tool_count, 13);
 
     let total_tools: usize = all_apps.iter().map(|a| a.metadata().tool_count).sum();
-    assert_eq!(total_tools, 51, "Sum of micro-app tools must equal 51");
+    assert_eq!(total_tools, 55, "Sum of micro-app tools must equal 55");
 }
 
 #[test]

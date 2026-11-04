@@ -8,7 +8,7 @@ use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc
 use crate::tools::{
     MarkdownToStyledPdfView, PdfArchiveLinearizeView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
     PdfCropMarginView, PdfFlattenFormsView, PdfFormManagerView, PdfGrayscalePrintView, PdfMergeSplitView,
-    PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfProtectSignView, PdfRedactionView, PdfRepairCorruptView,
+    PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfPkiSignView, PdfProtectSignView, PdfRedactionView, PdfRepairCorruptView,
     PdfTableExtractorView, PdfToLongImageView, PdfToMarkdownView, PdfVisualDiffView,
     PdfWatermarkStampView, VietnameseOcrView,
 };
@@ -204,6 +204,10 @@ pub fn PdfStudioLayout(
 
                                             "pdf-archive-linearize" => view! {
                                                 <PdfArchiveLinearizeView />
+                                            }.into_any(),
+
+                                            "pdf-pki-sign" => view! {
+                                                <PdfPkiSignView />
                                             }.into_any(),
 
                                             "pdf-repair-corrupt" => view! {
