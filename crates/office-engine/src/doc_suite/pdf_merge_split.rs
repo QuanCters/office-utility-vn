@@ -28,6 +28,10 @@ pub struct PdfMergeSplitOptions {
     pub page_ranges: Option<String>,
     #[serde(default)]
     pub rotation_deg: Option<i32>,
+    #[serde(default)]
+    pub max_size_mb: Option<f64>,
+    #[serde(default)]
+    pub insert_blank_pages: Option<Vec<usize>>,
 }
 
 pub struct PdfMergeSplitTool;
@@ -236,6 +240,80 @@ fn render_pdf(header: &str, objects: &[PdfObject], root_id: usize) -> Vec<u8> {
     out
 }
 
+fn render_selected_pages(
+    pdf: &MiniPdf,
+    selected_pages: &[usize],
+    insert_blanks: &Option<Vec<usize>>,
+) -> Vec<u8> {
+    let page_indices = pdf.get_page_indices();
+    let total_pages = page_indices.len();
+    let mut split_page_objects = Vec::new();
+    let mut split_refs = Vec::new();
+    let mut new_id_counter = 10;
+
+    for &page_num in selected_pages {
+        if page_num > 0 && page_num <= total_pages {
+            let original_idx = page_indices[page_num - 1];
+            if original_idx < pdf.objects.len() {
+                let mut original_page = pdf.objects[original_idx].clone();
+                let this_id = new_id_counter;
+                new_id_counter += 1;
+                split_refs.push(this_id);
+
+                original_page.id = this_id;
+                if let Some(parent_pos) = original_page.content.find("/Parent") {
+                    let end_of_parent = original_page.content[parent_pos..]
+                        .find('R')
+                        .map(|pos| parent_pos + pos + 1)
+                        .unwrap_or(parent_pos + 15);
+                    original_page.content.replace_range(parent_pos..end_of_parent, "/Parent 2 0 R");
+                } else {
+                    original_page.content.push_str(" /Parent 2 0 R");
+                }
+
+                split_page_objects.push(original_page);
+
+                if let Some(blanks) = insert_blanks
+                    && blanks.contains(&page_num) {
+                        let blank_id = new_id_counter;
+                        new_id_counter += 1;
+                        split_refs.push(blank_id);
+                        split_page_objects.push(PdfObject {
+                            id: blank_id,
+                            generation: 0,
+                            content: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << >> >>".to_string(),
+                        });
+                    }
+            }
+        }
+    }
+
+    let kids_str = split_refs
+        .iter()
+        .map(|id| format!("{} 0 R", id))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let catalog = PdfObject {
+        id: 1,
+        generation: 0,
+        content: "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+    };
+    let pages_root = PdfObject {
+        id: 2,
+        generation: 0,
+        content: format!(
+            "<< /Type /Pages /Kids [{}] /Count {} >>",
+            kids_str,
+            split_refs.len()
+        ),
+    };
+
+    let mut all_objects = vec![catalog, pages_root];
+    all_objects.extend(split_page_objects);
+    render_pdf(&pdf.header, &all_objects, 1)
+}
+
 impl OfficeTool for PdfMergeSplitTool {
     fn slug(&self) -> &'static str {
         "pdf-merge-split"
@@ -369,6 +447,19 @@ impl OfficeTool for PdfMergeSplitTool {
                             generation: 0,
                             content: page_content,
                         });
+
+                        let current_total_pages = page_refs.len();
+                        if let Some(ref blanks) = options.insert_blank_pages
+                            && blanks.contains(&current_total_pages) {
+                                let blank_id = max_id;
+                                max_id += 1;
+                                page_refs.push(blank_id);
+                                combined_objects.push(PdfObject {
+                                    id: blank_id,
+                                    generation: 0,
+                                    content: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << >> >>".to_string(),
+                                });
+                            }
                     }
                 }
 
@@ -419,67 +510,51 @@ impl OfficeTool for PdfMergeSplitTool {
                 let page_indices = first_pdf.get_page_indices();
                 let total_pages = page_indices.len();
 
-                let range_str = options.page_ranges.as_deref().unwrap_or("1");
-                let selected_pages = parse_page_ranges(range_str, total_pages)?;
+                let selected_pages: Vec<usize> = if let Some(ref range_str) = options.page_ranges {
+                    parse_page_ranges(range_str, total_pages)?.into_iter().collect()
+                } else {
+                    (1..=total_pages).collect()
+                };
 
-                let mut split_page_objects = Vec::new();
-                let mut split_refs = Vec::new();
-                let mut new_id_counter = 10;
+                if let Some(max_mb) = options.max_size_mb
+                    && max_mb > 0.0 {
+                        // Chia nhỏ theo ngưỡng dung lượng byte (max_size_mb)
+                        let max_bytes = (max_mb * 1024.0 * 1024.0).max(100.0) as usize;
+                        let mut current_chunk = Vec::new();
+                        let mut chunk_idx = 1;
 
-                for &page_num in &selected_pages {
-                    if page_num > 0 && page_num <= total_pages {
-                        let original_idx = page_indices[page_num - 1];
-                        let mut original_page = first_pdf.objects[original_idx].clone();
-                        let this_id = new_id_counter;
-                        new_id_counter += 1;
-                        split_refs.push(this_id);
-
-                        original_page.id = this_id;
-                        if let Some(parent_pos) = original_page.content.find("/Parent") {
-                            let end_of_parent = original_page.content[parent_pos..]
-                                .find('R')
-                                .map(|pos| parent_pos + pos + 1)
-                                .unwrap_or(parent_pos + 15);
-                            original_page.content.replace_range(parent_pos..end_of_parent, "/Parent 2 0 R");
-                        } else {
-                            original_page.content.push_str(" /Parent 2 0 R");
+                        for &p in &selected_pages {
+                            current_chunk.push(p);
+                            let rendered = render_selected_pages(first_pdf, &current_chunk, &options.insert_blank_pages);
+                            if rendered.len() > max_bytes && current_chunk.len() > 1 {
+                                current_chunk.pop();
+                                let chunk_bytes = render_selected_pages(first_pdf, &current_chunk, &options.insert_blank_pages);
+                                let out_path = output_dir.join(format!("{}_part{}.pdf", request.task_id, chunk_idx));
+                                fs::write(&out_path, chunk_bytes).map_err(|e| CommandError::IoError {
+                                    details: format!("Không thể ghi tệp PDF tách theo dung lượng: {e}"),
+                                })?;
+                                output_paths.push(out_path.to_string_lossy().to_string());
+                                chunk_idx += 1;
+                                current_chunk = vec![p];
+                            }
                         }
 
-                        split_page_objects.push(original_page);
+                        if !current_chunk.is_empty() {
+                            let chunk_bytes = render_selected_pages(first_pdf, &current_chunk, &options.insert_blank_pages);
+                            let out_path = output_dir.join(format!("{}_part{}.pdf", request.task_id, chunk_idx));
+                            fs::write(&out_path, chunk_bytes).map_err(|e| CommandError::IoError {
+                                details: format!("Không thể ghi tệp PDF tách theo dung lượng: {e}"),
+                            })?;
+                            output_paths.push(out_path.to_string_lossy().to_string());
+                        }
+                    } else {
+                        let split_bytes = render_selected_pages(first_pdf, &selected_pages, &options.insert_blank_pages);
+                        let out_path = output_dir.join(format!("{}_split.pdf", request.task_id));
+                        fs::write(&out_path, split_bytes).map_err(|e| CommandError::IoError {
+                            details: format!("Không thể ghi tệp PDF tách: {e}"),
+                        })?;
+                        output_paths.push(out_path.to_string_lossy().to_string());
                     }
-                }
-
-                let kids_str = split_refs
-                    .iter()
-                    .map(|id| format!("{} 0 R", id))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-
-                let catalog = PdfObject {
-                    id: 1,
-                    generation: 0,
-                    content: "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-                };
-                let pages_root = PdfObject {
-                    id: 2,
-                    generation: 0,
-                    content: format!(
-                        "<< /Type /Pages /Kids [{}] /Count {} >>",
-                        kids_str,
-                        split_refs.len()
-                    ),
-                };
-
-                let mut all_objects = vec![catalog, pages_root];
-                all_objects.extend(split_page_objects);
-
-                let split_bytes = render_pdf(&first_pdf.header, &all_objects, 1);
-                let out_path = output_dir.join(format!("{}_split.pdf", request.task_id));
-                fs::write(&out_path, split_bytes).map_err(|e| CommandError::IoError {
-                    details: format!("Không thể ghi tệp PDF tách: {e}"),
-                })?;
-
-                output_paths.push(out_path.to_string_lossy().to_string());
             }
 
             MergeSplitMode::Rotate => {
@@ -713,5 +788,77 @@ mod tests {
         assert!(invalid.is_err());
         let zero = parse_page_ranges("0", 5);
         assert!(zero.is_err());
+    }
+
+    #[test]
+    fn test_backward_compatible_options_deserialization() {
+        // Cấu hình cũ từ tool_presets hoặc workflow không có max_size_mb hay insert_blank_pages
+        let old_json = json!({
+            "mode": "split",
+            "page_ranges": "1-3"
+        });
+        let opts: PdfMergeSplitOptions = serde_json::from_value(old_json).expect("deserialize old options");
+        assert_eq!(opts.mode, MergeSplitMode::Split);
+        assert_eq!(opts.page_ranges, Some("1-3".to_string()));
+        assert_eq!(opts.max_size_mb, None);
+        assert_eq!(opts.insert_blank_pages, None);
+    }
+
+    #[test]
+    fn test_split_by_max_size_mb() {
+        let tool = PdfMergeSplitTool;
+        let tmp = std::env::temp_dir().join("test_pdf_split_size");
+        let _ = fs::create_dir_all(&tmp);
+
+        let pdf_path = tmp.join("multi_10p.pdf");
+        fs::write(&pdf_path, create_dummy_pdf(6)).expect("write multi_10p");
+
+        let req = DispatchTaskRequest {
+            task_id: "task-split-size".to_string(),
+            tool_slug: "pdf-merge-split".to_string(),
+            input_paths: vec![pdf_path.to_string_lossy().to_string()],
+            output_directory: Some(tmp.to_string_lossy().to_string()),
+            options: json!({
+                "mode": "split",
+                "max_size_mb": 0.0005 // Rất nhỏ (~500 bytes) để buộc chia thành nhiều part
+            }),
+        };
+
+        let cancel = AtomicBool::new(false);
+        let res = tool.execute(&req, &cancel, None).expect("split by size should succeed");
+        assert!(res.output_paths.len() > 1, "Kỳ vọng chia thành nhiều phần, thực tế: {}", res.output_paths.len());
+        for path in &res.output_paths {
+            let bytes = fs::read(path).expect("read chunk");
+            assert!(bytes.starts_with(b"%PDF-"));
+        }
+    }
+
+    #[test]
+    fn test_insert_blank_pages() {
+        let tool = PdfMergeSplitTool;
+        let tmp = std::env::temp_dir().join("test_pdf_insert_blank");
+        let _ = fs::create_dir_all(&tmp);
+
+        let pdf_path = tmp.join("doc_3p.pdf");
+        fs::write(&pdf_path, create_dummy_pdf(3)).expect("write doc_3p");
+
+        let req = DispatchTaskRequest {
+            task_id: "task-insert-blank".to_string(),
+            tool_slug: "pdf-merge-split".to_string(),
+            input_paths: vec![pdf_path.to_string_lossy().to_string()],
+            output_directory: Some(tmp.to_string_lossy().to_string()),
+            options: json!({
+                "mode": "split",
+                "page_ranges": "1-3",
+                "insert_blank_pages": [1, 2] // Chèn 2 trang trắng sau trang 1 và 2 -> tổng cộng 5 trang
+            }),
+        };
+
+        let cancel = AtomicBool::new(false);
+        let res = tool.execute(&req, &cancel, None).expect("split with blanks should succeed");
+        assert_eq!(res.output_paths.len(), 1);
+        let bytes = fs::read(&res.output_paths[0]).expect("read output");
+        let parsed = MiniPdf::parse(&bytes).expect("parse output");
+        assert_eq!(parsed.get_page_indices().len(), 5);
     }
 }

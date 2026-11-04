@@ -5,6 +5,8 @@ pub fn PdfMergeSplitView() -> impl IntoView {
     let (mode, set_mode) = signal("merge".to_string());
     let (page_ranges, set_page_ranges) = signal("1-3, 5".to_string());
     let (_rotation_deg, set_rotation_deg) = signal("90".to_string());
+    let (max_size_mb, set_max_size_mb) = signal("".to_string());
+    let (blank_pages, set_blank_pages) = signal("".to_string());
     let (_is_composing, set_is_composing) = signal(false);
 
     view! {
@@ -55,6 +57,26 @@ pub fn PdfMergeSplitView() -> impl IntoView {
                                 on:compositionend=move |_| set_is_composing.set(false)
                                 on:input=move |ev| set_page_ranges.set(event_target_value(&ev))
                                 placeholder="1-3, 5"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">"Tách theo dung lượng tối đa mỗi phần (MB, tùy chọn):"</label>
+                            <input
+                                class="form-input"
+                                type="text"
+                                prop:value=max_size_mb
+                                on:input=move |ev| set_max_size_mb.set(event_target_value(&ev))
+                                placeholder="VD: 5 (chia mỗi file tối đa 5MB)"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">"Chèn trang trắng sau các trang (VD: 1, 3):"</label>
+                            <input
+                                class="form-input"
+                                type="text"
+                                prop:value=blank_pages
+                                on:input=move |ev| set_blank_pages.set(event_target_value(&ev))
+                                placeholder="VD: 1, 3"
                             />
                         </div>
                     }.into_any()
