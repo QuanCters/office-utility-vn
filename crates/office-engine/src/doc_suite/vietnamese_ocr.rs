@@ -24,6 +24,8 @@ pub enum OcrOutputFormat {
     Txt,
     Docx,
     Md,
+    #[serde(rename = "searchable_pdf", alias = "pdf")]
+    SearchablePdf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,6 +212,46 @@ fn create_minimal_docx(text: &str) -> Vec<u8> {
     out
 }
 
+/// Sinh tài liệu PDF chứa lớp văn bản ẩn (invisible text layer) có thể tìm kiếm và sao chép
+fn create_searchable_pdf(recognized_text: &str) -> Vec<u8> {
+    let mut stream_content = String::from("q\n3 Tr\nBT\n/F1 12 Tf\n50 800 Td\n14 TL\n");
+    for line in recognized_text.lines() {
+        let clean = line.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)");
+        stream_content.push_str(&format!("({}) ' \n", clean));
+    }
+    stream_content.push_str("ET\nQ\n");
+
+    let stream_len = stream_content.len();
+    let content_obj = format!("4 0 obj\n<< /Length {} >>\nstream\n{}endstream\nendobj\n", stream_len, stream_content);
+    let font_obj = "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
+    let page_obj = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n";
+    let pages_obj = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
+    let catalog_obj = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+
+    let mut pdf = Vec::new();
+    pdf.extend_from_slice(b"%PDF-1.4\n");
+    let offsets = [
+        pdf.len(),
+        pdf.len() + catalog_obj.len(),
+        pdf.len() + catalog_obj.len() + pages_obj.len(),
+        pdf.len() + catalog_obj.len() + pages_obj.len() + page_obj.len(),
+        pdf.len() + catalog_obj.len() + pages_obj.len() + page_obj.len() + content_obj.len(),
+    ];
+    pdf.extend_from_slice(catalog_obj.as_bytes());
+    pdf.extend_from_slice(pages_obj.as_bytes());
+    pdf.extend_from_slice(page_obj.as_bytes());
+    pdf.extend_from_slice(content_obj.as_bytes());
+    pdf.extend_from_slice(font_obj.as_bytes());
+
+    let startxref = pdf.len();
+    pdf.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+    for &off in &offsets {
+        pdf.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", startxref).as_bytes());
+    pdf
+}
+
 impl OfficeTool for VietnameseOcrTool {
     fn slug(&self) -> &'static str {
         "vietnamese-ocr"
@@ -342,6 +384,14 @@ impl OfficeTool for VietnameseOcrTool {
                     let docx_bytes = create_minimal_docx(&recognized_text);
                     fs::write(&p, docx_bytes).map_err(|e| CommandError::IoError {
                         details: format!("Không thể ghi tệp DOCX: {e}"),
+                    })?;
+                    p
+                }
+                OcrOutputFormat::SearchablePdf => {
+                    let p = output_dir.join(format!("{stem}_searchable.pdf"));
+                    let pdf_bytes = create_searchable_pdf(&recognized_text);
+                    fs::write(&p, pdf_bytes).map_err(|e| CommandError::IoError {
+                        details: format!("Không thể ghi tệp Searchable PDF: {e}"),
                     })?;
                     p
                 }
@@ -542,5 +592,36 @@ xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n3
         let tool = VietnameseOcrTool;
         assert_eq!(tool.slug(), "vietnamese-ocr");
         assert_eq!(tool.name(), "OCR Nhận dạng Ký tự Tiếng Việt");
+    }
+
+    #[test]
+    fn test_ocr_output_format_searchable_pdf() {
+        let tool = VietnameseOcrTool;
+        let tmp = std::env::temp_dir().join("test_ocr_searchable_pdf");
+        let _ = fs::create_dir_all(&tmp);
+
+        let pdf_path = tmp.join("scan_doc.pdf");
+        fs::write(&pdf_path, create_test_pdf_with_vietnamese_text()).expect("write scan_doc");
+
+        let req = DispatchTaskRequest {
+            task_id: "task-searchable-pdf".to_string(),
+            tool_slug: "vietnamese-ocr".to_string(),
+            input_paths: vec![pdf_path.to_string_lossy().to_string()],
+            output_directory: Some(tmp.to_string_lossy().to_string()),
+            options: json!({
+                "output_format": "searchable_pdf"
+            }),
+        };
+
+        let cancel = AtomicBool::new(false);
+        let res = tool.execute(&req, &cancel, None).expect("ocr searchable pdf succeeds");
+        assert_eq!(res.output_paths.len(), 1);
+        assert!(res.output_paths[0].ends_with(".pdf"));
+
+        let bytes = fs::read(&res.output_paths[0]).expect("read generated pdf");
+        assert!(bytes.starts_with(b"%PDF-"));
+        let pdf_str = String::from_utf8_lossy(&bytes);
+        assert!(pdf_str.contains("3 Tr"), "Kỳ vọng chứa Text Rendering Mode 3 (invisible text)");
+        assert!(pdf_str.contains("/Font"), "Kỳ vọng chứa font dictionary");
     }
 }

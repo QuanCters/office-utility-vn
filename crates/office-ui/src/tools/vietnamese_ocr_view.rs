@@ -40,6 +40,7 @@ pub fn VietnameseOcrView() -> impl IntoView {
                     <option value="txt">".txt (Văn bản thuần UTF-8)"</option>
                     <option value="docx">".docx (Microsoft Word)"</option>
                     <option value="md">".md (Markdown)"</option>
+                    <option value="searchable_pdf">".pdf (Searchable PDF - tìm kiếm & sao chép)"</option>
                 </select>
             </div>
         </div>
