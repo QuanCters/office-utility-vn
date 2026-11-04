@@ -1,4 +1,5 @@
 pub mod base64_file_codec;
+pub mod data_profiler;
 pub mod data_structure_converter;
 pub mod diff_checker_text_sheets;
 pub mod encoding_mojibake_fixer;
@@ -8,7 +9,9 @@ pub mod excel_reader;
 pub mod excel_sheet_unlocker;
 pub mod excel_split_by_column;
 pub mod excel_visual_joiner;
+pub mod fuzzy_clustering;
 pub mod list_set_operations;
+pub mod recipe_history;
 pub mod sql_formatter_linter;
 pub mod text_pii_anonymizer;
 pub mod vietnamese_font_converter;
@@ -16,6 +19,10 @@ pub mod vietnamese_font_converter;
 pub use base64_file_codec::{
     stream_decode_base64, stream_encode_to_base64, Base64CodecOptions, Base64FileCodecTool,
     CodecMode,
+};
+pub use data_profiler::{
+    infer_column_type, parse_date_flexible, profile_tabular_rows, ColumnProfile, ColumnType,
+    DataProfileReport, DataProfilerOptions, DataProfilerTool, ValueFrequency,
 };
 
 pub use data_structure_converter::{
@@ -43,8 +50,18 @@ pub use excel_split_by_column::{
 pub use excel_visual_joiner::{
     perform_hash_join, ExcelJoinOptions, ExcelVisualJoinerTool, JoinType,
 };
+pub use fuzzy_clustering::{
+    apply_cluster_merges, cluster_column_values, compute_fingerprint, levenshtein_distance,
+    remove_vietnamese_diacritics, ClusterGroup, ClusteringMethod, FuzzyClusterOptions,
+    FuzzyClusterReport, FuzzyClusteringTool,
+};
 pub use list_set_operations::{
     compute_set_operation, ListSetOperationsTool, ListSetOptions, SetOperation,
+};
+pub use recipe_history::{
+    apply_recipe, apply_recipe_with_result, export_recipe_to_json, import_recipe_from_json,
+    DataRecipe, RecipeAction, RecipeExecutionResult, RecipeHistoryManager, RecipeReplayTool,
+    RecipeStep,
 };
 pub use sql_formatter_linter::{
     format_sql_query, lint_sql_syntax, SqlDialect, SqlFormatterLinterTool, SqlFormatterOptions,

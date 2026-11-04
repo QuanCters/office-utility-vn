@@ -1,16 +1,17 @@
 use leptos::prelude::*;
 use crate::launcher::CommandPalette;
 use crate::micro_apps::data_lab::file_list_panel::DataLabFileListPanel;
-use crate::micro_apps::data_lab::state::{category_for_tool, DataLabState};
+use crate::micro_apps::data_lab::split_pane_view::{ConverterMode, SplitPaneConverterView};
+use crate::micro_apps::data_lab::spreadsheet_grid_view::SpreadsheetGridFacetView;
+use crate::micro_apps::data_lab::state::{category_for_tool, DataLabCategory, DataLabState};
 use crate::micro_apps::data_lab::toolbar::{data_lab_tool_icon, DataLabToolbar};
+use crate::micro_apps::data_lab::visual_canvas_workflow::VisualCanvasWorkflowView;
 use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
-    Base64FileCodecView, DataStructureConverterView, DiffCheckerTextSheetsView,
     DocxTemplateMailmergeView, ExcelCleanerNormalizerView, ExcelMultiMergerView,
     ExcelSheetUnlockerView, ExcelSplitByColumnView, ExcelVisualJoinerView,
-    ListSetOperationsView, SqlFormatterLinterView, TextPiiAnonymizerView,
-    UniversalFileConverterHubView,
+    ListSetOperationsView, TextPiiAnonymizerView, UniversalFileConverterHubView,
 };
 
 /// Bố cục tổng thể của Micro-App Data Lab (Header + Tab Toolbar + File List Panel + Workspace).
@@ -23,6 +24,8 @@ pub fn DataLabLayout(
     provide_context(state);
 
     let palette_open = RwSignal::new(false);
+    let workflow_canvas_mode = RwSignal::new(true);
+    let grid_view_mode = RwSignal::new(true);
 
     // Callbacks xử lý thực thi chuỗi quy trình Workflow Macro DAG qua IPC
     let on_run_workflow = Callback::new(move |dag: crate::shared_ui::workflow_runner::WorkflowDag| {
@@ -73,17 +76,46 @@ pub fn DataLabLayout(
                 <main class="data-lab-center-workspace">
                     {move || {
                         if state.is_workflow() {
-                            // Chế độ chuỗi Workflow Macro DAG
+                            // Chế độ chuỗi Workflow Macro DAG (Visual Canvas Model + Linear Runner)
                             view! {
                                 <div class="data-lab-workflow-wrapper">
-                                    <WorkflowRunner
-                                        available_tools=micro_app_tools(MicroAppId::DataLab)
-                                        title="⚡ Chuỗi Quy trình Xử lý Data Lab"
-                                        is_running=Signal::derive(move || state.is_running.get())
-                                        status_message=Signal::derive(move || state.status_message.get())
-                                        on_run=on_run_workflow
-                                        on_cancel=on_cancel_workflow
-                                    />
+                                    <div class="data-lab-workflow-mode-switch">
+                                        <button
+                                            type="button"
+                                            class="workflow-mode-btn"
+                                            class:active=move || workflow_canvas_mode.get()
+                                            on:click=move |_| workflow_canvas_mode.set(true)
+                                        >
+                                            "🕸️ Bảng vẽ Canvas (KNIME)"
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="workflow-mode-btn"
+                                            class:active=move || !workflow_canvas_mode.get()
+                                            on:click=move |_| workflow_canvas_mode.set(false)
+                                        >
+                                            "📋 Danh sách Bước (Runner)"
+                                        </button>
+                                    </div>
+
+                                    {move || {
+                                        if workflow_canvas_mode.get() {
+                                            view! {
+                                                <VisualCanvasWorkflowView state=state />
+                                            }.into_any()
+                                        } else {
+                                            view! {
+                                                <WorkflowRunner
+                                                    available_tools=micro_app_tools(MicroAppId::DataLab)
+                                                    title="⚡ Chuỗi Quy trình Xử lý Data Lab"
+                                                    is_running=Signal::derive(move || state.is_running.get())
+                                                    status_message=Signal::derive(move || state.status_message.get())
+                                                    on_run=on_run_workflow
+                                                    on_cancel=on_cancel_workflow
+                                                />
+                                            }.into_any()
+                                        }
+                                    }}
                                 </div>
                             }.into_any()
                         } else {
@@ -109,6 +141,36 @@ pub fn DataLabLayout(
                                             </div>
                                         </div>
                                         <div class="data-lab-tool-meta">
+                                            {move || {
+                                                let cur = state.active_tool.get();
+                                                let cat = category_for_tool(&cur);
+                                                if cat == Some(DataLabCategory::Spreadsheet) {
+                                                    view! {
+                                                        <div class="data-lab-view-mode-toggle" style="display: flex; gap: 4px; background: var(--neutral-app); padding: 2px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-right: 6px;">
+                                                            <button
+                                                                type="button"
+                                                                class="time-travel-btn"
+                                                                style=move || if grid_view_mode.get() { "background: var(--brand-primary); color: #fff; font-weight: 600;" } else { "font-size: 12px;" }
+                                                                on:click=move |_| grid_view_mode.set(true)
+                                                                title="Xem chế độ bảng tính tương tác OpenRefine với Data Profiling & Facet"
+                                                            >
+                                                                "📊 Data Grid & Facet"
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="time-travel-btn"
+                                                                style=move || if !grid_view_mode.get() { "background: var(--brand-primary); color: #fff; font-weight: 600;" } else { "font-size: 12px;" }
+                                                                on:click=move |_| grid_view_mode.set(false)
+                                                                title="Xem biểu mẫu cài đặt tham số công cụ hàng loạt"
+                                                            >
+                                                                "🛠️ Form cài đặt"
+                                                            </button>
+                                                        </div>
+                                                    }.into_any()
+                                                } else {
+                                                    view! { <span style="display: none;"></span> }.into_any()
+                                                }
+                                            }}
                                             <span class="data-lab-cat-badge">{category_label}</span>
                                             <span class="data-lab-slug-badge">{active_slug.clone()}</span>
                                             <span class="data-lab-privacy-chip">"🔒 On-Device"</span>
@@ -142,7 +204,7 @@ pub fn DataLabLayout(
                                                             <span class="context-subtitle">
                                                                 {format!("(Tệp {}/{} trong danh sách dùng chung)", current_idx, total)}
                                                             </span>
-                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 11px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
+                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 12px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
                                                                 <span>"🔗 Đường dẫn liên kết:"</span>
                                                                 <code style="background: rgba(15, 23, 42, 0.6); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">
                                                                     {bound_path}
@@ -166,64 +228,77 @@ pub fn DataLabLayout(
 
                                     // Khối hiển thị View của từng công cụ
                                     <div class="data-lab-tool-view-body">
-                                        {match active_slug.as_str() {
-                                            "excel-cleaner-normalizer" => view! {
-                                                <ExcelCleanerNormalizerView />
-                                            }.into_any(),
+                                        {move || {
+                                            let cur_slug = state.active_tool.get();
+                                            let cat = category_for_tool(&cur_slug);
 
-                                            "excel-split-by-column" => view! {
-                                                <ExcelSplitByColumnView />
-                                            }.into_any(),
+                                            if (cat == Some(DataLabCategory::Spreadsheet) && grid_view_mode.get())
+                                                || matches!(cur_slug.as_str(), "data-profiler" | "fuzzy-clustering" | "recipe-replay")
+                                            {
+                                                return view! {
+                                                    <SpreadsheetGridFacetView state=state />
+                                                }.into_any();
+                                            }
 
-                                            "excel-multi-merger" => view! {
-                                                <ExcelMultiMergerView />
-                                            }.into_any(),
+                                            match cur_slug.as_str() {
+                                                "excel-cleaner-normalizer" => view! {
+                                                    <ExcelCleanerNormalizerView />
+                                                }.into_any(),
 
-                                            "excel-visual-joiner" => view! {
-                                                <ExcelVisualJoinerView />
-                                            }.into_any(),
+                                                "excel-split-by-column" => view! {
+                                                    <ExcelSplitByColumnView />
+                                                }.into_any(),
 
-                                            "excel-sheet-unlocker" => view! {
-                                                <ExcelSheetUnlockerView />
-                                            }.into_any(),
+                                                "excel-multi-merger" => view! {
+                                                    <ExcelMultiMergerView />
+                                                }.into_any(),
 
-                                            "data-structure-converter" => view! {
-                                                <DataStructureConverterView />
-                                            }.into_any(),
+                                                "excel-visual-joiner" => view! {
+                                                    <ExcelVisualJoinerView />
+                                                }.into_any(),
 
-                                            "docx-template-mailmerge" => view! {
-                                                <DocxTemplateMailmergeView />
-                                            }.into_any(),
+                                                "excel-sheet-unlocker" => view! {
+                                                    <ExcelSheetUnlockerView />
+                                                }.into_any(),
 
-                                            "universal-file-converter-hub" | "universal-converter" => view! {
-                                                <UniversalFileConverterHubView />
-                                            }.into_any(),
+                                                "data-structure-converter" => view! {
+                                                    <SplitPaneConverterView state=state initial_mode=ConverterMode::DataStructure />
+                                                }.into_any(),
 
-                                            "base64-file-codec" => view! {
-                                                <Base64FileCodecView />
-                                            }.into_any(),
+                                                "docx-template-mailmerge" => view! {
+                                                    <DocxTemplateMailmergeView />
+                                                }.into_any(),
 
-                                            "diff-checker-text-sheets" => view! {
-                                                <DiffCheckerTextSheetsView />
-                                            }.into_any(),
+                                                "universal-file-converter-hub" | "universal-converter" => view! {
+                                                    <UniversalFileConverterHubView />
+                                                }.into_any(),
 
-                                            "list-set-operations" => view! {
-                                                <ListSetOperationsView />
-                                            }.into_any(),
+                                                "base64-file-codec" => view! {
+                                                    <SplitPaneConverterView state=state initial_mode=ConverterMode::Base64 />
+                                                }.into_any(),
 
-                                            "text-pii-anonymizer" => view! {
-                                                <TextPiiAnonymizerView />
-                                            }.into_any(),
+                                                "diff-checker-text-sheets" => view! {
+                                                    <SplitPaneConverterView state=state initial_mode=ConverterMode::DiffChecker />
+                                                }.into_any(),
 
-                                            "sql-formatter-linter" => view! {
-                                                <SqlFormatterLinterView />
-                                            }.into_any(),
+                                                "list-set-operations" => view! {
+                                                    <ListSetOperationsView />
+                                                }.into_any(),
 
-                                            _ => view! {
-                                                <div class="data-lab-not-found">
-                                                    "Công cụ Data Lab không tồn tại."
-                                                </div>
-                                            }.into_any(),
+                                                "text-pii-anonymizer" => view! {
+                                                    <TextPiiAnonymizerView />
+                                                }.into_any(),
+
+                                                "sql-formatter-linter" => view! {
+                                                    <SplitPaneConverterView state=state initial_mode=ConverterMode::SqlFormatter />
+                                                }.into_any(),
+
+                                                _ => view! {
+                                                    <div class="data-lab-not-found">
+                                                        "Công cụ Data Lab không tồn tại."
+                                                    </div>
+                                                }.into_any(),
+                                            }
                                         }}
                                     </div>
 

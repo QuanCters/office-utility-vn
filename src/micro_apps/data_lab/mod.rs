@@ -1,12 +1,18 @@
 pub mod file_list_panel;
 pub mod layout;
+pub mod split_pane_view;
+pub mod spreadsheet_grid_view;
 pub mod state;
 pub mod toolbar;
+pub mod visual_canvas_workflow;
 
 pub use file_list_panel::DataLabFileListPanel;
 pub use layout::DataLabLayout;
+pub use split_pane_view::{ConverterMode, SplitPaneConverterView};
+pub use spreadsheet_grid_view::SpreadsheetGridFacetView;
 pub use state::{category_for_tool, DataLabCategory, DataLabState};
 pub use toolbar::{data_lab_tool_icon, DataLabToolbar};
+pub use visual_canvas_workflow::VisualCanvasWorkflowView;
 
 use leptos::prelude::*;
 
