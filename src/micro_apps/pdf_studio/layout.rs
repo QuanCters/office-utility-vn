@@ -1,8 +1,9 @@
 use leptos::prelude::*;
 use crate::launcher::CommandPalette;
 use crate::micro_apps::pdf_studio::file_list_panel::PdfStudioFileListPanel;
-use crate::micro_apps::pdf_studio::state::{category_for_tool, PdfStudioState};
-use crate::micro_apps::pdf_studio::toolbar::{pdf_studio_tool_icon, PdfStudioToolbar};
+use crate::micro_apps::pdf_studio::hub_view::PdfStudioHubView;
+use crate::micro_apps::pdf_studio::state::{category_for_tool, PdfStudioState, PdfViewMode};
+use crate::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
 use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
@@ -13,13 +14,18 @@ use crate::tools::{
     PdfWatermarkStampView, VietnameseOcrView,
 };
 
-/// Bố cục tổng thể của Micro-App PDF Studio (Header + Tab Toolbar + File List Panel + Workspace).
+/// Bố cục tổng thể của Micro-App PDF Studio theo mô hình Hub/Portal.
+///
+/// Hỗ trợ 3 chế độ xem chính:
+/// 1. `PdfViewMode::Hub`: Trang chủ Portal dạng lưới thẻ (Categorized Card Grid, iLovePDF model).
+/// 2. `PdfViewMode::ToolWorkspace`: Không gian làm việc tập trung của từng công cụ với Mini Sidebar (56px).
+/// 3. `PdfViewMode::Workflow`: Trình thiết kế chuỗi tự động hóa Macro DAG.
 #[component]
 pub fn PdfStudioLayout(
     state: PdfStudioState,
     #[prop(into)] on_back: Callback<()>,
 ) -> impl IntoView {
-    // Cung cấp context cho toàn bộ cây con nếu các view cần truy cập PdfStudioState
+    // Cung cấp context cho toàn bộ cây con nếu các view con cần truy cập PdfStudioState
     provide_context(state);
 
     let palette_open = RwSignal::new(false);
@@ -37,84 +43,137 @@ pub fn PdfStudioLayout(
 
     view! {
         <div class="pdf-studio-app-container">
-            // Header trên cùng với nút BackButton chuẩn mực và tiêu đề
-            <header class="pdf-studio-header">
-                <div class="pdf-studio-header-left">
-                    <BackButton on_back=on_back label="← Về Launcher" />
-                    <div class="pdf-studio-header-title-group">
-                        <h1 class="pdf-studio-header-title">
-                            "📄 PDF Studio — Xưởng Tài liệu PDF"
-                        </h1>
-                        <span class="pdf-studio-header-tagline">
-                            "Ghép tách • Nén • Bảo mật • Đóng dấu • OCR • Chuyển đổi PDF 100% On-Device"
-                        </span>
+            {move || match state.view_mode.get() {
+                PdfViewMode::Hub => view! {
+                    // =========================================================
+                    // CHẾ ĐỘ 1: HUB PORTAL VIEW (Toàn màn hình)
+                    // =========================================================
+                    <header class="pdf-studio-header">
+                        <div class="pdf-studio-header-left">
+                            <BackButton on_back=on_back label="← Về Launcher" />
+                            <div class="pdf-studio-header-title-group">
+                                <h1 class="pdf-studio-header-title">
+                                    "📄 PDF Studio — Xưởng Tài liệu PDF"
+                                </h1>
+                                <span class="pdf-studio-header-tagline">
+                                    "Ghép tách • Nén • Bảo mật • Đóng dấu • OCR • Chuyển đổi PDF 100% On-Device"
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="pdf-studio-header-right">
+                            <span class="pdf-studio-header-badge">
+                                "22 Công cụ PDF"
+                            </span>
+                            <span class="pdf-studio-privacy-badge">
+                                "🔒 100% On-Device"
+                            </span>
+                        </div>
+                    </header>
+
+                    <main class="pdf-studio-hub-main">
+                        <PdfStudioHubView state=state />
+                    </main>
+                }.into_any(),
+
+                PdfViewMode::Workflow => view! {
+                    // =========================================================
+                    // CHẾ ĐỘ 2: WORKFLOW MACRO DAG (Toàn màn hình)
+                    // =========================================================
+                    <header class="pdf-studio-header">
+                        <div class="pdf-studio-header-left">
+                            <button
+                                type="button"
+                                class="pdf-breadcrumb-btn"
+                                title="Quay lại Trang chủ Hub công cụ PDF"
+                                on:click=move |_| state.open_hub()
+                            >
+                                <span class="breadcrumb-arrow" aria-hidden="true">"←"</span>
+                                <span>"Tất cả công cụ (PDF Hub)"</span>
+                            </button>
+                            <div class="pdf-studio-header-title-group">
+                                <h1 class="pdf-studio-header-title">
+                                    "⚡ Chuỗi Quy Trình Tự Động Hóa PDF"
+                                </h1>
+                                <span class="pdf-studio-header-tagline">
+                                    "Kết nối liên hoàn các công cụ PDF thành quy trình tự động on-device"
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="pdf-studio-header-right">
+                            <BackButton on_back=on_back label="Về Launcher" />
+                            <span class="pdf-studio-privacy-badge">
+                                "🔒 100% On-Device"
+                            </span>
+                        </div>
+                    </header>
+
+                    <div class="pdf-studio-workspace-body">
+                        <PdfStudioFileListPanel state=state />
+                        <main class="pdf-studio-center-workspace">
+                            <div class="pdf-studio-workflow-wrapper">
+                                <WorkflowRunner
+                                    available_tools=micro_app_tools(MicroAppId::PdfStudio)
+                                    title="⚡ Chuỗi Quy trình Xử lý PDF Studio"
+                                    is_running=Signal::derive(move || state.is_running.get())
+                                    status_message=Signal::derive(move || state.status_message.get())
+                                    on_run=on_run_workflow
+                                    on_cancel=on_cancel_workflow
+                                />
+                            </div>
+                        </main>
                     </div>
-                </div>
+                }.into_any(),
 
-                <div class="pdf-studio-header-right">
-                    <span class="pdf-studio-header-badge">
-                        "18 Công cụ PDF"
-                    </span>
-                    <span class="pdf-studio-privacy-badge">
-                        "🔒 100% On-Device"
-                    </span>
-                </div>
-            </header>
+                PdfViewMode::ToolWorkspace => {
+                    let active_slug = state.active_tool.get();
+                    let current_tool = state.find_tool(&active_slug);
+                    let tool_name = current_tool.map(|t| t.name).unwrap_or("Công cụ PDF");
+                    let tool_desc = current_tool.map(|t| t.description).unwrap_or("");
+                    let icon = pdf_studio_tool_icon(&active_slug);
+                    let category_label = category_for_tool(&active_slug)
+                        .map(|c| c.label())
+                        .unwrap_or("Tài liệu PDF");
 
-            // Thanh công cụ Tab Toolbar phân loại theo 4 nhóm nghiệp vụ + 1 tab Workflow
-            <PdfStudioToolbar state=state />
+                    view! {
+                        // =========================================================
+                        // CHẾ ĐỘ 3: FOCUSED TOOL WORKSPACE (Mini Sidebar + Tool View)
+                        // =========================================================
+                        <header class="pdf-studio-header pdf-studio-focused-header">
+                            <div class="pdf-studio-header-left">
+                                <button
+                                    type="button"
+                                    class="pdf-breadcrumb-btn"
+                                    title="Quay lại Trang chủ Hub công cụ PDF"
+                                    on:click=move |_| state.open_hub()
+                                >
+                                    <span class="breadcrumb-arrow" aria-hidden="true">"←"</span>
+                                    <span>"Tất cả công cụ (PDF Hub)"</span>
+                                </button>
 
-            // Khu vực làm việc chính (Bố cục 2 cột: Left Panel quản lý file + Center Workspace)
-            <div class="pdf-studio-workspace-body">
-                // Cột 1: File List Panel quản lý các file PDF nạp vào (Shared Context)
-                <PdfStudioFileListPanel state=state />
-
-                // Cột 2: Workspace hiển thị công cụ đang chọn hoặc Workflow Runner
-                <main class="pdf-studio-center-workspace">
-                    {move || {
-                        if state.is_workflow() {
-                            // Chế độ chuỗi Workflow Macro DAG
-                            view! {
-                                <div class="pdf-studio-workflow-wrapper">
-                                    <WorkflowRunner
-                                        available_tools=micro_app_tools(MicroAppId::PdfStudio)
-                                        title="⚡ Chuỗi Quy trình Xử lý PDF Studio"
-                                        is_running=Signal::derive(move || state.is_running.get())
-                                        status_message=Signal::derive(move || state.status_message.get())
-                                        on_run=on_run_workflow
-                                        on_cancel=on_cancel_workflow
-                                    />
-                                </div>
-                            }.into_any()
-                        } else {
-                            // Chế độ công cụ đơn lẻ
-                            let active_slug = state.active_tool.get();
-                            let current_tool = state.find_tool(&active_slug);
-                            let tool_name = current_tool.map(|t| t.name).unwrap_or("Công cụ PDF");
-                            let tool_desc = current_tool.map(|t| t.description).unwrap_or("");
-                            let icon = pdf_studio_tool_icon(&active_slug);
-                            let category_label = category_for_tool(&active_slug)
-                                .map(|c| c.label())
-                                .unwrap_or("Tài liệu PDF");
-
-                            view! {
-                                <div class="pdf-studio-tool-workspace">
-                                    // Header của thẻ công cụ
-                                    <div class="pdf-studio-tool-card-header">
-                                        <div class="pdf-studio-tool-title-row">
-                                            <span class="pdf-studio-tool-icon" aria-hidden="true">{icon}</span>
-                                            <div>
-                                                <h2 class="pdf-studio-tool-name">{tool_name}</h2>
-                                                <p class="pdf-studio-tool-description">{tool_desc}</p>
-                                            </div>
-                                        </div>
-                                        <div class="pdf-studio-tool-meta">
-                                            <span class="pdf-studio-cat-badge">{category_label}</span>
-                                            <span class="pdf-studio-slug-badge">{active_slug.clone()}</span>
-                                            <span class="pdf-studio-privacy-chip">"🔒 On-Device"</span>
-                                        </div>
+                                <div class="pdf-focused-tool-indicator">
+                                    <span class="focused-tool-icon" aria-hidden="true">{icon}</span>
+                                    <div class="focused-tool-text">
+                                        <h2 class="pdf-focused-tool-title">{tool_name}</h2>
+                                        <span class="pdf-focused-tool-desc">{tool_desc}</span>
                                     </div>
+                                </div>
+                            </div>
 
+                            <div class="pdf-studio-header-right">
+                                <span class="pdf-studio-cat-badge">{category_label}</span>
+                                <span class="pdf-studio-slug-badge">{active_slug.clone()}</span>
+                                <span class="pdf-studio-privacy-badge">"🔒 100% On-Device"</span>
+                                <BackButton on_back=on_back label="Về Launcher" />
+                            </div>
+                        </header>
+
+                        <div class="pdf-studio-workspace-body">
+                            <PdfStudioFileListPanel state=state />
+
+                            <main class="pdf-studio-center-workspace">
+                                <div class="pdf-studio-tool-workspace">
                                     // Context Banner hiển thị tệp PDF đang mở dùng chung
                                     <div class="pdf-studio-context-banner">
                                         {move || {
@@ -133,9 +192,9 @@ pub fn PdfStudioLayout(
                                                             <span class="context-subtitle">
                                                                 {format!("(Tệp {}/{} trong danh sách dùng chung)", current_idx, total)}
                                                             </span>
-                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 11px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
+                                                            <div class="context-bound-path">
                                                                 <span>"🔗 Đường dẫn liên kết:"</span>
-                                                                <code style="background: rgba(15, 23, 42, 0.6); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">
+                                                                <code class="context-bound-code">
                                                                     {bound_path}
                                                                 </code>
                                                             </div>
@@ -147,7 +206,7 @@ pub fn PdfStudioLayout(
                                                     <div class="context-banner-hint">
                                                         <span class="context-icon" aria-hidden="true">"💡"</span>
                                                         <span class="context-hint-text">
-                                                            "Mẹo: Thêm tệp PDF ở danh sách bên trái để sẵn sàng xử lý và áp dụng tự động cho công cụ này."
+                                                            "Mẹo: Thêm tệp PDF ở thanh bên trái để sẵn sàng xử lý và áp dụng tự động cho công cụ này."
                                                         </span>
                                                     </div>
                                                 }.into_any()
@@ -268,17 +327,17 @@ pub fn PdfStudioLayout(
                                         external_is_running=state.is_running
                                     />
                                 </div>
-                            }.into_any()
-                        }
-                    }}
-                </main>
-            </div>
+                            </main>
+                        </div>
+                    }.into_any()
+                }
+            }}
 
             // Scoped Command Palette (Ctrl+K) trong PDF Studio
             <CommandPalette
                 open=palette_open
                 tools=state.tools()
-                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.select_tool(&slug))
+                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.open_tool(&slug))
                 on_back=on_back
             />
         </div>

@@ -85,6 +85,17 @@ pub fn category_for_tool(slug: &str) -> Option<PdfCategory> {
     PdfCategory::ALL.into_iter().find(|&cat| cat.slugs().contains(&slug))
 }
 
+/// Chế độ hiển thị chính của PDF Studio.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum PdfViewMode {
+    /// Trang chủ Hub/Portal hiển thị danh mục dạng lưới thẻ (iLovePDF model)
+    Hub,
+    /// Không gian làm việc tập trung của công cụ cụ thể
+    ToolWorkspace,
+    /// Trình chạy chuỗi quy trình Workflow Macro DAG
+    Workflow,
+}
+
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App PDF Studio.
 ///
 /// Các tệp PDF được nạp vào một lần sẽ có sẵn cho toàn bộ 18 công cụ xử lý.
@@ -104,6 +115,10 @@ pub struct PdfStudioState {
     pub status_message: RwSignal<String>,
     /// Danh mục toolbar tab hiện tại đang được chọn xem.
     pub active_category: RwSignal<PdfCategory>,
+    /// Chế độ xem hiện tại của PDF Studio (Hub, ToolWorkspace hoặc Workflow).
+    pub view_mode: RwSignal<PdfViewMode>,
+    /// Trạng thái thu gọn của Sidebar danh sách tệp (true: Mini Sidebar 56px, false: Full 280px).
+    pub sidebar_collapsed: RwSignal<bool>,
 }
 
 impl Default for PdfStudioState {
@@ -120,11 +135,17 @@ impl PdfStudioState {
 
     /// Khởi tạo trạng thái PDF Studio với công cụ ban đầu tùy chọn.
     pub fn with_initial_tool(initial_tool: Option<String>) -> Self {
+        let has_custom_tool = initial_tool.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false);
         let initial_slug = initial_tool
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "pdf-merge-split".to_string());
 
         let category = category_for_tool(&initial_slug).unwrap_or(PdfCategory::MergeSplit);
+        let view_mode = if has_custom_tool {
+            PdfViewMode::ToolWorkspace
+        } else {
+            PdfViewMode::Hub
+        };
 
         Self {
             loaded_files: RwSignal::new(Vec::new()),
@@ -134,6 +155,8 @@ impl PdfStudioState {
             is_running: RwSignal::new(false),
             status_message: RwSignal::new(String::new()),
             active_category: RwSignal::new(category),
+            view_mode: RwSignal::new(view_mode),
+            sidebar_collapsed: RwSignal::new(true),
         }
     }
 
@@ -232,6 +255,7 @@ impl PdfStudioState {
     pub fn select_tool(&self, slug: &str) {
         self.active_tool.set(slug.to_string());
         self.is_workflow_active.set(false);
+        self.view_mode.set(PdfViewMode::ToolWorkspace);
         if let Some(cat) = category_for_tool(slug) {
             self.active_category.set(cat);
         }
@@ -241,6 +265,7 @@ impl PdfStudioState {
     pub fn select_category(&self, cat: PdfCategory) {
         self.active_category.set(cat);
         self.is_workflow_active.set(false);
+        self.view_mode.set(PdfViewMode::ToolWorkspace);
         let cur_tool = self.active_tool.get();
         if !cat.slugs().contains(&cur_tool.as_str())
             && let Some(&first_slug) = cat.slugs().first()
@@ -252,11 +277,41 @@ impl PdfStudioState {
     /// Mở màn hình thiết kế chuỗi Workflow Macro DAG.
     pub fn open_workflow(&self) {
         self.is_workflow_active.set(true);
+        self.view_mode.set(PdfViewMode::Workflow);
     }
 
     /// Đóng màn hình workflow trở về công cụ hiện tại.
     pub fn close_workflow(&self) {
         self.is_workflow_active.set(false);
+        self.view_mode.set(PdfViewMode::ToolWorkspace);
+    }
+
+    /// Mở trang chủ Hub/Portal (lưới thẻ phân loại theo danh mục).
+    pub fn open_hub(&self) {
+        self.view_mode.set(PdfViewMode::Hub);
+        self.is_workflow_active.set(false);
+    }
+
+    /// Mở không gian làm việc tập trung của công cụ, tự động thu gọn sidebar về mini.
+    pub fn open_tool(&self, slug: &str) {
+        self.select_tool(slug);
+        self.view_mode.set(PdfViewMode::ToolWorkspace);
+        self.sidebar_collapsed.set(true);
+    }
+
+    /// Đảo ngược cờ thu gọn sidebar (mini sidebar <-> expanded sidebar).
+    pub fn toggle_sidebar(&self) {
+        self.sidebar_collapsed.update(|c| *c = !*c);
+    }
+
+    /// Kiểm tra xem có đang ở trang Hub Portal không.
+    pub fn is_hub(&self) -> bool {
+        self.view_mode.get_untracked() == PdfViewMode::Hub
+    }
+
+    /// Kiểm tra xem có đang ở không gian công cụ tập trung không.
+    pub fn is_tool_workspace(&self) -> bool {
+        self.view_mode.get_untracked() == PdfViewMode::ToolWorkspace
     }
 
     /// Lấy slug của công cụ đang kích hoạt.
@@ -266,7 +321,7 @@ impl PdfStudioState {
 
     /// Kiểm tra xem chế độ workflow có đang hiển thị hay không.
     pub fn is_workflow(&self) -> bool {
-        self.is_workflow_active.get()
+        self.is_workflow_active.get_untracked() || self.view_mode.get_untracked() == PdfViewMode::Workflow
     }
 
     /// Kiểm tra xem tác vụ có đang chạy hay không.

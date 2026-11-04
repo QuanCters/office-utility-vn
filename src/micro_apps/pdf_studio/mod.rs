@@ -1,11 +1,13 @@
 pub mod file_list_panel;
+pub mod hub_view;
 pub mod layout;
 pub mod state;
 pub mod toolbar;
 
 pub use file_list_panel::PdfStudioFileListPanel;
+pub use hub_view::{filter_pdf_studio_tools, matches_pdf_tool, PdfStudioHubView};
 pub use layout::PdfStudioLayout;
-pub use state::{category_for_tool, PdfCategory, PdfStudioState};
+pub use state::{category_for_tool, PdfCategory, PdfStudioState, PdfViewMode};
 pub use toolbar::{pdf_studio_tool_icon, PdfStudioToolbar};
 
 use leptos::prelude::*;
