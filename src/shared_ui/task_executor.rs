@@ -148,6 +148,75 @@ pub fn execute_workflow_ipc(
     }
 }
 
+/// Trait định nghĩa giao ước tham số thực thi công cụ On-Device
+pub trait ToolPayloadContract {
+    /// Kiểm tra tính hợp lệ của tham số trước khi gửi sang Tauri IPC
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Đóng gói thành JSON Value tương thích với backend
+    fn to_payload(&self) -> serde_json::Value;
+}
+
+/// Triển khai mặc định cho trường hợp không có tham số mở rộng (Empty Payload)
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EmptyToolPayload;
+
+impl ToolPayloadContract for EmptyToolPayload {
+    fn to_payload(&self) -> serde_json::Value {
+        serde_json::json!({})
+    }
+}
+
+/// Triển khai cho Generic JSON Payload kèm validator tùy chọn
+#[derive(Debug, Clone)]
+pub struct GenericToolPayload {
+    pub data: serde_json::Value,
+    pub validator: Option<fn(&serde_json::Value) -> Result<(), String>>,
+}
+
+impl GenericToolPayload {
+    pub fn new(data: serde_json::Value) -> Self {
+        Self {
+            data,
+            validator: None,
+        }
+    }
+
+    pub fn with_validator(
+        data: serde_json::Value,
+        validator: fn(&serde_json::Value) -> Result<(), String>,
+    ) -> Self {
+        Self {
+            data,
+            validator: Some(validator),
+        }
+    }
+}
+
+impl ToolPayloadContract for GenericToolPayload {
+    fn validate(&self) -> Result<(), String> {
+        if let Some(v) = self.validator {
+            v(&self.data)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn to_payload(&self) -> serde_json::Value {
+        self.data.clone()
+    }
+}
+
+/// Kiểm tra tính hợp lệ của payload trước khi dispatch sang IPC
+pub fn validate_payload_before_dispatch<T: ToolPayloadContract + ?Sized>(
+    payload: &T,
+) -> Result<serde_json::Value, String> {
+    payload.validate()?;
+    Ok(payload.to_payload())
+}
+
 /// Component TaskExecutor dùng chung cho cả 4 Micro-Apps:
 /// - Nút "🚀 Thực thi tác vụ" (phím tắt `Ctrl+Enter`)
 /// - Nút "✕ Hủy tác vụ" (phím tắt `Esc`)
@@ -165,6 +234,12 @@ pub fn TaskExecutor(
     /// Hàm xây dựng options JSON tùy biến cho công cụ
     #[prop(into, optional)]
     options_builder: Option<Callback<(), serde_json::Value>>,
+    /// Hàm kiểm tra tính hợp lệ của tham số trước khi dispatch
+    #[prop(into, optional)]
+    validator: Option<Callback<serde_json::Value, Result<(), String>>>,
+    /// Tùy chọn signal cập nhật thông báo trạng thái
+    #[prop(into, optional)]
+    status_message: Option<RwSignal<String>>,
     /// Trạng thái đang chạy từ bên ngoài tùy chọn (được đồng bộ với micro-app)
     #[prop(into, optional)]
     external_is_running: Option<RwSignal<bool>>,
@@ -189,6 +264,7 @@ pub fn TaskExecutor(
     let elapsed_ms = RwSignal::new(None::<u64>);
 
     let input_files_sig = input_files.unwrap_or_else(|| Signal::derive(Vec::new));
+    let status_message_sig = status_message.unwrap_or_else(|| RwSignal::new(String::new()));
 
     // Xử lý hủy tác vụ
     let do_cancel = move || {
@@ -226,6 +302,22 @@ pub fn TaskExecutor(
         let opts = options_builder
             .map(|cb| cb.run(()))
             .unwrap_or_else(|| serde_json::json!({}));
+
+        // Kiểm tra tính hợp lệ của tham số trước khi dispatch
+        if let Some(val_cb) = validator {
+            if let Err(msg) = val_cb.run(opts.clone()) {
+                let err_text = format!("⚠️ Lỗi tham số: {msg}");
+                status_message_sig.set(err_text.clone());
+                error_msg.set(Some(err_text.clone()));
+                result_msg.set(None);
+                progress.set(0.0);
+                progress_msg.set("Lỗi tham số".to_string());
+                if let Some(cb) = on_error {
+                    cb.run(err_text);
+                }
+                return;
+            }
+        }
 
         #[cfg(target_arch = "wasm32")]
         let task_id_str = format!("task-{}", js_sys::Date::now() as u64);
