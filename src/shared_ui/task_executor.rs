@@ -10,8 +10,56 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], catch)]
+    async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
+}
+
+#[cfg(target_arch = "wasm32")]
+fn create_tauri_channel(
+    progress_sig: Option<WriteSignal<f32>>,
+    progress_msg_sig: Option<WriteSignal<String>>,
+) -> JsValue {
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return JsValue::NULL,
+    };
+
+    let create_fn = js_sys::Function::new_no_args(r#"
+        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.Channel) {
+            return new window.__TAURI__.core.Channel();
+        }
+        return {
+            id: 0,
+            toJSON: function() { return "__CHANNEL__:0"; }
+        };
+    "#);
+
+    let channel = match create_fn.call0(&window) {
+        Ok(c) => c,
+        Err(_) => return JsValue::NULL,
+    };
+
+    if progress_sig.is_some() || progress_msg_sig.is_some() {
+        let closure = Closure::<dyn Fn(JsValue)>::new(move |val: JsValue| {
+            if let Ok(prog) = serde_wasm_bindgen::from_value::<serde_json::Value>(val) {
+                if let Some(sig) = progress_sig {
+                    if let Some(pct) = prog.get("percentage").and_then(|p| p.as_f64()) {
+                        sig.set(pct as f32);
+                    }
+                }
+                if let Some(msg_sig) = progress_msg_sig {
+                    if let Some(msg) = prog.get("message").and_then(|m| m.as_str()) {
+                        msg_sig.set(msg.to_string());
+                    }
+                }
+            }
+        });
+
+        let _ = js_sys::Reflect::set(&channel, &JsValue::from_str("onmessage"), closure.as_ref().unchecked_ref());
+        closure.forget();
+    }
+
+    channel
 }
 
 /// Mở thư mục đầu ra mặc định (Downloads) qua Tauri IPC command `open_output_folder`.
@@ -97,21 +145,28 @@ pub fn execute_workflow_ipc(
         };
         let _ = invoke("save_workflow", save_args).await;
 
-        // 2. Thực thi chuỗi workflow pipeline
-        let exec_args = match serde_wasm_bindgen::to_value(&serde_json::json!({
-            "workflow_id": dag.id,
-            "input_paths": input_files,
-            "output_directory": null,
-        })) {
+        // 2. Thực thi chuỗi workflow pipeline kèm onProgress Channel
+        let channel_val = create_tauri_channel(None, None);
+        let exec_args = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("workflowId"), &JsValue::from_str(&dag.id));
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("workflow_id"), &JsValue::from_str(&dag.id));
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("inputPaths"), &serde_wasm_bindgen::to_value(&input_files).unwrap_or(JsValue::NULL));
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("input_paths"), &serde_wasm_bindgen::to_value(&input_files).unwrap_or(JsValue::NULL));
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("outputDirectory"), &JsValue::NULL);
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("output_directory"), &JsValue::NULL);
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("onProgress"), &channel_val);
+        let _ = js_sys::Reflect::set(&exec_args, &JsValue::from_str("on_progress"), &channel_val);
+
+        let invoke_res = invoke("execute_workflow_pipeline", exec_args.into()).await;
+        let resp = match invoke_res {
             Ok(v) => v,
             Err(e) => {
                 is_running.set(false);
-                status_message.set(format!("Lỗi tham số pipeline: {e}"));
+                let err_text = e.as_string().unwrap_or_else(|| format!("{e:?}"));
+                status_message.set(format!("❌ Lỗi IPC chuỗi tự động hóa: {err_text}"));
                 return;
             }
         };
-
-        let resp = invoke("execute_workflow_pipeline", exec_args).await;
         if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp.clone()) {
             let status = res_obj.get("status").and_then(|v| v.as_str()).unwrap_or("SUCCESS");
             if status == "FAILED" {
@@ -252,11 +307,12 @@ pub fn TaskExecutor(
     /// Callback khi tác vụ thất bại
     #[prop(into, optional)]
     on_error: Option<Callback<String>>,
-    /// Tùy chọn nhãn nút thực thi (mặc định: "🚀 Thực thi tác vụ")
+    /// Tùy chọn nhãn nút thực thi (mặc định: "Thực thi tác vụ")
     #[prop(into, optional)]
     run_label: Option<&'static str>,
 ) -> impl IntoView {
-    let btn_label = run_label.unwrap_or("🚀 Thực thi tác vụ");
+    let raw_label = run_label.unwrap_or("Thực thi tác vụ");
+    let btn_label = raw_label.trim_start_matches("🚀").trim();
 
     let is_running = RwSignal::new(false);
     let active_task_id = RwSignal::new(None::<String>);
@@ -346,19 +402,34 @@ pub fn TaskExecutor(
                 "options": opts
             });
 
-            let args = match serde_wasm_bindgen::to_value(&serde_json::json!({ "request": request_payload })) {
+            let channel_val = create_tauri_channel(Some(progress.write_only()), Some(progress_msg.write_only()));
+
+            let args_obj = js_sys::Object::new();
+            if let Ok(req_js) = serde_wasm_bindgen::to_value(&request_payload) {
+                let _ = js_sys::Reflect::set(&args_obj, &JsValue::from_str("request"), &req_js);
+            }
+            let _ = js_sys::Reflect::set(&args_obj, &JsValue::from_str("onProgress"), &channel_val);
+            let _ = js_sys::Reflect::set(&args_obj, &JsValue::from_str("on_progress"), &channel_val);
+
+            let invoke_res = invoke("dispatch_tool_task", args_obj.into()).await;
+            let resp = match invoke_res {
                 Ok(v) => v,
                 Err(e) => {
                     is_running.set(false);
                     if let Some(ext) = external_is_running {
                         ext.set(false);
                     }
-                    error_msg.set(Some(format!("Lỗi tham số yêu cầu: {e}")));
+                    let err_text = e.as_string().unwrap_or_else(|| format!("{e:?}"));
+                    error_msg.set(Some(format!("Lỗi IPC Desktop: {err_text}")));
+                    result_msg.set(None);
+                    progress.set(0.0);
+                    progress_msg.set("Có lỗi phát sinh".to_string());
+                    if let Some(cb) = on_error {
+                        cb.run(err_text);
+                    }
                     return;
                 }
             };
-
-            let resp = invoke("dispatch_tool_task", args).await;
             if let Ok(res_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(resp.clone()) {
                 let status = res_obj.get("status").and_then(|v| v.as_str()).unwrap_or("SUCCESS");
                 let failed_items = res_obj.get("failed_items").and_then(|v| v.as_array());
