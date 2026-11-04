@@ -382,6 +382,18 @@ impl ToolRegistry {
             secondary_apps: &[],
             tags: &["pdf", "trich-xuat-bang", "excel", "xlsx"],
         },
+        ToolRegistration {
+            tool: ToolItem {
+                slug: "pdf-form-manager",
+                name: "Quản lý & Điền Biểu mẫu PDF",
+                domain: "doc-suite",
+                description: "Khảo sát trường AcroForm, xuất dữ liệu JSON/CSV và tự động điền form hàng loạt.",
+                is_pinned: false,
+            },
+            primary_app: MicroAppId::PdfStudio,
+            secondary_apps: &[],
+            tags: &["pdf", "acroform", "bieu-mau", "autofill", "form"],
+        },
 
         // ==========================================
         // MEDIA STUDIO (9 công cụ)

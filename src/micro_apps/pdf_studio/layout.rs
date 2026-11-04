@@ -7,7 +7,7 @@ use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     MarkdownToStyledPdfView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
-    PdfCropMarginView, PdfFlattenFormsView, PdfGrayscalePrintView, PdfMergeSplitView,
+    PdfCropMarginView, PdfFlattenFormsView, PdfFormManagerView, PdfGrayscalePrintView, PdfMergeSplitView,
     PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfProtectSignView, PdfRepairCorruptView,
     PdfTableExtractorView, PdfToLongImageView, PdfToMarkdownView, PdfVisualDiffView,
     PdfWatermarkStampView, VietnameseOcrView,
@@ -192,6 +192,10 @@ pub fn PdfStudioLayout(
 
                                             "pdf-flatten-forms" => view! {
                                                 <PdfFlattenFormsView />
+                                            }.into_any(),
+
+                                            "pdf-form-manager" => view! {
+                                                <PdfFormManagerView />
                                             }.into_any(),
 
                                             "pdf-repair-corrupt" => view! {

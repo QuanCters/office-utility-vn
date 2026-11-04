@@ -58,6 +58,7 @@ impl PdfCategory {
                 "pdf-compress",
                 "pdf-metadata-scrubber",
                 "pdf-flatten-forms",
+                "pdf-form-manager",
                 "pdf-repair-corrupt",
             ],
             PdfCategory::FormatPage => &[
