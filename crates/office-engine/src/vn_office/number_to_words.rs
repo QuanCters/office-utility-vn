@@ -358,6 +358,85 @@ pub fn format_vietnamese_number(
     Ok(result)
 }
 
+/// Chuyển đổi chuỗi văn bản kết quả tiếng Việt thành danh sách mã token âm thanh tương ứng
+pub fn words_to_audio_tokens(words_str: &str, dialect: Dialect) -> Vec<&'static str> {
+    let lower = words_str.to_lowercase();
+    let clean = lower.replace(['.', ',', ';', ':', '!', '?'], " ");
+    let raw_tokens: Vec<&str> = clean.split_whitespace().collect();
+
+    let mut tokens = Vec::new();
+    let mut i = 0;
+    while i < raw_tokens.len() {
+        let w = raw_tokens[i];
+        match w {
+            "không" => tokens.push("khong"),
+            "một" => {
+                if i > 0 && raw_tokens[i - 1] == "mươi" {
+                    match dialect {
+                        Dialect::North => tokens.push("mot_sau"),
+                        Dialect::South => tokens.push("mot_nam"),
+                    }
+                } else {
+                    tokens.push("mot");
+                }
+            }
+            "mốt" => {
+                match dialect {
+                    Dialect::North => tokens.push("mot_sau"),
+                    Dialect::South => tokens.push("mot_nam"),
+                }
+            }
+            "hai" => tokens.push("hai"),
+            "ba" => tokens.push("ba"),
+            "bốn" => {
+                if i > 0 && raw_tokens[i - 1] == "mươi" && dialect == Dialect::South {
+                    tokens.push("tu_nam");
+                } else {
+                    tokens.push("bon");
+                }
+            }
+            "tư" => tokens.push("tu"),
+            "năm" => tokens.push("nam"),
+            "lăm" => tokens.push("lam"),
+            "sáu" => tokens.push("sau"),
+            "bảy" => tokens.push("bay"),
+            "tám" => tokens.push("tam"),
+            "chín" => tokens.push("chin"),
+            "mười" => tokens.push("muoi"),
+            "mươi" => tokens.push("muoi_chuc"),
+            "chục" => tokens.push("chuc"),
+            "trăm" => tokens.push("tram"),
+            "nghìn" => tokens.push("nghin"),
+            "ngàn" => tokens.push("ngan"),
+            "triệu" => tokens.push("trieu"),
+            "tỷ" => tokens.push("ty"),
+            "lẻ" => tokens.push("le"),
+            "linh" => tokens.push("linh"),
+            "âm" => tokens.push("am"),
+            "và" => tokens.push("va"),
+            "đồng" => tokens.push("dong"),
+            "chẵn" => tokens.push("chan"),
+            "xu" => tokens.push("xu"),
+            "phẩy" => tokens.push("phay"),
+            "chấm" => tokens.push("cham"),
+            "đô" => {
+                if i + 2 < raw_tokens.len() && raw_tokens[i + 1] == "la" && raw_tokens[i + 2] == "mỹ" {
+                    tokens.push("do_la_my");
+                    i += 2;
+                } else {
+                    tokens.push("do_la_my");
+                }
+            }
+            "euro" => tokens.push("euro"),
+            "cents" | "cent" | "xen" => tokens.push("cents"),
+            _ => {}
+        }
+        i += 1;
+    }
+
+    tokens
+}
+
 /// Công cụ `FR-VNO-01` thực thi trait `OfficeTool`
 #[derive(Default)]
 pub struct VietnameseNumberToWordsTool;
@@ -695,6 +774,52 @@ mod vietnamese_number_to_words_tests {
         assert!(
             elapsed.as_millis() < 100,
             "Hủy tác vụ phải hoàn tất dưới 100ms (NFR-REL-01, NFR-PERF-02)"
+        );
+    }
+
+    #[test]
+    fn test_words_to_audio_tokens_mapping() {
+        // Test chuẩn Bắc
+        let tokens_north = words_to_audio_tokens(
+            "Một triệu hai trăm năm mươi nghìn đồng chẵn.",
+            Dialect::North,
+        );
+        assert_eq!(
+            tokens_north,
+            vec!["mot", "trieu", "hai", "tram", "nam", "muoi_chuc", "nghin", "dong", "chan"]
+        );
+
+        // Test chuẩn Nam
+        let tokens_south = words_to_audio_tokens(
+            "Một trăm linh năm ngàn đồng",
+            Dialect::South,
+        );
+        assert_eq!(
+            tokens_south,
+            vec!["mot", "tram", "linh", "nam", "ngan", "dong"]
+        );
+
+        // Test biến âm mốt, lăm, tư (Bắc) vs bốn (Nam)
+        let tokens_mot_lam = words_to_audio_tokens("Hai mươi mốt nghìn hai mươi lăm đồng", Dialect::North);
+        assert_eq!(
+            tokens_mot_lam,
+            vec!["hai", "muoi_chuc", "mot_sau", "nghin", "hai", "muoi_chuc", "lam", "dong"]
+        );
+
+        let tokens_tu_north = words_to_audio_tokens("Hai mươi tư", Dialect::North);
+        assert_eq!(tokens_tu_north, vec!["hai", "muoi_chuc", "tu"]);
+
+        let tokens_bon_south = words_to_audio_tokens("Hai mươi bốn", Dialect::South);
+        assert_eq!(tokens_bon_south, vec!["hai", "muoi_chuc", "tu_nam"]);
+
+        // Test số âm và ngoại tệ
+        let tokens_am_usd = words_to_audio_tokens(
+            "Âm một trăm hai mươi lăm đô la Mỹ và năm mươi xu",
+            Dialect::North,
+        );
+        assert_eq!(
+            tokens_am_usd,
+            vec!["am", "mot", "tram", "hai", "muoi_chuc", "lam", "do_la_my", "va", "nam", "muoi_chuc", "xu"]
         );
     }
 }

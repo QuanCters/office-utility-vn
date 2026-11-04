@@ -7,6 +7,206 @@
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="copy-dir" href="public" />
     <link data-trunk rel="rust" data-wasm-opt="0" />
+    <script>
+      // Vietnamese Number Web Audio Scheduler
+      (function() {
+        let audioCtx = null;
+        let bufferCache = new Map();
+        let activeSources = [];
+        let currentPlaybackId = 0;
+
+        function getAudioContext() {
+          if (!audioCtx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) audioCtx = new AudioCtx();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          return audioCtx;
+        }
+
+        async function loadAudioBuffer(ctx, token) {
+          if (bufferCache.has(token)) return bufferCache.get(token);
+          const urls = [
+            `public/audio/vn_numbers/${token}.mp3`,
+            `/audio/vn_numbers/${token}.mp3`,
+            `audio/vn_numbers/${token}.mp3`
+          ];
+          for (const url of urls) {
+            try {
+              const res = await fetch(url);
+              if (res.ok) {
+                const arrayBuffer = await res.arrayBuffer();
+                const buffer = await ctx.decodeAudioData(arrayBuffer);
+                bufferCache.set(token, buffer);
+                return buffer;
+              }
+            } catch (e) {}
+          }
+          return null;
+        }
+
+        window.playVietnameseNumberAudio = async function(tokens, onEnded) {
+          window.stopVietnameseNumberAudio();
+          const playbackId = ++currentPlaybackId;
+          const ctx = getAudioContext();
+          if (!ctx) {
+            if (onEnded) onEnded();
+            return;
+          }
+
+          const buffers = await Promise.all(tokens.map(t => loadAudioBuffer(ctx, t)));
+          if (playbackId !== currentPlaybackId) return;
+
+          let time = ctx.currentTime + 0.05;
+          for (let i = 0; i < tokens.length; i++) {
+            const buf = buffers[i];
+            const token = tokens[i];
+            if (!buf) continue;
+            const source = ctx.createBufferSource();
+            source.buffer = buf;
+            source.connect(ctx.destination);
+            source.start(time);
+            activeSources.push(source);
+            const extraGap = (token === "trieu" || token === "ty" || token === "nghin" || token === "ngan") ? 0.08 : 0.0;
+            time += buf.duration + 0.035 + extraGap;
+          }
+
+          const durationMs = Math.max(0, (time - ctx.currentTime) * 1000);
+          setTimeout(() => {
+            if (playbackId === currentPlaybackId && onEnded) {
+              onEnded();
+            }
+          }, durationMs);
+        };
+
+        window.stopVietnameseNumberAudio = function() {
+          currentPlaybackId++;
+          for (const src of activeSources) {
+            try { src.stop(); } catch(e) {}
+          }
+          activeSources = [];
+        };
+      })();
+
+      function toPlain(val) {
+        if (!val || typeof val !== "object") return val;
+        if (val instanceof Map) {
+          const obj = {};
+          for (const [k, v] of val.entries()) {
+            obj[k] = toPlain(v);
+          }
+          return obj;
+        }
+        if (Array.isArray(val)) {
+          return val.map(toPlain);
+        }
+        const obj = {};
+        for (const k of Object.keys(val)) {
+          obj[k] = toPlain(val[k]);
+        }
+        return obj;
+      }
+
+      if (typeof window !== "undefined" && !window.__TAURI__) {
+        window.__TAURI__ = {
+          core: {
+            Channel: class {
+              constructor() {
+                this.id = 0;
+                this.onmessage = null;
+              }
+              toJSON() {
+                return "__CHANNEL__:0";
+              }
+            },
+            invoke: async function(cmd, args) {
+              console.log("[Tauri Web Shim] invoke:", cmd, args);
+              const plainArgs = toPlain(args);
+              window.__last_args = plainArgs;
+              if (cmd === "check_app_update") return { has_update: false };
+              if (cmd === "get_task_history") return [];
+              if (cmd === "get_tool_setting") return null;
+              if (cmd === "list_tool_presets") return [];
+              if (cmd === "dispatch_tool_task") {
+                const req = (plainArgs && plainArgs.request) || {};
+                const slug = req.tool_slug;
+                const opts = req.options || {};
+                const input = opts.input_string || opts.input || opts.cccd || "";
+                if (slug === "vn-cccd-mst-validator") {
+                  const clean = (input || "").replace(/\D/g, "");
+                  let result;
+                  if (clean.length === 12) {
+                    const provMap = { "001": "Hà Nội", "079": "TP. Hồ Chí Minh", "048": "Đà Nẵng", "031": "Hải Phòng", "092": "Cần Thơ" };
+                    const pCode = clean.slice(0, 3);
+                    const pName = provMap[pCode] || "TP. Hồ Chí Minh";
+                    const gCode = parseInt(clean[3], 10);
+                    let cBase = 1900, gender = "Nam";
+                    if (gCode === 0) { cBase = 1900; gender = "Nam"; }
+                    else if (gCode === 1) { cBase = 1900; gender = "Nữ"; }
+                    else if (gCode === 2) { cBase = 2000; gender = "Nam"; }
+                    else if (gCode === 3) { cBase = 2000; gender = "Nữ"; }
+                    else if (gCode === 4) { cBase = 2100; gender = "Nam"; }
+                    else if (gCode === 5) { cBase = 2100; gender = "Nữ"; }
+                    const bYear = cBase + parseInt(clean.slice(4, 6), 10);
+                    const century = Math.floor(cBase / 100) + 1;
+                    result = {
+                      type: "Cccd",
+                      is_valid: true,
+                      cccd_number: clean,
+                      province_code: pCode,
+                      province_name: pName,
+                      gender: gender,
+                      century: century,
+                      birth_year: bYear,
+                      random_number: clean.slice(6)
+                    };
+                  } else if (clean.length === 10 || clean.length === 13) {
+                    const weights = [31, 29, 23, 19, 17, 13, 7, 5, 3];
+                    let sum = 0;
+                    for (let i = 0; i < 9; i++) sum += parseInt(clean[i], 10) * weights[i];
+                    const rem = sum % 11;
+                    const exp = (10 - rem) >= 10 ? 0 : (10 - rem);
+                    const actual = parseInt(clean[9], 10);
+                    result = {
+                      type: "Mst",
+                      is_valid: actual === exp,
+                      mst: clean,
+                      mst_type: clean.length === 10 ? "Doanh nghiệp / Cá nhân (10 số)" : "Đơn vị trực thuộc / Chi nhánh (13 số)",
+                      checksum_digit: actual,
+                      expected_checksum: exp,
+                      branch_code: clean.length === 13 ? clean.slice(10, 13) : null
+                    };
+                  } else {
+                    result = {
+                      type: "Invalid",
+                      input: input,
+                      reason: `Độ dài ${clean.length} chữ số không khớp chuẩn CCCD (12 số) hoặc MST (10 hoặc 13 số)`
+                    };
+                  }
+                  return {
+                    task_id: req.task_id || "sim-task",
+                    status: "SUCCESS",
+                    output_paths: [JSON.stringify(result, null, 2)],
+                    failed_items: [],
+                    elapsed_ms: 12
+                  };
+                }
+                return {
+                  task_id: req.task_id || "sim-task",
+                  status: "SUCCESS",
+                  output_paths: ["Tác vụ xử lý hoàn tất thành công!"],
+                  failed_items: [],
+                  elapsed_ms: 10
+                };
+              }
+              return null;
+            }
+          }
+        };
+      }
+    </script>
   </head>
   <body></body>
 </html>

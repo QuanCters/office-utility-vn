@@ -1,5 +1,6 @@
 /* ==============================================================================
    VN Office Micro-App Styling (Phase 2 Micro-App Architecture)
+   Standardized to DESIGN.md Tokens & Responsive Ergonomics
    ============================================================================== */
 
 .vn-office-app-container {
@@ -7,8 +8,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: #0F172A;
-  color: #F8FAFC;
+  background: var(--bg-main);
+  color: var(--text-main);
   overflow: hidden;
 }
 
@@ -16,68 +17,68 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
-  background: #1E293B;
-  border-bottom: 1px solid #334155;
+  padding: var(--space-md) var(--space-xl);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .vn-office-header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-lg);
   min-width: 0;
 }
 
 .vn-office-header-title-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xs);
   min-width: 0;
 }
 
 .vn-office-header-title {
   font-size: 16px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text-main);
   margin: 0;
   white-space: nowrap;
 }
 
 .vn-office-header-tagline {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .vn-office-header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-md);
   flex-shrink: 0;
 }
 
 .vn-office-header-badge {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   padding: 4px 10px;
-  background: rgba(16, 185, 129, 0.15);
-  color: #10B981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 9999px;
+  background: var(--success-bg);
+  color: var(--success-light);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-full);
   white-space: nowrap;
 }
 
 .vn-office-toggle-legal-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #0F172A;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  color: #94A3B8;
+  gap: var(--space-sm);
+  padding: 6px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -85,15 +86,15 @@
 }
 
 .vn-office-toggle-legal-btn:hover {
-  background: #334155;
-  color: #F8FAFC;
-  border-color: #475569;
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  border-color: var(--primary);
 }
 
 .vn-office-toggle-legal-btn.active {
-  background: rgba(5, 150, 105, 0.15);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #34D399;
+  background: var(--success-bg);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: var(--success-light);
 }
 
 .vn-office-workspace-body {
@@ -101,13 +102,14 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 /* Sidebar nội bộ */
 .vn-office-sidebar {
-  width: 260px;
-  background: #0F172A;
-  border-right: 1px solid #1E293B;
+  width: 270px;
+  background: var(--bg-main);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -115,11 +117,11 @@
 }
 
 .vn-office-sidebar-header {
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid #1E293B;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 
 .vn-office-sidebar-title-row {
@@ -129,82 +131,88 @@
 }
 
 .vn-office-sidebar-badge {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.05em;
-  color: #10B981;
+  color: var(--success-light);
 }
 
 .vn-office-sidebar-count {
-  font-size: 11px;
-  color: #64748B;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .vn-office-search-box {
   display: flex;
   align-items: center;
-  background: #1E293B;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 4px 8px;
-  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  gap: var(--space-sm);
+  transition: border-color 0.15s;
+}
+
+.vn-office-search-box:focus-within {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
 .vn-office-search-icon {
-  font-size: 12px;
-  opacity: 0.6;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .vn-office-search-input {
   background: transparent;
   border: none;
   outline: none;
-  color: #F8FAFC;
-  font-size: 12px;
+  color: var(--text-main);
+  font-size: 13px;
   width: 100%;
 }
 
 .vn-office-search-input::placeholder {
-  color: #64748B;
+  color: var(--text-subtle);
 }
 
 .vn-office-search-clear {
   background: transparent;
   border: none;
-  color: #94A3B8;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
-  padding: 0 2px;
+  font-size: 12px;
+  padding: 0 4px;
 }
 
 .vn-office-workflow-section {
-  padding: 10px 12px 6px;
+  padding: var(--space-sm) var(--space-md) var(--space-xs);
 }
 
 .vn-office-workflow-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-md);
   width: 100%;
-  padding: 8px 12px;
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(16, 185, 129, 0.12));
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  border-radius: 8px;
+  padding: var(--space-sm) var(--space-md);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.15), rgba(16, 185, 129, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
 }
 
 .vn-office-workflow-btn:hover {
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.25), rgba(16, 185, 129, 0.25));
-  border-color: rgba(99, 102, 241, 0.5);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.28), rgba(16, 185, 129, 0.28));
+  border-color: rgba(99, 102, 241, 0.6);
   transform: translateY(-1px);
 }
 
 .vn-office-workflow-btn.active {
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.35), rgba(16, 185, 129, 0.35));
-  border-color: #10B981;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.4), rgba(16, 185, 129, 0.4));
+  border-color: var(--success);
+  box-shadow: 0 0 12px var(--success-bg);
 }
 
 .vn-office-workflow-icon {
@@ -218,28 +226,28 @@
 }
 
 .vn-office-workflow-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: #F8FAFC;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .vn-office-workflow-desc {
-  font-size: 10px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .vn-office-section-divider {
-  padding: 10px 14px 4px;
-  font-size: 10px;
+  padding: var(--space-sm) var(--space-md) var(--space-xs);
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: #64748B;
+  color: var(--text-subtle);
 }
 
 .vn-office-tools-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 8px 16px;
+  padding: var(--space-xs) var(--space-sm) var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -248,11 +256,11 @@
 .vn-office-tool-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -260,18 +268,18 @@
 }
 
 .vn-office-tool-item:hover {
-  background: #1E293B;
-  border-color: #334155;
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
 }
 
 .vn-office-tool-item.active {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--success-bg);
   border-color: rgba(16, 185, 129, 0.4);
-  color: #F8FAFC;
+  color: var(--text-main);
 }
 
 .vn-office-tool-item-icon {
-  font-size: 16px;
+  font-size: 18px;
   flex-shrink: 0;
 }
 
@@ -283,30 +291,32 @@
 }
 
 .vn-office-tool-item-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: #E2E8F0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vn-office-tool-item.active .vn-office-tool-item-name {
-  color: #34D399;
+  color: var(--success-light);
+  font-weight: 600;
 }
 
 .vn-office-tool-item-slug {
-  font-size: 10px;
-  color: #64748B;
+  font-size: 12px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vn-office-empty-filter {
-  padding: 16px 12px;
-  font-size: 12px;
-  color: #64748B;
+  padding: var(--space-lg) var(--space-md);
+  font-size: 13px;
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -315,8 +325,8 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 20px 24px;
-  background: #0B1120;
+  padding: var(--space-xl) var(--space-2xl);
+  background: var(--neutral-app);
 }
 
 .vn-office-workflow-wrapper {
@@ -329,24 +339,24 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .vn-office-tool-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 18px 20px;
-  background: #1E293B;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  gap: 16px;
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  gap: var(--space-lg);
 }
 
 .vn-office-tool-title-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   min-width: 0;
 }
 
@@ -356,65 +366,66 @@
 }
 
 .vn-office-tool-name {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text-main);
   margin: 0 0 4px;
 }
 
 .vn-office-tool-description {
-  font-size: 12px;
-  color: #94A3B8;
+  font-size: 13px;
+  color: var(--text-muted);
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .vn-office-tool-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--space-sm);
   flex-shrink: 0;
 }
 
 .vn-office-slug-badge {
-  font-size: 11px;
-  font-family: monospace;
-  padding: 2px 8px;
-  background: #0F172A;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  color: #94A3B8;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
 }
 
 .vn-office-privacy-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  background: rgba(16, 185, 129, 0.1);
-  color: #34D399;
-  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  background: var(--success-bg);
+  color: var(--success-light);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-full);
 }
 
 .vn-office-tool-view-body {
-  background: #1E293B;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  padding: 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
 }
 
 .vn-office-not-found {
-  padding: 40px;
+  padding: var(--space-3xl);
   text-align: center;
-  color: #94A3B8;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 /* Right Legal Panel */
 .vn-office-right-panel {
   width: 320px;
-  background: #0F172A;
-  border-left: 1px solid #1E293B;
+  background: var(--bg-main);
+  border-left: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -422,29 +433,29 @@
 }
 
 .legal-panel-header {
-  padding: 14px 16px;
-  border-bottom: 1px solid #1E293B;
-  background: #111827;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .legal-panel-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--space-sm);
+  font-size: 14px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text-main);
 }
 
 .legal-panel-title h3 {
-  font-size: 13px;
+  font-size: 14px;
   margin: 0;
   font-weight: 700;
 }
 
 .legal-panel-subtitle {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: var(--text-muted);
   margin: 4px 0 0;
 }
 
@@ -453,95 +464,98 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--success-bg);
   border-bottom: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34D399;
-  font-size: 11px;
+  color: var(--success-light);
+  font-size: 12px;
   font-weight: 600;
 }
 
 .legal-copy-banner-close {
   background: transparent;
   border: none;
-  color: #34D399;
+  color: var(--success-light);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .legal-panel-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .legal-section-card {
-  background: #1E293B;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .legal-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  padding-bottom: 6px;
+  padding-bottom: var(--space-xs);
 }
 
 .legal-card-header h4 {
-  font-size: 12px;
-  font-weight: 700;
-  color: #E2E8F0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
   margin: 0;
 }
 
 .legal-stat-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-sm);
 }
 
 .legal-stat-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: rgba(15, 23, 42, 0.4);
-  padding: 6px 8px;
-  border-radius: 6px;
+  background: var(--bg-main);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .legal-stat-label {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .legal-stat-value {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
 }
 
 .legal-stat-value.emerald {
-  color: #34D399;
+  color: var(--success-light);
 }
 
 .legal-stat-sub {
-  font-size: 10px;
-  color: #64748B;
+  font-size: 12px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
 }
 
 .legal-citation {
-  font-size: 10px;
-  color: #64748B;
+  font-size: 12px;
+  color: var(--text-subtle);
   font-style: italic;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .legal-table-wrapper {
@@ -551,67 +565,75 @@
 .legal-mini-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
 }
 
 .legal-mini-table th,
 .legal-mini-table td {
-  padding: 4px 6px;
-  border-bottom: 1px solid #334155;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-variant-numeric: tabular-nums;
 }
 
 .legal-mini-table th {
-  color: #94A3B8;
+  color: var(--text-muted);
   font-weight: 600;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--bg-main);
 }
 
 .legal-mini-table td.bold {
   font-weight: 600;
-  color: #F8FAFC;
+  color: var(--text-main);
 }
 
 .legal-table-total {
-  border-top: 1px solid #475569;
+  border-top: 1px solid var(--border-color);
   background: rgba(15, 23, 42, 0.7);
 }
 
 .highlight-emerald {
-  color: #34D399;
+  color: var(--success-light);
   font-weight: 700;
 }
 
 .legal-tax-tiers {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .tax-tier-row {
   display: flex;
   justify-content: space-between;
-  padding: 3px 6px;
-  font-size: 11px;
-  color: #CBD5E1;
-  background: rgba(15, 23, 42, 0.3);
-  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-main);
+  background: var(--bg-main);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  font-variant-numeric: tabular-nums;
 }
 
 .tier-rate {
   font-weight: 700;
-  color: #38BDF8;
+  color: var(--info-light);
 }
 
 .legal-bank-search input {
-  font-size: 11px;
-  padding: 6px 8px;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  width: 100%;
 }
 
 .legal-bank-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-sm);
   max-height: 280px;
   overflow-y: auto;
   padding-right: 2px;
@@ -621,11 +643,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  gap: var(--space-sm);
 }
 
 .legal-bank-info {
@@ -638,59 +660,147 @@
 .legal-bank-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-sm);
 }
 
 .legal-bank-code {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--text-main);
 }
 
 .legal-bank-bin {
-  font-size: 10px;
-  font-family: monospace;
-  color: #34D399;
-  background: rgba(16, 185, 129, 0.1);
-  padding: 1px 4px;
-  border-radius: 3px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--success-light);
+  background: var(--success-bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .legal-bank-name {
-  font-size: 10px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .legal-bank-swift {
-  font-size: 9px;
-  font-family: monospace;
-  color: #64748B;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-subtle);
 }
 
 .legal-bank-copy-btn {
-  font-size: 10px;
-  padding: 3px 6px;
-  background: #334155;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  color: #F8FAFC;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.12s ease;
 }
 
 .legal-bank-copy-btn:hover {
-  background: #475569;
-  border-color: #64748B;
+  background: var(--bg-card-hover);
+  border-color: var(--primary);
 }
 
 .legal-bank-empty {
-  font-size: 11px;
-  color: #64748B;
+  font-size: 12px;
+  color: var(--text-subtle);
   text-align: center;
-  padding: 12px;
+  padding: var(--space-md);
 }
 
+/* ==============================================================================
+   Responsive Media Queries for VN Office (Mobile <= 768px, Tablet <= 1024px)
+   ============================================================================== */
+
+@media (max-width: 1024px) {
+  .vn-office-right-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    z-index: 40;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@media (max-width: 768px) {
+  .vn-office-header {
+    flex-wrap: wrap;
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+  .vn-office-header-title {
+    font-size: 14px;
+  }
+  .vn-office-header-tagline {
+    display: none;
+  }
+  .vn-office-workspace-body {
+    flex-direction: column;
+  }
+  .vn-office-sidebar {
+    width: 100%;
+    max-height: 160px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .vn-office-center-workspace {
+    padding: var(--space-md);
+  }
+  .vn-office-tool-card-header {
+    flex-direction: column;
+    padding: var(--space-md);
+    gap: var(--space-sm);
+  }
+  .vn-office-tool-meta {
+    align-items: flex-start;
+  }
+  .vn-office-right-panel {
+    width: 100%;
+    position: fixed;
+    top: 38px;
+    bottom: 0;
+    right: 0;
+    z-index: 50;
+  }
+}
+
+/* Nút phát âm thanh đọc số tiền chuẩn (Audio Stitching) */
+.vn-audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vn-audio-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.vn-audio-btn.playing {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: var(--danger);
+  color: var(--danger);
+}

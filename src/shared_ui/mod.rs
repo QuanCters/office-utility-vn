@@ -2,6 +2,7 @@ pub mod back_button;
 pub mod keyboard_shortcuts;
 pub mod progress_bar;
 pub mod task_executor;
+pub mod vn_number_audio_player;
 pub mod workflow_runner;
 
 pub use back_button::BackButton;
@@ -15,6 +16,7 @@ pub use task_executor::{
     cancel_task_ipc, execute_workflow_ipc, open_output_folder_ipc, validate_payload_before_dispatch,
     EmptyToolPayload, GenericToolPayload, TaskExecutor, ToolPayloadContract, ToolValidatorFn,
 };
+pub use vn_number_audio_player::{play_audio_tokens, stop_audio, words_to_audio_tokens};
 pub use workflow_runner::{WorkflowDag, WorkflowRunner, WorkflowStep};
 
 #[cfg(test)]

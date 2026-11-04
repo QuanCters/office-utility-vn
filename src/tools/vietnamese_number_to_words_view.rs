@@ -11,6 +11,34 @@ pub fn VietnameseNumberToWordsView(
     output_result: ReadSignal<String>,
     set_is_ime_composing: WriteSignal<bool>,
 ) -> impl IntoView {
+    let is_playing = RwSignal::new(false);
+
+    on_cleanup(move || {
+        crate::shared_ui::stop_audio();
+    });
+
+    let toggle_speak = move |_| {
+        if is_playing.get_untracked() {
+            crate::shared_ui::stop_audio();
+            is_playing.set(false);
+        } else {
+            let text = output_result.get_untracked();
+            if text.trim().is_empty() {
+                return;
+            }
+            let is_south = dialect.get_untracked() == "South";
+            let tokens = crate::shared_ui::words_to_audio_tokens(&text, is_south);
+            if tokens.is_empty() {
+                return;
+            }
+            is_playing.set(true);
+            let on_ended = Callback::new(move |_| {
+                is_playing.set(false);
+            });
+            crate::shared_ui::play_audio_tokens(tokens, on_ended);
+        }
+    };
+
     view! {
         <div class="tool-config-panel">
             <div class="form-group">
@@ -73,8 +101,17 @@ pub fn VietnameseNumberToWordsView(
                 if !res.is_empty() {
                     view! {
                         <div style="margin-top: 12px; padding: 14px; background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.3); border-radius: 6px;">
-                            <div style="font-size: 11px; color: #10B981; font-weight: 600; margin-bottom: 4px;">"KẾT QUẢ ĐỌC SỐ CHUẨN:"</div>
-                            <div style="font-size: 16px; font-weight: 600; color: #F8FAFC;">{res}</div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <div style="font-size: 12px; color: var(--success); font-weight: 600;">"KẾT QUẢ ĐỌC SỐ CHUẨN:"</div>
+                                <button
+                                    type="button"
+                                    class=move || if is_playing.get() { "vn-audio-btn playing" } else { "vn-audio-btn" }
+                                    on:click=toggle_speak
+                                >
+                                    {move || if is_playing.get() { "⏹ Dừng đọc" } else { "🔊 Nghe đọc số" }}
+                                </button>
+                            </div>
+                            <div style="font-size: 16px; font-weight: 600; color: var(--text-main);">{res}</div>
                         </div>
                     }.into_any()
                 } else {
