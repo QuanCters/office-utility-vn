@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use crate::app::ToolItem;
-use crate::micro_apps::MEDIA_STUDIO_TOOLS;
+use crate::micro_apps::{MicroAppId, ToolRegistry};
 
 /// Mục công việc trong hàng đợi xử lý đa phương tiện hàng loạt (Batch Queue).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -101,12 +101,7 @@ impl MediaCategory {
 
 /// Ánh xạ một slug công cụ Media sang nhóm danh mục tương ứng.
 pub fn category_for_tool(slug: &str) -> Option<MediaCategory> {
-    for cat in MediaCategory::ALL {
-        if cat.slugs().contains(&slug) {
-            return Some(cat);
-        }
-    }
-    None
+    MediaCategory::ALL.into_iter().find(|&cat| cat.slugs().contains(&slug))
 }
 
 /// Ánh xạ tĩnh từ slug công cụ Media Studio sang icon emoji trực quan.
@@ -326,12 +321,12 @@ impl MediaStudioState {
 
     /// Kiểm tra danh sách tệp có rỗng hay không.
     pub fn has_files(&self) -> bool {
-        !self.loaded_files.with(|f| f.is_empty())
+        !self.loaded_files.with_untracked(|f| f.is_empty())
     }
 
     /// Số lượng tệp đã nạp vào workspace.
     pub fn loaded_files_count(&self) -> usize {
-        self.loaded_files.with(|f| f.len())
+        self.loaded_files.with_untracked(|f| f.len())
     }
 
     /// Đường dẫn tệp đang được chọn (None nếu chưa có tệp).
@@ -373,10 +368,10 @@ impl MediaStudioState {
         self.is_workflow_active.set(false);
 
         let cur_tool = self.active_tool.get();
-        if category_for_tool(&cur_tool) != Some(category) {
-            if let Some(&first_slug) = category.slugs().first() {
-                self.active_tool.set(first_slug.to_string());
-            }
+        if category_for_tool(&cur_tool) != Some(category)
+            && let Some(&first_slug) = category.slugs().first()
+        {
+            self.active_tool.set(first_slug.to_string());
         }
     }
 
@@ -397,12 +392,12 @@ impl MediaStudioState {
 
     /// Kiểm tra xem có đang thực thi tác vụ hay không.
     pub fn is_running(&self) -> bool {
-        self.is_running.get()
+        self.is_running.get_untracked()
     }
 
-    /// Tìm thông tin chi tiết của một công cụ theo slug từ danh sách `MEDIA_STUDIO_TOOLS`.
+    /// Tìm thông tin chi tiết của một công cụ theo slug từ ToolRegistry.
     pub fn find_tool(&self, slug: &str) -> Option<&'static ToolItem> {
-        MEDIA_STUDIO_TOOLS.iter().find(|t| t.slug == slug)
+        self.tools().iter().find(|t| t.slug == slug)
     }
 
     // --- Batch Queue helper methods ---
@@ -444,12 +439,12 @@ impl MediaStudioState {
 
     /// Số lượng mục hiện tại trong hàng đợi xử lý hàng loạt.
     pub fn batch_items_count(&self) -> usize {
-        self.batch_queue.with(|q| q.len())
+        self.batch_queue.with_untracked(|q| q.len())
     }
 
     /// Kiểm tra xem hàng đợi có tác vụ nào đang chờ hoặc đang chạy không.
     pub fn has_active_batches(&self) -> bool {
-        self.batch_queue.with(|q| {
+        self.batch_queue.with_untracked(|q| {
             q.iter().any(|it| it.status == "Pending" || it.status == "Processing")
         })
     }
@@ -459,8 +454,13 @@ impl MediaStudioState {
         self.is_queue_expanded.update(|exp| *exp = !*exp);
     }
 
-    /// Danh sách tĩnh 9 công cụ thuộc phạm vi Media Studio.
+    /// Danh sách công cụ thuộc phạm vi Media Studio (ủy quyền từ ToolRegistry).
     pub fn tools(&self) -> &'static [ToolItem] {
-        crate::micro_apps::MEDIA_STUDIO_TOOLS
+        ToolRegistry::micro_app_tools(MicroAppId::MediaStudio)
+    }
+
+    /// Danh sách công cụ khả dụng (alias cho tools()).
+    pub fn available_tools(&self) -> &'static [ToolItem] {
+        self.tools()
     }
 }

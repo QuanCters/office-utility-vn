@@ -13,7 +13,7 @@ pub use keyboard_shortcuts::{
 pub use progress_bar::ProgressBar;
 pub use task_executor::{
     cancel_task_ipc, execute_workflow_ipc, open_output_folder_ipc, validate_payload_before_dispatch,
-    EmptyToolPayload, GenericToolPayload, TaskExecutor, ToolPayloadContract,
+    EmptyToolPayload, GenericToolPayload, TaskExecutor, ToolPayloadContract, ToolValidatorFn,
 };
 pub use workflow_runner::{WorkflowDag, WorkflowRunner, WorkflowStep};
 

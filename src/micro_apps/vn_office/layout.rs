@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use crate::launcher::CommandPalette;
 use crate::micro_apps::vn_office::sidebar::{vn_office_tool_icon, VnOfficeSidebar};
 use crate::micro_apps::vn_office::state::{BankReference, VnOfficeState, POPULAR_VN_BANKS};
-use crate::micro_apps::VN_OFFICE_TOOLS;
+use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     EncodingMojibakeFixerView, GrossNetSalaryCalculatorView, VietnameseFontConverterView,
@@ -549,7 +549,7 @@ pub fn VnOfficeLayout(
                             view! {
                                 <div class="vn-office-workflow-wrapper">
                                     <WorkflowRunner
-                                        available_tools=VN_OFFICE_TOOLS
+                                        available_tools=micro_app_tools(MicroAppId::VnOffice)
                                         title="⚡ Chuỗi Quy trình Nghiệp vụ VN Office"
                                         is_running=Signal::derive(move || state.is_running.get())
                                         status_message=Signal::derive(move || state.status_message.get())

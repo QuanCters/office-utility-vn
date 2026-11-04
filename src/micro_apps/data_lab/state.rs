@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use crate::app::ToolItem;
-use crate::micro_apps::DATA_LAB_TOOLS;
+use crate::micro_apps::{MicroAppId, ToolRegistry};
 
 /// Phân loại 3 nhóm nghiệp vụ xử lý dữ liệu và bảng tính trong Data Lab.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -69,12 +69,7 @@ pub fn category_for_tool(slug: &str) -> Option<DataLabCategory> {
     if slug == "universal-converter" {
         return Some(DataLabCategory::TransformMerge);
     }
-    for cat in DataLabCategory::ALL {
-        if cat.slugs().contains(&slug) {
-            return Some(cat);
-        }
-    }
-    None
+    DataLabCategory::ALL.into_iter().find(|&cat| cat.slugs().contains(&slug))
 }
 
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App Data Lab.
@@ -254,10 +249,11 @@ impl DataLabState {
         self.active_category.set(cat);
         self.is_workflow_active.set(false);
         let cur_tool = self.active_tool.get();
-        if !cat.slugs().contains(&cur_tool.as_str()) && cur_tool != "universal-converter" {
-            if let Some(&first_slug) = cat.slugs().first() {
-                self.active_tool.set(first_slug.to_string());
-            }
+        if !cat.slugs().contains(&cur_tool.as_str())
+            && cur_tool != "universal-converter"
+            && let Some(&first_slug) = cat.slugs().first()
+        {
+            self.active_tool.set(first_slug.to_string());
         }
     }
 
@@ -293,17 +289,17 @@ impl DataLabState {
 
     /// Kiểm tra xem có tác vụ nào đang thực thi không.
     pub fn is_running(&self) -> bool {
-        self.is_running.get()
+        self.is_running.get_untracked()
     }
 
     /// Số lượng file đã nạp vào workspace.
     pub fn loaded_files_count(&self) -> usize {
-        self.loaded_files.with(|f| f.len())
+        self.loaded_files.with_untracked(|f| f.len())
     }
 
     /// Kiểm tra xem đã có ít nhất một file nạp vào chưa.
     pub fn has_files(&self) -> bool {
-        self.loaded_files_count() > 0
+        self.loaded_files.with_untracked(|f| !f.is_empty())
     }
 
     /// Lấy slug của công cụ hiện tại.
@@ -311,18 +307,23 @@ impl DataLabState {
         self.active_tool.get()
     }
 
-    /// Tìm kiếm metadata ToolItem tĩnh từ slug trong `DATA_LAB_TOOLS`.
+    /// Tìm kiếm metadata ToolItem từ slug trong ToolRegistry (hỗ trợ alias universal-converter).
     pub fn find_tool(&self, slug: &str) -> Option<&'static ToolItem> {
         let lookup_slug = if slug == "universal-converter" {
             "universal-file-converter-hub"
         } else {
             slug
         };
-        DATA_LAB_TOOLS.iter().find(|t| t.slug == lookup_slug)
+        self.tools().iter().find(|t| t.slug == lookup_slug)
     }
 
-    /// Danh sách tĩnh 13 công cụ thuộc phạm vi Data Lab.
+    /// Danh sách công cụ thuộc phạm vi Data Lab (ủy quyền từ ToolRegistry).
     pub fn tools(&self) -> &'static [ToolItem] {
-        DATA_LAB_TOOLS
+        ToolRegistry::micro_app_tools(MicroAppId::DataLab)
+    }
+
+    /// Danh sách công cụ khả dụng (alias cho tools()).
+    pub fn available_tools(&self) -> &'static [ToolItem] {
+        self.tools()
     }
 }

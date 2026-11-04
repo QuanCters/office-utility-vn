@@ -3,7 +3,7 @@ use crate::launcher::CommandPalette;
 use crate::micro_apps::pdf_studio::file_list_panel::PdfStudioFileListPanel;
 use crate::micro_apps::pdf_studio::state::{category_for_tool, PdfStudioState};
 use crate::micro_apps::pdf_studio::toolbar::{pdf_studio_tool_icon, PdfStudioToolbar};
-use crate::micro_apps::PDF_STUDIO_TOOLS;
+use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     MarkdownToStyledPdfView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
@@ -77,7 +77,7 @@ pub fn PdfStudioLayout(
                             view! {
                                 <div class="pdf-studio-workflow-wrapper">
                                     <WorkflowRunner
-                                        available_tools=PDF_STUDIO_TOOLS
+                                        available_tools=micro_app_tools(MicroAppId::PdfStudio)
                                         title="⚡ Chuỗi Quy trình Xử lý PDF Studio"
                                         is_running=Signal::derive(move || state.is_running.get())
                                         status_message=Signal::derive(move || state.status_message.get())
@@ -243,11 +243,9 @@ pub fn PdfStudioLayout(
                                         tool_slug=Signal::derive(move || state.active_tool.get())
                                         input_files=Signal::derive(move || {
                                             let mut files = state.loaded_files.get();
-                                            if let Some(ref p) = state.active_file_path() {
-                                                if let Some(pos) = files.iter().position(|f| f == p) {
-                                                    let active = files.remove(pos);
-                                                    files.insert(0, active);
-                                                }
+                                            if let Some(pos) = state.active_file_path().and_then(|p| files.iter().position(|f| f == &p)) {
+                                                let active = files.remove(pos);
+                                                files.insert(0, active);
                                             }
                                             files
                                         })

@@ -3,7 +3,7 @@ use crate::launcher::CommandPalette;
 use crate::micro_apps::data_lab::file_list_panel::DataLabFileListPanel;
 use crate::micro_apps::data_lab::state::{category_for_tool, DataLabState};
 use crate::micro_apps::data_lab::toolbar::{data_lab_tool_icon, DataLabToolbar};
-use crate::micro_apps::DATA_LAB_TOOLS;
+use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     Base64FileCodecView, DataStructureConverterView, DiffCheckerTextSheetsView,
@@ -77,7 +77,7 @@ pub fn DataLabLayout(
                             view! {
                                 <div class="data-lab-workflow-wrapper">
                                     <WorkflowRunner
-                                        available_tools=DATA_LAB_TOOLS
+                                        available_tools=micro_app_tools(MicroAppId::DataLab)
                                         title="⚡ Chuỗi Quy trình Xử lý Data Lab"
                                         is_running=Signal::derive(move || state.is_running.get())
                                         status_message=Signal::derive(move || state.status_message.get())
@@ -232,11 +232,9 @@ pub fn DataLabLayout(
                                         tool_slug=Signal::derive(move || state.active_tool.get())
                                         input_files=Signal::derive(move || {
                                             let mut files = state.loaded_files.get();
-                                            if let Some(ref p) = state.active_file_path() {
-                                                if let Some(pos) = files.iter().position(|f| f == p) {
-                                                    let active = files.remove(pos);
-                                                    files.insert(0, active);
-                                                }
+                                            if let Some(pos) = state.active_file_path().and_then(|p| files.iter().position(|f| f == &p)) {
+                                                let active = files.remove(pos);
+                                                files.insert(0, active);
                                             }
                                             files
                                         })

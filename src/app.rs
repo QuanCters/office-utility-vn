@@ -513,12 +513,24 @@ impl AppState {
     /// Kiểm tra xem Micro-App cụ thể có tác vụ / dữ liệu đang làm việc hay không.
     pub fn has_active_work(&self, app_id: MicroAppId) -> bool {
         match app_id {
-            MicroAppId::VnOffice => self.vn_office_state.calculation_history.with(|h| !h.is_empty()),
-            MicroAppId::PdfStudio => self.pdf_studio_state.has_files(),
-            MicroAppId::MediaStudio => {
-                self.media_studio_state.batch_items_count() > 0 || self.media_studio_state.has_files()
+            MicroAppId::VnOffice => {
+                self.vn_office_state.is_running()
+                    || self
+                        .vn_office_state
+                        .calculation_history
+                        .with_untracked(|h| !h.is_empty())
             }
-            MicroAppId::DataLab => self.data_lab_state.has_files(),
+            MicroAppId::PdfStudio => {
+                self.pdf_studio_state.is_running() || self.pdf_studio_state.has_files()
+            }
+            MicroAppId::MediaStudio => {
+                self.media_studio_state.is_running()
+                    || self.media_studio_state.batch_items_count() > 0
+                    || self.media_studio_state.has_files()
+            }
+            MicroAppId::DataLab => {
+                self.data_lab_state.is_running() || self.data_lab_state.has_files()
+            }
         }
     }
 
@@ -722,10 +734,8 @@ pub fn App() -> impl IntoView {
         } else if ctrl_or_meta && (key == "w" || key == "W") {
             ev.prevent_default();
             close_win();
-        } else if key == "Escape" {
-            if update_modal_open.get() {
-                set_update_modal_open.set(false);
-            }
+        } else if key == "Escape" && update_modal_open.get() {
+            set_update_modal_open.set(false);
         }
     };
 

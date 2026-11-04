@@ -169,11 +169,14 @@ impl ToolPayloadContract for EmptyToolPayload {
     }
 }
 
+/// Type alias cho con trỏ hàm kiểm tra tính hợp lệ của tham số công cụ
+pub type ToolValidatorFn = fn(&serde_json::Value) -> Result<(), String>;
+
 /// Triển khai cho Generic JSON Payload kèm validator tùy chọn
 #[derive(Debug, Clone)]
 pub struct GenericToolPayload {
     pub data: serde_json::Value,
-    pub validator: Option<fn(&serde_json::Value) -> Result<(), String>>,
+    pub validator: Option<ToolValidatorFn>,
 }
 
 impl GenericToolPayload {
@@ -186,7 +189,7 @@ impl GenericToolPayload {
 
     pub fn with_validator(
         data: serde_json::Value,
-        validator: fn(&serde_json::Value) -> Result<(), String>,
+        validator: ToolValidatorFn,
     ) -> Self {
         Self {
             data,
@@ -304,19 +307,17 @@ pub fn TaskExecutor(
             .unwrap_or_else(|| serde_json::json!({}));
 
         // Kiểm tra tính hợp lệ của tham số trước khi dispatch
-        if let Some(val_cb) = validator {
-            if let Err(msg) = val_cb.run(opts.clone()) {
-                let err_text = format!("⚠️ Lỗi tham số: {msg}");
-                status_message_sig.set(err_text.clone());
-                error_msg.set(Some(err_text.clone()));
-                result_msg.set(None);
-                progress.set(0.0);
-                progress_msg.set("Lỗi tham số".to_string());
-                if let Some(cb) = on_error {
-                    cb.run(err_text);
-                }
-                return;
+        if let Some(Err(msg)) = validator.map(|cb| cb.run(opts.clone())) {
+            let err_text = format!("⚠️ Lỗi tham số: {msg}");
+            status_message_sig.set(err_text.clone());
+            error_msg.set(Some(err_text.clone()));
+            result_msg.set(None);
+            progress.set(0.0);
+            progress_msg.set("Lỗi tham số".to_string());
+            if let Some(cb) = on_error {
+                cb.run(err_text);
             }
+            return;
         }
 
         #[cfg(target_arch = "wasm32")]

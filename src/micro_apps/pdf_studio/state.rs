@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use crate::app::ToolItem;
-use crate::micro_apps::PDF_STUDIO_TOOLS;
+use crate::micro_apps::{MicroAppId, ToolRegistry};
 
 /// Phân loại 4 nhóm nghiệp vụ xử lý tài liệu PDF trong PDF Studio.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -78,12 +78,7 @@ impl PdfCategory {
 
 /// Ánh xạ một slug công cụ PDF sang nhóm danh mục tương ứng.
 pub fn category_for_tool(slug: &str) -> Option<PdfCategory> {
-    for cat in PdfCategory::ALL {
-        if cat.slugs().contains(&slug) {
-            return Some(cat);
-        }
-    }
-    None
+    PdfCategory::ALL.into_iter().find(|&cat| cat.slugs().contains(&slug))
 }
 
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App PDF Studio.
@@ -243,10 +238,10 @@ impl PdfStudioState {
         self.active_category.set(cat);
         self.is_workflow_active.set(false);
         let cur_tool = self.active_tool.get();
-        if !cat.slugs().contains(&cur_tool.as_str()) {
-            if let Some(&first_slug) = cat.slugs().first() {
-                self.active_tool.set(first_slug.to_string());
-            }
+        if !cat.slugs().contains(&cur_tool.as_str())
+            && let Some(&first_slug) = cat.slugs().first()
+        {
+            self.active_tool.set(first_slug.to_string());
         }
     }
 
@@ -272,26 +267,31 @@ impl PdfStudioState {
 
     /// Kiểm tra xem tác vụ có đang chạy hay không.
     pub fn is_running(&self) -> bool {
-        self.is_running.get()
+        self.is_running.get_untracked()
     }
 
     /// Số lượng tệp PDF hiện đang có trong workspace.
     pub fn loaded_files_count(&self) -> usize {
-        self.loaded_files.with(|f| f.len())
+        self.loaded_files.with_untracked(|f| f.len())
     }
 
     /// Kiểm tra xem workspace đã có tệp PDF nào được nạp chưa.
     pub fn has_files(&self) -> bool {
-        self.loaded_files_count() > 0
+        self.loaded_files.with_untracked(|f| !f.is_empty())
     }
 
-    /// Danh sách tĩnh 18 công cụ thuộc phạm vi PDF Studio.
+    /// Danh sách công cụ thuộc phạm vi PDF Studio (ủy quyền từ ToolRegistry).
     pub fn tools(&self) -> &'static [ToolItem] {
-        PDF_STUDIO_TOOLS
+        ToolRegistry::micro_app_tools(MicroAppId::PdfStudio)
+    }
+
+    /// Danh sách công cụ khả dụng (alias cho tools()).
+    pub fn available_tools(&self) -> &'static [ToolItem] {
+        self.tools()
     }
 
     /// Tìm kiếm thông tin công cụ PDF theo slug.
     pub fn find_tool(&self, slug: &str) -> Option<&'static ToolItem> {
-        PDF_STUDIO_TOOLS.iter().find(|t| t.slug == slug)
+        self.tools().iter().find(|t| t.slug == slug)
     }
 }

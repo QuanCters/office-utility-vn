@@ -4,7 +4,7 @@ use crate::micro_apps::media_studio::batch_queue::MediaStudioBatchQueue;
 use crate::micro_apps::media_studio::gallery_panel::MediaStudioGalleryPanel;
 use crate::micro_apps::media_studio::state::{category_for_tool, media_studio_tool_icon, MediaStudioState};
 use crate::micro_apps::media_studio::toolbar::MediaStudioToolbar;
-use crate::micro_apps::MEDIA_STUDIO_TOOLS;
+use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
     AudioSilenceTrimmerView, DocScannerPerspectiveView, ImageBatchView, ImageBgRedactView,
@@ -133,7 +133,7 @@ pub fn MediaStudioLayout(
                             view! {
                                 <div class="media-studio-workflow-wrapper">
                                     <WorkflowRunner
-                                        available_tools=MEDIA_STUDIO_TOOLS
+                                        available_tools=micro_app_tools(MicroAppId::MediaStudio)
                                         title="⚡ Chuỗi Quy trình Xử lý Media Studio"
                                         is_running=Signal::derive(move || state.is_running.get())
                                         status_message=Signal::derive(move || state.status_message.get())
@@ -304,11 +304,9 @@ pub fn MediaStudioLayout(
                                             tool_slug=Signal::derive(move || state.active_tool.get())
                                             input_files=Signal::derive(move || {
                                                 let mut files = state.loaded_files.get();
-                                                if let Some(ref p) = state.active_file_path() {
-                                                    if let Some(pos) = files.iter().position(|f| f == p) {
-                                                        let active = files.remove(pos);
-                                                        files.insert(0, active);
-                                                    }
+                                                if let Some(pos) = state.active_file_path().and_then(|p| files.iter().position(|f| f == &p)) {
+                                                    let active = files.remove(pos);
+                                                    files.insert(0, active);
                                                 }
                                                 files
                                             })

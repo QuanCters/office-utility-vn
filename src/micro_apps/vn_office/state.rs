@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use crate::app::ToolItem;
-use crate::micro_apps::VN_OFFICE_TOOLS;
+use crate::micro_apps::{MicroAppId, ToolRegistry};
 
 /// Các tham số quy định pháp lý dùng chung cho VN Office (TNCN, BHXH, Thuế, Lương).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -315,7 +315,7 @@ impl VnOfficeState {
 
     /// Kiểm tra xem tác vụ có đang chạy hay không.
     pub fn is_running(&self) -> bool {
-        self.is_running.get()
+        self.is_running.get_untracked()
     }
 
     /// Lấy chuỗi lọc sidebar hiện tại.
@@ -333,14 +333,19 @@ impl VnOfficeState {
         self.regulations.get()
     }
 
-    /// Danh sách tĩnh 11 công cụ thuộc phạm vi VN Office.
+    /// Danh sách công cụ thuộc phạm vi VN Office (ủy quyền từ ToolRegistry).
     pub fn tools(&self) -> &'static [ToolItem] {
-        VN_OFFICE_TOOLS
+        ToolRegistry::micro_app_tools(MicroAppId::VnOffice)
+    }
+
+    /// Danh sách công cụ khả dụng (alias cho tools()).
+    pub fn available_tools(&self) -> &'static [ToolItem] {
+        self.tools()
     }
 
     /// Tìm kiếm thông tin công cụ theo slug.
     pub fn find_tool(&self, slug: &str) -> Option<&'static ToolItem> {
-        VN_OFFICE_TOOLS.iter().find(|t| t.slug == slug)
+        self.tools().iter().find(|t| t.slug == slug)
     }
 
     /// Lấy danh sách ngân hàng mẫu.
