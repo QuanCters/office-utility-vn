@@ -26,6 +26,35 @@
           return audioCtx;
         }
 
+        function trimAudioBuffer(ctx, buf) {
+          const data = buf.getChannelData(0);
+          const sampleRate = buf.sampleRate;
+          const threshold = 0.008;
+          let start = 0;
+          while (start < data.length && Math.abs(data[start]) < threshold) {
+            start++;
+          }
+          let end = data.length - 1;
+          while (end > start && Math.abs(data[end]) < threshold) {
+            end--;
+          }
+          if (start >= end) return buf;
+          const margin = Math.floor(sampleRate * 0.02);
+          const realStart = Math.max(0, start - margin);
+          const realEnd = Math.min(data.length, end + margin);
+          const newLength = Math.max(1, realEnd - realStart);
+          
+          const trimmed = ctx.createBuffer(buf.numberOfChannels, newLength, sampleRate);
+          for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+            const orig = buf.getChannelData(ch);
+            const dest = trimmed.getChannelData(ch);
+            for (let i = 0; i < newLength; i++) {
+              dest[i] = orig[realStart + i];
+            }
+          }
+          return trimmed;
+        }
+
         async function loadAudioBuffer(ctx, token) {
           if (bufferCache.has(token)) return bufferCache.get(token);
           const urls = [
@@ -38,7 +67,8 @@
               const res = await fetch(url);
               if (res.ok) {
                 const arrayBuffer = await res.arrayBuffer();
-                const buffer = await ctx.decodeAudioData(arrayBuffer);
+                const rawBuffer = await ctx.decodeAudioData(arrayBuffer);
+                const buffer = trimAudioBuffer(ctx, rawBuffer);
                 bufferCache.set(token, buffer);
                 return buffer;
               }
@@ -59,7 +89,7 @@
           const buffers = await Promise.all(tokens.map(t => loadAudioBuffer(ctx, t)));
           if (playbackId !== currentPlaybackId) return;
 
-          let time = ctx.currentTime + 0.05;
+          let time = ctx.currentTime + 0.03;
           for (let i = 0; i < tokens.length; i++) {
             const buf = buffers[i];
             const token = tokens[i];
@@ -69,8 +99,8 @@
             source.connect(ctx.destination);
             source.start(time);
             activeSources.push(source);
-            const extraGap = (token === "trieu" || token === "ty" || token === "nghin" || token === "ngan") ? 0.08 : 0.0;
-            time += buf.duration + 0.035 + extraGap;
+            const extraGap = (token === "trieu" || token === "ty" || token === "nghin" || token === "ngan") ? 0.06 : 0.025;
+            time += buf.duration + extraGap;
           }
 
           const durationMs = Math.max(0, (time - ctx.currentTime) * 1000);
