@@ -8,8 +8,9 @@ use wasm_bindgen::prelude::*;
 
 use crate::launcher::LauncherView;
 use crate::micro_apps::{
-    tool_slug_to_micro_app, DataLabApp, DataLabState, MediaStudioApp, MediaStudioState,
-    MicroAppId, PdfStudioApp, PdfStudioState, VnOfficeApp, VnOfficeState,
+    tool_slug_to_micro_app, vn_office::VnLegalRegulations, DataLabApp, DataLabState,
+    MediaStudioApp, MediaStudioState, MicroAppId, PdfStudioApp, PdfStudioState, VnOfficeApp,
+    VnOfficeState,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -507,6 +508,64 @@ impl AppState {
     pub fn back_to_launcher(&self) {
         self.deep_link_tool.set(None);
         self.current_view.set(AppView::Launcher);
+    }
+
+    /// Kiểm tra xem Micro-App cụ thể có tác vụ / dữ liệu đang làm việc hay không.
+    pub fn has_active_work(&self, app_id: MicroAppId) -> bool {
+        match app_id {
+            MicroAppId::VnOffice => self.vn_office_state.calculation_history.with(|h| !h.is_empty()),
+            MicroAppId::PdfStudio => self.pdf_studio_state.has_files(),
+            MicroAppId::MediaStudio => {
+                self.media_studio_state.batch_items_count() > 0 || self.media_studio_state.has_files()
+            }
+            MicroAppId::DataLab => self.data_lab_state.has_files(),
+        }
+    }
+
+    /// Khôi phục trạng thái bộ nhớ của một Micro-App về mặc định.
+    pub fn reset_app_state(&self, app_id: MicroAppId) {
+        match app_id {
+            MicroAppId::VnOffice => {
+                self.vn_office_state.select_tool("vietnamese-number-to-words");
+                self.vn_office_state.clear_calculation_history();
+                self.vn_office_state.regulations.set(VnLegalRegulations::default());
+                self.vn_office_state.sidebar_filter.set(String::new());
+                self.vn_office_state.is_legal_panel_open.set(true);
+                self.vn_office_state.is_running.set(false);
+                self.vn_office_state.status_message.set(String::new());
+            }
+            MicroAppId::PdfStudio => {
+                self.pdf_studio_state.clear_files();
+                self.pdf_studio_state.select_tool("pdf-merge-split");
+                self.pdf_studio_state.is_running.set(false);
+                self.pdf_studio_state.status_message.set(String::new());
+            }
+            MicroAppId::MediaStudio => {
+                self.media_studio_state.clear_files();
+                self.media_studio_state.clear_batch_queue();
+                self.media_studio_state.select_tool("image-batch");
+                self.media_studio_state.is_running.set(false);
+                self.media_studio_state.status_message.set(String::new());
+                self.media_studio_state.is_queue_expanded.set(false);
+            }
+            MicroAppId::DataLab => {
+                self.data_lab_state.clear_files();
+                self.data_lab_state.select_tool("excel-cleaner-normalizer");
+                self.data_lab_state.set_sheet(String::new());
+                self.data_lab_state.available_sheets.set(Vec::new());
+                self.data_lab_state.is_running.set(false);
+                self.data_lab_state.status_message.set(String::new());
+            }
+        }
+    }
+
+    /// Đánh dấu Micro-App đang hoạt động và dọn dẹp các vùng nhớ đệm tạm của các app không dùng nếu không có tác vụ dở dang.
+    pub fn hibernate_inactive_apps(&self, active_app: MicroAppId) {
+        for app_id in MicroAppId::ALL {
+            if app_id != active_app && !self.has_active_work(app_id) {
+                self.reset_app_state(app_id);
+            }
+        }
     }
 }
 
