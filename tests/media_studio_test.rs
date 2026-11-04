@@ -357,3 +357,122 @@ fn test_media_studio_batch_queue_operations() {
     state.toggle_queue_expanded();
     assert!(state.is_queue_expanded.get());
 }
+
+#[test]
+fn test_media_studio_view_mode_and_sidebar_toggle() {
+    use office_utility_vn_ui::micro_apps::media_studio::state::MediaViewMode;
+
+    let state = MediaStudioState::new();
+
+    // 1. Mặc định khi khởi tạo là chế độ Hub (Portal View)
+    assert_eq!(state.view_mode.get(), MediaViewMode::Hub);
+    assert!(state.is_hub());
+    assert!(!state.is_tool_workspace());
+
+    // 2. Mở một công cụ cụ thể -> Chuyển sang ToolWorkspace và thu gọn Sidebar (mini)
+    state.open_tool("photo-id-crop");
+    assert_eq!(state.view_mode.get(), MediaViewMode::ToolWorkspace);
+    assert_eq!(state.active_tool_slug(), "photo-id-crop");
+    assert!(state.is_tool_workspace());
+    assert!(!state.is_hub());
+    assert!(state.sidebar_collapsed.get(), "Sidebar phải tự động thu gọn về dạng Mini khi vào công cụ");
+
+    // 3. Toggle sidebar mở rộng và thu gọn
+    state.toggle_sidebar();
+    assert!(!state.sidebar_collapsed.get(), "Sau khi toggle, sidebar phải mở rộng");
+    state.toggle_sidebar();
+    assert!(state.sidebar_collapsed.get(), "Sau khi toggle lần 2, sidebar phải thu gọn");
+
+    // 4. Quay lại Hub
+    state.open_hub();
+    assert_eq!(state.view_mode.get(), MediaViewMode::Hub);
+    assert!(state.is_hub());
+    assert!(!state.is_tool_workspace());
+
+    // 5. Mở Workflow
+    state.open_workflow();
+    assert_eq!(state.view_mode.get(), MediaViewMode::Workflow);
+    assert!(state.is_workflow());
+
+    // 6. Đóng Workflow
+    state.close_workflow();
+    assert!(!state.is_workflow());
+    assert!(state.is_tool_workspace());
+
+    // 7. Toggle Floating Queue Drawer
+    assert!(!state.is_floating_queue_open.get());
+    state.toggle_floating_queue();
+    assert!(state.is_floating_queue_open.get());
+    state.toggle_floating_queue();
+    assert!(!state.is_floating_queue_open.get());
+}
+
+#[test]
+fn test_media_studio_hub_filter() {
+    use office_utility_vn_ui::micro_apps::media_studio::hub_view::{filter_media_studio_tools, matches_media_tool};
+
+    let state = MediaStudioState::new();
+    let tools = state.tools();
+    assert_eq!(tools.len(), 9);
+
+    // 1. Chuỗi tìm kiếm rỗng -> Khớp toàn bộ 9 công cụ
+    let all_filtered = filter_media_studio_tools(tools, "");
+    assert_eq!(all_filtered.len(), 9);
+
+    let all_spaces = filter_media_studio_tools(tools, "   ");
+    assert_eq!(all_spaces.len(), 9);
+
+    // 2. Tìm kiếm có dấu tiếng Việt "ảnh thẻ" -> Tìm ra photo-id-crop
+    let the_results = filter_media_studio_tools(tools, "ảnh thẻ");
+    assert!(the_results.iter().any(|t| t.slug == "photo-id-crop"));
+
+    // 3. Tìm kiếm không dấu tiếng Việt "anh the" -> Vẫn tìm ra photo-id-crop
+    let unaccented_the = filter_media_studio_tools(tools, "anh the");
+    assert!(unaccented_the.iter().any(|t| t.slug == "photo-id-crop"));
+
+    // 4. Tìm kiếm theo slug "exif" -> Tìm ra image-exif-inspector
+    let exif_results = filter_media_studio_tools(tools, "exif");
+    assert!(exif_results.iter().any(|t| t.slug == "image-exif-inspector"));
+
+    // 5. Tìm kiếm theo từ khóa "nén"
+    let nen_results = filter_media_studio_tools(tools, "nén");
+    assert!(nen_results.iter().any(|t| t.slug == "image-batch"));
+
+    // 6. Tìm kiếm video sang gif
+    let gif_results = filter_media_studio_tools(tools, "gif");
+    assert!(gif_results.iter().any(|t| t.slug == "video-to-gif-webp"));
+
+    // 7. Kiểm tra trực tiếp hàm matches_media_tool
+    let crop_tool = state.find_tool("photo-id-crop").expect("photo-id-crop must exist");
+    assert!(matches_media_tool(crop_tool, "3x4"));
+    assert!(matches_media_tool(crop_tool, "passport"));
+
+    // 8. Từ khóa không tồn tại -> Trả về danh sách rỗng
+    let not_found = filter_media_studio_tools(tools, "xyz_not_found_token_999");
+    assert!(not_found.is_empty());
+}
+
+#[test]
+fn test_media_studio_floating_widget_signals() {
+    let state = MediaStudioState::new();
+
+    // 1. Ban đầu không có tác vụ chạy ngầm và tỷ lệ tiến trình là 0.0
+    assert!(!state.is_background_processing());
+    assert_eq!(state.batch_progress_ratio(), 0.0);
+
+    // 2. Thêm item ở trạng thái Pending
+    state.enqueue_batch_item(MediaBatchItem::new("t1", "img1.png", "Pending", 0.0));
+    assert!(!state.is_background_processing()); // Pending chưa phải là Processing
+    assert!(state.has_active_batches());
+    assert_eq!(state.batch_progress_ratio(), 0.0);
+
+    // 3. Cập nhật sang Processing 60%
+    state.update_batch_progress("t1", "Processing", 0.6);
+    assert!(state.is_background_processing());
+    assert_eq!(state.batch_progress_ratio(), 0.6);
+
+    // 4. Thêm item thứ 2 và hoàn thành 100%
+    state.enqueue_batch_item(MediaBatchItem::new("t2", "img2.png", "Done", 1.0));
+    // Tỷ lệ trung bình của 2 item: (0.6 + 1.0) / 2 = 0.8
+    assert!((state.batch_progress_ratio() - 0.8).abs() < 1e-4);
+}

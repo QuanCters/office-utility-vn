@@ -2,8 +2,10 @@ use leptos::prelude::*;
 use crate::launcher::CommandPalette;
 use crate::micro_apps::media_studio::batch_queue::MediaStudioBatchQueue;
 use crate::micro_apps::media_studio::gallery_panel::MediaStudioGalleryPanel;
-use crate::micro_apps::media_studio::state::{category_for_tool, media_studio_tool_icon, MediaStudioState};
-use crate::micro_apps::media_studio::toolbar::MediaStudioToolbar;
+use crate::micro_apps::media_studio::hub_view::MediaStudioHubView;
+use crate::micro_apps::media_studio::state::{
+    category_for_tool, media_studio_tool_icon, MediaStudioState, MediaViewMode,
+};
 use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
@@ -12,7 +14,14 @@ use crate::tools::{
     WatermarkBatchStudioView,
 };
 
-/// Bố cục tổng thể của Micro-App Media Studio (Header + Toolbar + Gallery Panel + Main Workspace + Batch Queue).
+/// Bố cục tổng thể của Micro-App Media Studio theo mô hình Hub/Portal.
+///
+/// Hỗ trợ 3 chế độ xem chính:
+/// 1. `MediaViewMode::Hub`: Trang chủ Portal dạng lưới thẻ (Categorized Card Grid, iLoveIMG model)
+///    với Floating Contextual Widget ở góc dưới phải khi có tiến trình nền.
+/// 2. `MediaViewMode::ToolWorkspace`: Không gian làm việc tập trung của từng công cụ với Mini Gallery Sidebar (56px)
+///    và Persistent Dock Batch Queue ở đáy.
+/// 3. `MediaViewMode::Workflow`: Trình thiết kế chuỗi tự động hóa Macro DAG.
 #[component]
 pub fn MediaStudioLayout(
     state: MediaStudioState,
@@ -93,84 +102,139 @@ pub fn MediaStudioLayout(
 
     view! {
         <div class="media-studio-app-container">
-            // Header trên cùng với nút BackButton chuẩn mực và tiêu đề
-            <header class="media-studio-header">
-                <div class="media-studio-header-left">
-                    <BackButton on_back=on_back label="← Về Launcher" />
-                    <div class="media-studio-header-title-group">
-                        <h1 class="media-studio-header-title">
-                            "🎨 Media Studio — Phòng thu Đa phương tiện"
-                        </h1>
-                        <span class="media-studio-header-tagline">
-                            "Ảnh thẻ • Tối ưu WebP/AVIF • Che mờ dữ liệu • Xóa Exif • Bản quyền • Nắn scan • Audio & Video 100% On-Device"
-                        </span>
+            {move || match state.view_mode.get() {
+                MediaViewMode::Hub => view! {
+                    // =========================================================
+                    // CHẾ ĐỘ 1: HUB PORTAL VIEW (Toàn màn hình)
+                    // =========================================================
+                    <header class="media-studio-header">
+                        <div class="media-studio-header-left">
+                            <BackButton on_back=on_back label="← Về Launcher" />
+                            <div class="media-studio-header-title-group">
+                                <h1 class="media-studio-header-title">
+                                    "🎨 Media Studio — Phòng thu Đa phương tiện"
+                                </h1>
+                                <span class="media-studio-header-tagline">
+                                    "Ảnh thẻ • Tối ưu WebP/AVIF • Che mờ dữ liệu • Xóa Exif • Bản quyền • Nắn scan • Audio & Video 100% On-Device"
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="media-studio-header-right">
+                            <span class="media-studio-header-badge">
+                                "9 Công cụ Media"
+                            </span>
+                            <span class="media-studio-privacy-badge">
+                                "🔒 100% On-Device"
+                            </span>
+                        </div>
+                    </header>
+
+                    <main class="media-studio-hub-main">
+                        <MediaStudioHubView state=state />
+                    </main>
+                }.into_any(),
+
+                MediaViewMode::Workflow => view! {
+                    // =========================================================
+                    // CHẾ ĐỘ 2: WORKFLOW MACRO DAG (Toàn màn hình)
+                    // =========================================================
+                    <header class="media-studio-header">
+                        <div class="media-studio-header-left">
+                            <button
+                                type="button"
+                                class="media-breadcrumb-btn"
+                                title="Quay lại Trang chủ Hub công cụ Media"
+                                on:click=move |_| state.open_hub()
+                            >
+                                <span class="breadcrumb-arrow" aria-hidden="true">"←"</span>
+                                <span>"Tất cả công cụ (Media Hub)"</span>
+                            </button>
+                            <div class="media-studio-header-title-group">
+                                <h1 class="media-studio-header-title">
+                                    "⚡ Chuỗi Quy Trình Tự Động Hóa Media"
+                                </h1>
+                                <span class="media-studio-header-tagline">
+                                    "Kết nối liên hoàn các công cụ xử lý đồ họa, âm thanh và video on-device"
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="media-studio-header-right">
+                            <BackButton on_back=on_back label="Về Launcher" />
+                            <span class="media-studio-privacy-badge">
+                                "🔒 100% On-Device"
+                            </span>
+                        </div>
+                    </header>
+
+                    <div class="media-studio-workspace-body">
+                        <MediaStudioGalleryPanel state=state />
+                        <main class="media-studio-center-workspace">
+                            <div class="media-studio-workflow-wrapper">
+                                <WorkflowRunner
+                                    available_tools=micro_app_tools(MicroAppId::MediaStudio)
+                                    title="⚡ Chuỗi Quy trình Xử lý Media Studio"
+                                    is_running=Signal::derive(move || state.is_running.get())
+                                    status_message=Signal::derive(move || state.status_message.get())
+                                    on_run=on_run_workflow
+                                    on_cancel=on_cancel_workflow
+                                />
+                            </div>
+                        </main>
                     </div>
-                </div>
+                }.into_any(),
 
-                <div class="media-studio-header-right">
-                    <span class="media-studio-header-badge">
-                        "9 Công cụ Media"
-                    </span>
-                    <span class="media-studio-privacy-badge">
-                        "🔒 100% On-Device"
-                    </span>
-                </div>
-            </header>
+                MediaViewMode::ToolWorkspace => {
+                    let active_slug = state.active_tool.get();
+                    let current_tool = state.find_tool(&active_slug);
+                    let tool_name = current_tool.map(|t| t.name).unwrap_or("Công cụ Media");
+                    let tool_desc = current_tool.map(|t| t.description).unwrap_or("");
+                    let icon = media_studio_tool_icon(&active_slug);
+                    let category_label = category_for_tool(&active_slug)
+                        .map(|c| c.label())
+                        .unwrap_or("Đa phương tiện");
 
-            // Thanh công cụ Tab Toolbar phân loại theo 2 nhóm nghiệp vụ + 1 tab Workflow
-            <MediaStudioToolbar state=state />
+                    view! {
+                        // =========================================================
+                        // CHẾ ĐỘ 3: FOCUSED TOOL WORKSPACE (Mini Sidebar + Tool View + Persistent Dock)
+                        // =========================================================
+                        <header class="media-studio-header media-studio-focused-header">
+                            <div class="media-studio-header-left">
+                                <button
+                                    type="button"
+                                    class="media-breadcrumb-btn"
+                                    title="Quay lại Trang chủ Hub công cụ Media"
+                                    on:click=move |_| state.open_hub()
+                                >
+                                    <span class="breadcrumb-arrow" aria-hidden="true">"←"</span>
+                                    <span>"Tất cả công cụ (Media Hub)"</span>
+                                </button>
 
-            // Khu vực làm việc chính (Bố cục 2 cột: Left Panel thư viện media + Center Workspace)
-            <div class="media-studio-workspace-body">
-                // Cột 1: Gallery Panel quản lý các file media nạp vào (Shared Context)
-                <MediaStudioGalleryPanel state=state />
-
-                // Cột 2: Workspace hiển thị công cụ đang chọn hoặc Workflow Runner
-                <main class="media-studio-center-workspace">
-                    {move || {
-                        if state.is_workflow() {
-                            // Chế độ chuỗi Workflow Macro DAG
-                            view! {
-                                <div class="media-studio-workflow-wrapper">
-                                    <WorkflowRunner
-                                        available_tools=micro_app_tools(MicroAppId::MediaStudio)
-                                        title="⚡ Chuỗi Quy trình Xử lý Media Studio"
-                                        is_running=Signal::derive(move || state.is_running.get())
-                                        status_message=Signal::derive(move || state.status_message.get())
-                                        on_run=on_run_workflow
-                                        on_cancel=on_cancel_workflow
-                                    />
-                                </div>
-                            }.into_any()
-                        } else {
-                            // Chế độ công cụ đơn lẻ
-                            let active_slug = state.active_tool.get();
-                            let current_tool = state.find_tool(&active_slug);
-                            let tool_name = current_tool.map(|t| t.name).unwrap_or("Công cụ Media");
-                            let tool_desc = current_tool.map(|t| t.description).unwrap_or("");
-                            let icon = media_studio_tool_icon(&active_slug);
-                            let category_label = category_for_tool(&active_slug)
-                                .map(|c| c.label())
-                                .unwrap_or("Đa phương tiện");
-
-                            view! {
-                                <div class="media-studio-tool-workspace">
-                                    // Header của thẻ công cụ
-                                    <div class="media-studio-tool-card-header">
-                                        <div class="media-studio-tool-title-row">
-                                            <span class="media-studio-tool-icon" aria-hidden="true">{icon}</span>
-                                            <div>
-                                                <h2 class="media-studio-tool-name">{tool_name}</h2>
-                                                <p class="media-studio-tool-description">{tool_desc}</p>
-                                            </div>
-                                        </div>
-                                        <div class="media-studio-tool-meta">
-                                            <span class="media-studio-cat-badge">{category_label}</span>
-                                            <span class="media-studio-slug-badge">{active_slug.clone()}</span>
-                                            <span class="media-studio-privacy-chip">"🔒 On-Device"</span>
-                                        </div>
+                                <div class="media-focused-tool-indicator">
+                                    <span class="focused-tool-icon" aria-hidden="true">{icon}</span>
+                                    <div class="focused-tool-text">
+                                        <h2 class="media-focused-tool-title">{tool_name}</h2>
+                                        <span class="media-focused-tool-desc">{tool_desc}</span>
                                     </div>
+                                </div>
+                            </div>
 
+                            <div class="media-studio-header-right">
+                                <span class="media-studio-cat-badge">{category_label}</span>
+                                <span class="media-studio-slug-badge">{active_slug.clone()}</span>
+                                <span class="media-studio-privacy-badge">"🔒 100% On-Device"</span>
+                                <BackButton on_back=on_back label="Về Launcher" />
+                            </div>
+                        </header>
+
+                        <div class="media-studio-workspace-body">
+                            // Cột 1: Gallery Panel (Hỗ trợ Mini Sidebar 56px hoặc Expanded 280px)
+                            <MediaStudioGalleryPanel state=state />
+
+                            // Cột 2: Workspace hiển thị View của công cụ đang chọn
+                            <main class="media-studio-center-workspace">
+                                <div class="media-studio-tool-workspace">
                                     // Context Banner hiển thị tệp Media nguồn chung đang áp dụng
                                     <div class="media-studio-context-banner">
                                         {move || {
@@ -189,9 +253,9 @@ pub fn MediaStudioLayout(
                                                             <span class="context-subtitle">
                                                                 {format!("(Tệp {}/{} trong thư viện media)", current_idx, total)}
                                                             </span>
-                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 11px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
+                                                            <div class="context-bound-path">
                                                                 <span>"🔗 Đường dẫn liên kết:"</span>
-                                                                <code style="background: rgba(15, 23, 42, 0.6); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">
+                                                                <code class="context-bound-code">
                                                                     {bound_path}
                                                                 </code>
                                                             </div>
@@ -315,20 +379,20 @@ pub fn MediaStudioLayout(
                                         />
                                     </div>
                                 </div>
-                            }.into_any()
-                        }
-                    }}
-                </main>
-            </div>
+                            </main>
+                        </div>
 
-            // Khu vực đáy: Collapsible Batch Processing Queue
-            <MediaStudioBatchQueue state=state />
+                        // Khu vực đáy: Persistent Dock Batch Processing Queue (ở ToolWorkspace)
+                        <MediaStudioBatchQueue state=state />
+                    }.into_any()
+                }
+            }}
 
             // Scoped Command Palette (Ctrl+K) trong Media Studio
             <CommandPalette
                 open=palette_open
                 tools=state.tools()
-                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.select_tool(&slug))
+                on_deep_link=Callback::new(move |(_, slug): (_, String)| state.open_tool(&slug))
                 on_back=on_back
             />
         </div>

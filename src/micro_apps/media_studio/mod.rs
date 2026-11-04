@@ -1,13 +1,15 @@
 pub mod batch_queue;
 pub mod gallery_panel;
+pub mod hub_view;
 pub mod layout;
 pub mod state;
 pub mod toolbar;
 
 pub use batch_queue::MediaStudioBatchQueue;
 pub use gallery_panel::MediaStudioGalleryPanel;
+pub use hub_view::{filter_media_studio_tools, matches_media_tool, MediaStudioHubView};
 pub use layout::MediaStudioLayout;
-pub use state::{category_for_tool, media_studio_tool_icon, MediaBatchItem, MediaCategory, MediaStudioState};
+pub use state::{category_for_tool, media_studio_tool_icon, MediaBatchItem, MediaCategory, MediaStudioState, MediaViewMode};
 pub use toolbar::MediaStudioToolbar;
 
 use leptos::prelude::*;

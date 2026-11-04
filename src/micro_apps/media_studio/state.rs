@@ -104,6 +104,17 @@ pub fn category_for_tool(slug: &str) -> Option<MediaCategory> {
     MediaCategory::ALL.into_iter().find(|&cat| cat.slugs().contains(&slug))
 }
 
+/// Chế độ hiển thị chính của Media Studio.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum MediaViewMode {
+    /// Trang chủ Hub/Portal hiển thị danh mục dạng lưới thẻ (iLoveIMG & Lightroom model)
+    Hub,
+    /// Không gian làm việc tập trung của công cụ cụ thể
+    ToolWorkspace,
+    /// Trình chạy chuỗi quy trình Workflow Macro DAG
+    Workflow,
+}
+
 /// Ánh xạ tĩnh từ slug công cụ Media Studio sang icon emoji trực quan.
 pub fn media_studio_tool_icon(slug: &str) -> &'static str {
     match slug {
@@ -144,6 +155,12 @@ pub struct MediaStudioState {
     pub status_message: RwSignal<String>,
     /// Trạng thái mở rộng/thu gọn của bảng Batch Queue ở dưới đáy.
     pub is_queue_expanded: RwSignal<bool>,
+    /// Chế độ xem hiện tại của Media Studio (Hub, ToolWorkspace hoặc Workflow).
+    pub view_mode: RwSignal<MediaViewMode>,
+    /// Trạng thái thu gọn của Sidebar danh sách tệp (true: Mini Sidebar 56px, false: Full 280px).
+    pub sidebar_collapsed: RwSignal<bool>,
+    /// Trạng thái mở Popover/Drawer của Floating Contextual Widget trên Hub.
+    pub is_floating_queue_open: RwSignal<bool>,
 
     // Signals lưu cấu hình của từng công cụ
     pub img_batch_target_format: RwSignal<String>,
@@ -191,11 +208,17 @@ impl MediaStudioState {
 
     /// Khởi tạo trạng thái Media Studio với công cụ ban đầu tùy chọn.
     pub fn with_initial_tool(initial_tool: Option<String>) -> Self {
+        let has_custom_tool = initial_tool.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false);
         let initial_slug = initial_tool
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "image-batch".to_string());
 
         let category = category_for_tool(&initial_slug).unwrap_or(MediaCategory::Image);
+        let view_mode = if has_custom_tool {
+            MediaViewMode::ToolWorkspace
+        } else {
+            MediaViewMode::Hub
+        };
 
         Self {
             loaded_files: RwSignal::new(Vec::new()),
@@ -207,6 +230,9 @@ impl MediaStudioState {
             is_running: RwSignal::new(false),
             status_message: RwSignal::new(String::new()),
             is_queue_expanded: RwSignal::new(true),
+            view_mode: RwSignal::new(view_mode),
+            sidebar_collapsed: RwSignal::new(true),
+            is_floating_queue_open: RwSignal::new(false),
 
             // Tool defaults
             img_batch_target_format: RwSignal::new("webp".to_string()),
@@ -352,7 +378,7 @@ impl MediaStudioState {
         self.active_tool.get()
     }
 
-    /// Chọn công cụ cụ thể, tự động cập nhật category tương ứng và tắt chế độ Workflow.
+    /// Chọn công cụ cụ thể, tự động cập nhật category tương ứng và chuyển sang chế độ ToolWorkspace.
     pub fn select_tool(&self, slug: impl Into<String>) {
         let s = slug.into();
         if let Some(cat) = category_for_tool(&s) {
@@ -360,12 +386,14 @@ impl MediaStudioState {
         }
         self.active_tool.set(s);
         self.is_workflow_active.set(false);
+        self.view_mode.set(MediaViewMode::ToolWorkspace);
     }
 
     /// Chuyển tab danh mục, tự động chọn công cụ đầu tiên thuộc danh mục đó nếu công cụ hiện tại không thuộc nhóm.
     pub fn select_category(&self, category: MediaCategory) {
         self.active_category.set(category);
         self.is_workflow_active.set(false);
+        self.view_mode.set(MediaViewMode::ToolWorkspace);
 
         let cur_tool = self.active_tool.get();
         if category_for_tool(&cur_tool) != Some(category)
@@ -378,16 +406,82 @@ impl MediaStudioState {
     /// Kích hoạt chế độ Workflow Pipeline Macro DAG.
     pub fn open_workflow(&self) {
         self.is_workflow_active.set(true);
+        self.view_mode.set(MediaViewMode::Workflow);
     }
 
-    /// Tắt chế độ Workflow Pipeline Macro DAG.
+    /// Tắt chế độ Workflow Pipeline Macro DAG quay về ToolWorkspace.
     pub fn close_workflow(&self) {
         self.is_workflow_active.set(false);
+        self.view_mode.set(MediaViewMode::ToolWorkspace);
+    }
+
+    /// Mở trang chủ Hub/Portal (lưới thẻ phân loại theo danh mục).
+    pub fn open_hub(&self) {
+        self.view_mode.set(MediaViewMode::Hub);
+        self.is_workflow_active.set(false);
+    }
+
+    /// Mở không gian làm việc tập trung của công cụ, tự động thu gọn sidebar về mini.
+    pub fn open_tool(&self, slug: &str) {
+        self.select_tool(slug);
+        self.view_mode.set(MediaViewMode::ToolWorkspace);
+        self.sidebar_collapsed.set(true);
+    }
+
+    /// Đảo ngược cờ thu gọn sidebar (mini sidebar <-> expanded sidebar).
+    pub fn toggle_sidebar(&self) {
+        self.sidebar_collapsed.update(|c| *c = !*c);
+    }
+
+    /// Đảo ngược trạng thái mở Drawer của Floating Contextual Widget trên Hub.
+    pub fn toggle_floating_queue(&self) {
+        self.is_floating_queue_open.update(|open| *open = !*open);
+    }
+
+    /// Đóng Drawer của Floating Contextual Widget.
+    pub fn close_floating_queue(&self) {
+        self.is_floating_queue_open.set(false);
+    }
+
+    /// Kiểm tra xem có đang ở trang Hub Portal không.
+    pub fn is_hub(&self) -> bool {
+        self.view_mode.get_untracked() == MediaViewMode::Hub
+    }
+
+    /// Kiểm tra xem có đang ở không gian công cụ tập trung không.
+    pub fn is_tool_workspace(&self) -> bool {
+        self.view_mode.get_untracked() == MediaViewMode::ToolWorkspace
+    }
+
+    /// Kiểm tra xem có tiến trình xử lý ngầm trong hàng đợi không.
+    pub fn is_background_processing(&self) -> bool {
+        self.is_running.get_untracked() || self.batch_queue.with_untracked(|q| {
+            q.iter().any(|it| it.status == "Processing")
+        })
+    }
+
+    /// Tính tỷ lệ tiến trình hoàn thành trung bình của Batch Queue (0.0 đến 1.0).
+    pub fn batch_progress_ratio(&self) -> f32 {
+        self.batch_queue.with_untracked(|q| {
+            if q.is_empty() {
+                return 0.0;
+            }
+            let sum: f32 = q.iter().map(|it| {
+                if it.status == "Done" || it.status == "Hoàn thành" {
+                    1.0
+                } else if it.status == "Processing" {
+                    it.progress.clamp(0.0, 1.0)
+                } else {
+                    0.0
+                }
+            }).sum();
+            (sum / q.len() as f32).clamp(0.0, 1.0)
+        })
     }
 
     /// Kiểm tra xem hiện có đang ở chế độ Workflow hay không.
     pub fn is_workflow(&self) -> bool {
-        self.is_workflow_active.get()
+        self.is_workflow_active.get_untracked() || self.view_mode.get_untracked() == MediaViewMode::Workflow
     }
 
     /// Kiểm tra xem có đang thực thi tác vụ hay không.
