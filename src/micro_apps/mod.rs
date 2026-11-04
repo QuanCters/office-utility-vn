@@ -1,6 +1,9 @@
 use crate::app::ToolItem;
 use serde::{Deserialize, Serialize};
 
+pub mod registry;
+pub use registry::{ToolRegistration, ToolRegistry};
+
 pub mod vn_office;
 pub use vn_office::{VnCalculationRecord, VnOfficeApp, VnOfficeState};
 
@@ -41,34 +44,35 @@ impl MicroAppId {
     ];
 
     pub fn metadata(self) -> MicroAppMetadata {
+        let count = ToolRegistry::count_for_app(self);
         match self {
             MicroAppId::VnOffice => MicroAppMetadata {
                 id: self,
                 name: "VN Office",
                 icon: "🏢",
                 description: "Trợ lý nghiệp vụ kế toán, thuế, ngân hàng & văn bản quy chuẩn Việt Nam",
-                tool_count: 11,
+                tool_count: count,
             },
             MicroAppId::PdfStudio => MicroAppMetadata {
                 id: self,
                 name: "PDF Studio",
                 icon: "📄",
                 description: "Xưởng xử lý, biên tập, bảo mật và số hóa tài liệu PDF chuyên nghiệp",
-                tool_count: 18,
+                tool_count: count,
             },
             MicroAppId::MediaStudio => MicroAppMetadata {
                 id: self,
                 name: "Media Studio",
                 icon: "🎨",
                 description: "Phòng thu xử lý ảnh thẻ, làm đẹp ảnh, xóa siêu dữ liệu và tối ưu đa phương tiện",
-                tool_count: 9,
+                tool_count: count,
             },
             MicroAppId::DataLab => MicroAppMetadata {
                 id: self,
                 name: "Data Lab",
                 icon: "📊",
                 description: "Phòng thí nghiệm bảng tính Excel, đối chiếu dữ liệu và trạm chuyển đổi tệp vạn năng",
-                tool_count: 13,
+                tool_count: count,
             },
         }
     }
@@ -94,71 +98,9 @@ impl MicroAppId {
     }
 }
 
-/// Ánh xạ tĩnh từ slug công cụ sang MicroAppId tương ứng.
+/// Ánh xạ tĩnh từ slug công cụ sang MicroAppId tương ứng (ủy quyền cho ToolRegistry).
 pub fn tool_slug_to_micro_app(slug: &str) -> Option<MicroAppId> {
-    match slug {
-        // VN Office (11 công cụ)
-        "vietnamese-number-to-words"
-        | "gross-net-salary-calculator"
-        | "vietqr-napas247-generator"
-        | "vn-einvoice-xml-reader"
-        | "vn-cccd-mst-validator"
-        | "vn-address-normalizer"
-        | "vn-working-days-calc"
-        | "vn-loan-amortization"
-        | "vn-bank-bin-mapper"
-        | "vietnamese-font-converter"
-        | "encoding-mojibake-fixer" => Some(MicroAppId::VnOffice),
-
-        // PDF Studio (18 công cụ)
-        "pdf-merge-split"
-        | "pdf-protect-sign"
-        | "pdf-to-markdown"
-        | "pdf-compress"
-        | "vietnamese-ocr"
-        | "pdf-watermark-stamp"
-        | "pdf-page-number-header"
-        | "pdf-metadata-scrubber"
-        | "pdf-flatten-forms"
-        | "pdf-crop-margin"
-        | "pdf-booklet-imposition"
-        | "pdf-visual-diff"
-        | "pdf-bookmark-toc"
-        | "pdf-to-long-image"
-        | "pdf-grayscale-print"
-        | "pdf-repair-corrupt"
-        | "markdown-to-styled-pdf"
-        | "pdf-table-extractor" => Some(MicroAppId::PdfStudio),
-
-        // Media Studio (9 công cụ)
-        "image-batch"
-        | "photo-id-crop"
-        | "image-bg-redact"
-        | "image-exif-inspector"
-        | "watermark-batch-studio"
-        | "screenshot-beautifier"
-        | "doc-scanner-perspective"
-        | "audio-silence-trimmer"
-        | "video-to-gif-webp" => Some(MicroAppId::MediaStudio),
-
-        // Data Lab (13 công cụ)
-        "excel-cleaner-normalizer"
-        | "diff-checker-text-sheets"
-        | "data-structure-converter"
-        | "excel-split-by-column"
-        | "excel-multi-merger"
-        | "excel-visual-joiner"
-        | "excel-sheet-unlocker"
-        | "list-set-operations"
-        | "text-pii-anonymizer"
-        | "sql-formatter-linter"
-        | "base64-file-codec"
-        | "docx-template-mailmerge"
-        | "universal-file-converter-hub"
-        | "universal-converter" => Some(MicroAppId::DataLab),
-
-        _ => None,
-    }
+    ToolRegistry::lookup_app(slug)
 }
 
 pub const VN_OFFICE_TOOLS: &[ToolItem] = &[
@@ -530,14 +472,9 @@ pub const DATA_LAB_TOOLS: &[ToolItem] = &[
         },
 ];
 
-/// Trả về danh sách tĩnh các công cụ thuộc một MicroAppId.
+/// Trả về danh sách tĩnh các công cụ thuộc một MicroAppId (ủy quyền cho ToolRegistry).
 pub fn micro_app_tools(app: MicroAppId) -> &'static [ToolItem] {
-    match app {
-        MicroAppId::VnOffice => VN_OFFICE_TOOLS,
-        MicroAppId::PdfStudio => PDF_STUDIO_TOOLS,
-        MicroAppId::MediaStudio => MEDIA_STUDIO_TOOLS,
-        MicroAppId::DataLab => DATA_LAB_TOOLS,
-    }
+    ToolRegistry::micro_app_tools(app)
 }
 
 #[cfg(test)]
