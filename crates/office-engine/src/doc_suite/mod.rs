@@ -18,6 +18,7 @@ pub mod pdf_repair_corrupt;
 pub mod markdown_to_styled_pdf;
 pub mod pdf_table_extractor;
 pub mod pdf_form_manager;
+pub mod pdf_redaction;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -39,6 +40,7 @@ pub use pdf_repair_corrupt::{PdfRepairCorruptTool, PdfRepairOptions};
 pub use markdown_to_styled_pdf::{MarkdownToPdfOptions, MarkdownToPdfTool};
 pub use pdf_table_extractor::{PdfTableExtractorOptions, PdfTableExtractorTool};
 pub use pdf_form_manager::{FormAction, FormFieldInfo, PdfFormManagerOptions, PdfFormManagerTool};
+pub use pdf_redaction::{PdfRedactionOptions, PdfRedactionTool, RedactRegion};
 
 
 

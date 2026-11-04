@@ -8,7 +8,7 @@ use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc
 use crate::tools::{
     MarkdownToStyledPdfView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
     PdfCropMarginView, PdfFlattenFormsView, PdfFormManagerView, PdfGrayscalePrintView, PdfMergeSplitView,
-    PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfProtectSignView, PdfRepairCorruptView,
+    PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfProtectSignView, PdfRedactionView, PdfRepairCorruptView,
     PdfTableExtractorView, PdfToLongImageView, PdfToMarkdownView, PdfVisualDiffView,
     PdfWatermarkStampView, VietnameseOcrView,
 };
@@ -196,6 +196,10 @@ pub fn PdfStudioLayout(
 
                                             "pdf-form-manager" => view! {
                                                 <PdfFormManagerView />
+                                            }.into_any(),
+
+                                            "pdf-redaction" => view! {
+                                                <PdfRedactionView />
                                             }.into_any(),
 
                                             "pdf-repair-corrupt" => view! {

@@ -394,6 +394,18 @@ impl ToolRegistry {
             secondary_apps: &[],
             tags: &["pdf", "acroform", "bieu-mau", "autofill", "form"],
         },
+        ToolRegistration {
+            tool: ToolItem {
+                slug: "pdf-redaction",
+                name: "Xóa Dữ liệu Nhạy cảm PDF",
+                domain: "doc-suite",
+                description: "Cắt bỏ triệt để chuỗi ký tự nhạy cảm khỏi stream PDF và phủ hộp đen bảo mật.",
+                is_pinned: false,
+            },
+            primary_app: MicroAppId::PdfStudio,
+            secondary_apps: &[],
+            tags: &["pdf", "redact", "bao-mat", "xoa-du-lieu", "che-den"],
+        },
 
         // ==========================================
         // MEDIA STUDIO (9 công cụ)

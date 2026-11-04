@@ -17,6 +17,7 @@ pub fn pdf_studio_tool_icon(slug: &str) -> &'static str {
         "pdf-metadata-scrubber" => "🧹",
         "pdf-flatten-forms" => "📋",
         "pdf-form-manager" => "📝",
+        "pdf-redaction" => "⬛",
         "pdf-repair-corrupt" => "🩹",
 
         // Định dạng & Trang
