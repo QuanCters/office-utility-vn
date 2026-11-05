@@ -364,6 +364,11 @@ pub fn setup_bridge_listener(
 /// Đọc toàn bộ nội dung nhị phân của tệp (ưu tiên Tauri IPC, fallback web fetch).
 #[cfg(target_arch = "wasm32")]
 pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
+    // 0. Tuân thủ nghiêm ngặt NFR-SEC-01 (Zero-Cloud): Nghiêm cấm tải file từ URL http:// hoặc https://
+    if file_path.starts_with("http://") || file_path.starts_with("https://") {
+        return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
+    }
+
     // 1. Thử gọi qua Tauri IPC `read_file_binary`
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "filePath": file_path
@@ -378,8 +383,8 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
         }
     }
 
-    // 2. Thử fetch qua web nếu file_path là URL hoặc web path
-    if file_path.starts_with("http://") || file_path.starts_with("https://") || file_path.starts_with('/') {
+    // 2. Thử fetch qua web nếu file_path là local path nội bộ (ví dụ: /assets/... hoặc blob:)
+    if file_path.starts_with('/') || file_path.starts_with("blob:") {
         if let Some(win) = web_sys::window() {
             if let Ok(resp_val) = wasm_bindgen_futures::JsFuture::from(win.fetch_with_str(file_path)).await {
                 if let Ok(resp) = resp_val.dyn_into::<web_sys::Response>() {
@@ -399,6 +404,9 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
+    if file_path.starts_with("http://") || file_path.starts_with("https://") {
+        return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
+    }
     std::fs::read(file_path).map_err(|e| format!("Không thể đọc tệp: {e}"))
 }
 

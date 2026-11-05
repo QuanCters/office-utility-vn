@@ -5,6 +5,7 @@ use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
 use office_utility_vn_ui::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use office_utility_vn_ui::micro_apps::pdf_studio::state::{category_for_tool, PdfCategory, PdfStudioState};
 use office_utility_vn_ui::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
+use office_utility_vn_ui::micro_apps::pdf_studio::vn_ribbon::PdfVnExtensionRibbon;
 use office_utility_vn_ui::micro_apps::{tool_slug_to_micro_app, MicroAppId, PDF_STUDIO_TOOLS};
 
 const EXPECTED_PDF_STUDIO_SLUGS: &[&str] = &[
@@ -561,4 +562,71 @@ fn test_bridge_protocol() {
         bytes: vec![1, 2, 3],
     });
     assert!(save_dispatched.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+#[test]
+fn test_vn_extension_ribbon_renders() {
+    let state = PdfStudioState::new();
+    let html = view! { <PdfVnExtensionRibbon state=state /> }.to_html();
+
+    // 1. Kiểm tra container của ribbon
+    assert!(html.contains("pdf-vn-extension-ribbon"));
+
+    // 2. Kiểm tra đầy đủ 6 nút bấm công cụ độc bản Việt Nam
+    // 2.1. 🇻🇳 Nhận dạng OCR tiếng Việt (vietnamese-ocr)
+    assert!(html.contains("vietnamese-ocr"));
+    assert!(html.contains("🇻🇳"));
+    assert!(html.contains("Nhận dạng OCR tiếng Việt"));
+
+    // 2.2. 📊 Xuất bảng biểu sang Excel (pdf-table-extractor)
+    assert!(html.contains("pdf-table-extractor"));
+    assert!(html.contains("📊"));
+    assert!(html.contains("Xuất bảng biểu sang Excel"));
+
+    // 2.3. 📜 Ghép ảnh dài Infographic (pdf-to-long-image)
+    assert!(html.contains("pdf-to-long-image"));
+    assert!(html.contains("📜"));
+    assert!(html.contains("Ghép ảnh dài Infographic"));
+
+    // 2.4. 📖 In sách đóng kim Booklet (pdf-booklet-imposition)
+    assert!(html.contains("pdf-booklet-imposition"));
+    assert!(html.contains("📖"));
+    assert!(html.contains("In sách đóng kim Booklet"));
+
+    // 2.5. 🖨️ In tiết kiệm mực Grayscale (pdf-grayscale-print)
+    assert!(html.contains("pdf-grayscale-print"));
+    assert!(html.contains("🖨️"));
+    assert!(html.contains("In tiết kiệm mực Grayscale"));
+
+    // 2.6. 🛠️ Khôi phục PDF lỗi (pdf-repair-corrupt)
+    assert!(html.contains("pdf-repair-corrupt"));
+    assert!(html.contains("🛠️"));
+    assert!(html.contains("Khôi phục PDF lỗi"));
+}
+
+#[test]
+fn test_read_file_bytes_zero_cloud_rejection() {
+    use std::future::Future;
+
+    let mut fut_http = Box::pin(office_utility_vn_ui::micro_apps::pdf_studio::bridge::read_file_bytes(
+        "http://evil.com/remote.pdf",
+    ));
+    let waker = std::task::Waker::noop();
+    let mut cx = std::task::Context::from_waker(&waker);
+    let res_http = match fut_http.as_mut().poll(&mut cx) {
+        std::task::Poll::Ready(res) => res,
+        std::task::Poll::Pending => panic!("Expected Ready"),
+    };
+    assert!(res_http.is_err());
+    assert!(res_http.unwrap_err().contains("NFR-SEC-01"));
+
+    let mut fut_https = Box::pin(office_utility_vn_ui::micro_apps::pdf_studio::bridge::read_file_bytes(
+        "https://evil.com/remote.pdf",
+    ));
+    let res_https = match fut_https.as_mut().poll(&mut cx) {
+        std::task::Poll::Ready(res) => res,
+        std::task::Poll::Pending => panic!("Expected Ready"),
+    };
+    assert!(res_https.is_err());
+    assert!(res_https.unwrap_err().contains("NFR-SEC-01"));
 }

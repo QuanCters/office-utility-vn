@@ -15,7 +15,7 @@ extern "C" {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn create_tauri_channel(
+pub(crate) fn create_tauri_channel(
     progress_sig: Option<WriteSignal<f32>>,
     progress_msg_sig: Option<WriteSignal<String>>,
 ) -> JsValue {

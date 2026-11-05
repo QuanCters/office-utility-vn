@@ -4,6 +4,7 @@ use crate::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use crate::micro_apps::pdf_studio::file_list_panel::PdfStudioFileListPanel;
 use crate::micro_apps::pdf_studio::state::{category_for_tool, PdfStudioState, PdfViewMode};
 use crate::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
+use crate::micro_apps::pdf_studio::vn_ribbon::PdfVnExtensionRibbon;
 use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
@@ -72,6 +73,7 @@ pub fn PdfStudioLayout(
                     </header>
 
                     <main class="pdf-studio-canvas-main">
+                        <PdfVnExtensionRibbon state=state />
                         <PdfCraftCanvasFrame />
                     </main>
                 }.into_any(),

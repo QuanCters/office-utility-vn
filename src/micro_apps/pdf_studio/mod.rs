@@ -5,6 +5,7 @@ pub mod hub_view;
 pub mod layout;
 pub mod state;
 pub mod toolbar;
+pub mod vn_ribbon;
 
 pub use bridge::{IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge};
 pub use canvas_frame::PdfCraftCanvasFrame;
@@ -13,6 +14,7 @@ pub use hub_view::{filter_pdf_studio_tools, matches_pdf_tool, PdfStudioHubView};
 pub use layout::PdfStudioLayout;
 pub use state::{category_for_tool, PdfCategory, PdfStudioState, PdfViewMode};
 pub use toolbar::{pdf_studio_tool_icon, PdfStudioToolbar};
+pub use vn_ribbon::{PdfVnExtensionRibbon, VnRibbonTool};
 
 use leptos::prelude::*;
 

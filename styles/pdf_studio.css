@@ -1535,6 +1535,7 @@
 
 .pdf-studio-canvas-main {
   display: flex;
+  flex-direction: column;
   flex: 1;
   width: 100%;
   height: calc(100vh - 64px);
@@ -1614,5 +1615,326 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ==============================================================================
+   Vietnamese Extension Ribbon (Thanh Tiện Ích Độc Bản Việt Nam)
+   ============================================================================== */
+
+.pdf-vn-extension-ribbon {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.vn-ribbon-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-lg);
+  min-height: 44px;
+  gap: var(--space-md);
+  overflow-x: auto;
+}
+
+.vn-ribbon-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vn-ribbon-brand-flag {
+  font-size: 14px;
+}
+
+.vn-ribbon-tools-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.vn-ribbon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.vn-ribbon-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--border-subtle);
+  color: var(--text-white);
+}
+
+.vn-ribbon-btn.active {
+  background: var(--primary);
+  border-color: var(--primary-light);
+  color: var(--text-white);
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.vn-ribbon-icon {
+  font-size: 14px;
+}
+
+.vn-ribbon-label {
+  font-size: 12px;
+}
+
+.vn-ribbon-file-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-main);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vn-ribbon-file-icon {
+  font-size: 12px;
+}
+
+.vn-ribbon-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Drawer / Quick Settings */
+.vn-ribbon-drawer {
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-md) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+  animation: vn-ribbon-slide-down 0.18s ease-out;
+}
+
+@keyframes vn-ribbon-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vn-ribbon-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.vn-ribbon-drawer-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vn-ribbon-drawer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.vn-ribbon-drawer-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.vn-ribbon-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.vn-ribbon-close-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-white);
+}
+
+.vn-ribbon-drawer-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-md);
+  align-items: end;
+}
+
+.vn-ribbon-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vn-ribbon-form-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.vn-ribbon-select,
+.vn-ribbon-input {
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.vn-ribbon-select:focus,
+.vn-ribbon-input:focus {
+  border-color: var(--primary-light);
+}
+
+.vn-ribbon-form-checkbox-group {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.vn-ribbon-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 12px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.vn-ribbon-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.vn-ribbon-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--primary);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.vn-ribbon-run-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.vn-ribbon-run-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Progress bar inside ribbon */
+.vn-ribbon-progress-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-xs) 0;
+}
+
+.vn-ribbon-progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.vn-ribbon-progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-main);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.vn-ribbon-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+/* Status alerts */
+.vn-ribbon-result,
+.vn-ribbon-error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.vn-ribbon-result {
+  background: var(--emerald-bg);
+  color: var(--success-light);
+  border: 1px solid var(--emerald);
+}
+
+.vn-ribbon-result-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.vn-ribbon-error {
+  background: var(--danger-bg);
+  color: var(--danger-light);
+  border: 1px solid var(--rose);
+}
+
 
 

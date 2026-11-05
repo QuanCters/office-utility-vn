@@ -47,6 +47,30 @@ pub async fn dispatch_tool_task(
                 let tool = VnCccdMstValidatorTool::default();
                 tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
             }
+            "vietnamese-ocr" => {
+                let tool = office_engine::doc_suite::VietnameseOcrTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
+            "pdf-table-extractor" => {
+                let tool = office_engine::doc_suite::PdfTableExtractorTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
+            "pdf-to-long-image" => {
+                let tool = office_engine::doc_suite::PdfToLongImageTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
+            "pdf-booklet-imposition" => {
+                let tool = office_engine::doc_suite::PdfBookletImpositionTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
+            "pdf-grayscale-print" => {
+                let tool = office_engine::doc_suite::PdfGrayscalePrintTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
+            "pdf-repair-corrupt" => {
+                let tool = office_engine::doc_suite::PdfRepairCorruptTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
             _ => {
                 // Giả lập/Fallback cho các công cụ khác trong quá trình phát triển
                 if cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
