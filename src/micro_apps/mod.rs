@@ -338,6 +338,27 @@ pub const PDF_STUDIO_TOOLS: &[ToolItem] = &[
             description: "Gắn chữ ký số chuẩn PKCS#7 với /ByteRange, kiểm tra toàn vẹn và phát hiện tài liệu bị giả mạo.",
             is_pinned: false,
         },
+    ToolItem {
+            slug: "pdf-page-organizer",
+            name: "Sắp xếp & Đảo trang PDF Trực quan",
+            domain: "doc-suite",
+            description: "Trực quan hóa danh sách trang, xoay góc 90°/180°/270°, kéo thả đổi thứ tự và xóa trang thừa.",
+            is_pinned: false,
+        },
+    ToolItem {
+            slug: "pdf-signature-pad",
+            name: "Ký tay Điện tử & Dán Chữ ký PDF",
+            domain: "doc-suite",
+            description: "Ký tay tự do trên canvas HTML5 và dán chữ ký số dạng ảnh vào các trang PDF theo preset.",
+            is_pinned: false,
+        },
+    ToolItem {
+            slug: "pdf-to-images-pack",
+            name: "Xuất Toàn bộ Trang PDF sang Gói Ảnh ZIP",
+            domain: "doc-suite",
+            description: "Kết xuất từng trang PDF thành ảnh PNG/JPEG chất lượng cao và đóng gói thành file ZIP tiện lợi.",
+            is_pinned: false,
+        },
 ];
 
 pub const MEDIA_STUDIO_TOOLS: &[ToolItem] = &[
@@ -581,7 +602,7 @@ mod tests {
     #[test]
     fn test_tools_count_per_app() {
         assert_eq!(micro_app_tools(MicroAppId::VnOffice).len(), 11);
-        assert_eq!(micro_app_tools(MicroAppId::PdfStudio).len(), 22);
+        assert_eq!(micro_app_tools(MicroAppId::PdfStudio).len(), 25);
         assert_eq!(micro_app_tools(MicroAppId::MediaStudio).len(), 9);
         assert_eq!(micro_app_tools(MicroAppId::DataLab).len(), 13);
     }

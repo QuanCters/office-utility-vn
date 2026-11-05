@@ -75,7 +75,7 @@ pub fn PdfSignaturePadView() -> impl IntoView {
         }
     });
 
-    let update_pen_style = move |color: &str, width: f64| {
+    let update_pen_style = move |_color: &str, _width: f64| {
         #[cfg(target_arch = "wasm32")]
         {
             let code = format!(
@@ -89,7 +89,7 @@ pub fn PdfSignaturePadView() -> impl IntoView {
                     ctx.lineWidth = {};
                 }})();
                 "#,
-                color, width
+                _color, _width
             );
             let _ = js_sys::eval(&code);
         }

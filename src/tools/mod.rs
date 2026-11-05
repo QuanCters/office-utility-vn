@@ -1,4 +1,4 @@
-// Document Suite (19 tools)
+// Document Suite (22 tools)
 pub mod docx_template_mailmerge_view;
 pub mod markdown_to_styled_pdf_view;
 pub mod pdf_booklet_imposition_view;
@@ -17,6 +17,9 @@ pub mod pdf_form_manager_view;
 pub mod pdf_redaction_view;
 pub mod pdf_archive_linearize_view;
 pub mod pdf_pki_sign_view;
+pub mod pdf_page_organizer_view;
+pub mod pdf_signature_pad_view;
+pub mod pdf_to_images_pack_view;
 pub mod pdf_to_long_image_view;
 pub mod pdf_to_markdown_view;
 pub mod pdf_visual_diff_view;
@@ -33,6 +36,9 @@ pub use pdf_grayscale_print_view::PdfGrayscalePrintView;
 pub use pdf_merge_split_view::PdfMergeSplitView;
 pub use pdf_metadata_scrubber_view::PdfMetadataScrubberView;
 pub use pdf_page_number_header_view::PdfPageNumberHeaderView;
+pub use pdf_page_organizer_view::PdfPageOrganizerView;
+pub use pdf_signature_pad_view::PdfSignaturePadView;
+pub use pdf_to_images_pack_view::PdfToImagesPackView;
 pub use pdf_protect_sign_view::PdfProtectSignView;
 pub use pdf_repair_corrupt_view::PdfRepairCorruptView;
 pub use pdf_table_extractor_view::PdfTableExtractorView;

@@ -48,6 +48,7 @@ impl PdfCategory {
         match self {
             PdfCategory::MergeSplit => &[
                 "pdf-merge-split",
+                "pdf-page-organizer",
                 "pdf-crop-margin",
                 "pdf-booklet-imposition",
                 "pdf-bookmark-toc",
@@ -55,6 +56,7 @@ impl PdfCategory {
             ],
             PdfCategory::SecurityOptimize => &[
                 "pdf-protect-sign",
+                "pdf-signature-pad",
                 "pdf-compress",
                 "pdf-metadata-scrubber",
                 "pdf-flatten-forms",
@@ -73,6 +75,7 @@ impl PdfCategory {
                 "vietnamese-ocr",
                 "pdf-to-markdown",
                 "pdf-to-long-image",
+                "pdf-to-images-pack",
                 "pdf-table-extractor",
                 "markdown-to-styled-pdf",
             ],

@@ -152,7 +152,7 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                         let orient_icon = if eff_landscape { "📑" } else { "📄" };
                         let orient_label = if eff_landscape { "Ngang" } else { "Dọc" };
 
-                        let on_rot_left = move |_| {
+                        let on_rot_left = move |_: web_sys::MouseEvent| {
                             set_pages.update(|list| {
                                 if let Some(p) = list.get_mut(idx) {
                                     p.rotation_deg = (p.rotation_deg - 90 + 360) % 360;
@@ -160,7 +160,7 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                             });
                         };
 
-                        let on_rot_right = move |_| {
+                        let on_rot_right = move |_: web_sys::MouseEvent| {
                             set_pages.update(|list| {
                                 if let Some(p) = list.get_mut(idx) {
                                     p.rotation_deg = (p.rotation_deg + 90) % 360;
@@ -168,7 +168,7 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                             });
                         };
 
-                        let on_move_left = move |_| {
+                        let on_move_left = move |_: web_sys::MouseEvent| {
                             if idx > 0 {
                                 set_pages.update(|list| {
                                     list.swap(idx, idx - 1);
@@ -176,7 +176,7 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                             }
                         };
 
-                        let on_move_right = move |_| {
+                        let on_move_right = move |_: web_sys::MouseEvent| {
                             if idx + 1 < total {
                                 set_pages.update(|list| {
                                     list.swap(idx, idx + 1);
@@ -184,13 +184,16 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                             }
                         };
 
-                        let on_delete = move |_| {
+                        let on_delete = move |_: web_sys::MouseEvent| {
                             set_pages.update(|list| {
                                 if idx < list.len() {
                                     list.remove(idx);
                                 }
                             });
                         };
+
+                        let is_first = idx == 0;
+                        let is_last = idx + 1 >= total;
 
                         view! {
                             <div
@@ -255,7 +258,7 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                                     <button
                                         type="button"
                                         title="Di chuyển sang trước"
-                                        disabled=idx == 0
+                                        disabled=is_first
                                         on:click=on_move_left
                                         style="flex: 1; padding: 4px 0; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); cursor: pointer; font-size: 13px;"
                                     >
@@ -264,7 +267,7 @@ pub fn PdfPageOrganizerView() -> impl IntoView {
                                     <button
                                         type="button"
                                         title="Di chuyển sang sau"
-                                        disabled=idx + 1 >= total
+                                        disabled=is_last
                                         on:click=on_move_right
                                         style="flex: 1; padding: 4px 0; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); cursor: pointer; font-size: 13px;"
                                     >

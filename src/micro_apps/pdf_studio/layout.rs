@@ -9,9 +9,9 @@ use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc
 use crate::tools::{
     MarkdownToStyledPdfView, PdfArchiveLinearizeView, PdfBookletImpositionView, PdfBookmarkTocView, PdfCompressView,
     PdfCropMarginView, PdfFlattenFormsView, PdfFormManagerView, PdfGrayscalePrintView, PdfMergeSplitView,
-    PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfPkiSignView, PdfProtectSignView, PdfRedactionView, PdfRepairCorruptView,
-    PdfTableExtractorView, PdfToLongImageView, PdfToMarkdownView, PdfVisualDiffView,
-    PdfWatermarkStampView, VietnameseOcrView,
+    PdfMetadataScrubberView, PdfPageNumberHeaderView, PdfPageOrganizerView, PdfPkiSignView, PdfProtectSignView,
+    PdfRedactionView, PdfRepairCorruptView, PdfSignaturePadView, PdfTableExtractorView, PdfToImagesPackView,
+    PdfToLongImageView, PdfToMarkdownView, PdfVisualDiffView, PdfWatermarkStampView, VietnameseOcrView,
 };
 
 /// Bố cục tổng thể của Micro-App PDF Studio theo mô hình Hub/Portal.
@@ -63,7 +63,7 @@ pub fn PdfStudioLayout(
 
                         <div class="pdf-studio-header-right">
                             <span class="pdf-studio-header-badge">
-                                "22 Công cụ PDF"
+                                "25 Công cụ PDF"
                             </span>
                             <span class="pdf-studio-privacy-badge">
                                 "🔒 100% On-Device"
@@ -219,6 +219,18 @@ pub fn PdfStudioLayout(
                                         {match active_slug.as_str() {
                                             "pdf-merge-split" => view! {
                                                 <PdfMergeSplitView />
+                                            }.into_any(),
+
+                                            "pdf-page-organizer" => view! {
+                                                <PdfPageOrganizerView />
+                                            }.into_any(),
+
+                                            "pdf-signature-pad" => view! {
+                                                <PdfSignaturePadView />
+                                            }.into_any(),
+
+                                            "pdf-to-images-pack" => view! {
+                                                <PdfToImagesPackView />
                                             }.into_any(),
 
                                             "pdf-crop-margin" => view! {

@@ -6,6 +6,7 @@ pub fn pdf_studio_tool_icon(slug: &str) -> &'static str {
     match slug {
         // Ghép / Tách
         "pdf-merge-split" => "📑",
+        "pdf-page-organizer" => "📑",
         "pdf-crop-margin" => "✂️",
         "pdf-booklet-imposition" => "📖",
         "pdf-bookmark-toc" => "📑",
@@ -13,6 +14,7 @@ pub fn pdf_studio_tool_icon(slug: &str) -> &'static str {
 
         // Bảo mật & Tối ưu
         "pdf-protect-sign" => "🔒",
+        "pdf-signature-pad" => "✍️",
         "pdf-compress" => "🗜️",
         "pdf-metadata-scrubber" => "🧹",
         "pdf-flatten-forms" => "📋",
@@ -31,6 +33,7 @@ pub fn pdf_studio_tool_icon(slug: &str) -> &'static str {
         "vietnamese-ocr" => "🔍",
         "pdf-to-markdown" => "📝",
         "pdf-to-long-image" => "🖼️",
+        "pdf-to-images-pack" => "🗜️",
         "pdf-table-extractor" => "📊",
         "markdown-to-styled-pdf" => "📄",
 
@@ -90,7 +93,7 @@ pub fn PdfStudioToolbar(
                             <div class="pdf-studio-subrow-workflow-info">
                                 <span class="workflow-info-badge">"⚡ Chế độ Tự động hóa"</span>
                                 <span class="workflow-info-text">
-                                    "Kéo ghép 18 công cụ PDF thành chuỗi xử lý liên hoàn tự động on-device."
+                                    "Kéo ghép 25 công cụ PDF thành chuỗi xử lý liên hoàn tự động on-device."
                                 </span>
                             </div>
                         }.into_any()

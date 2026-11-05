@@ -26,6 +26,9 @@ const EXPECTED_PDF_STUDIO_SLUGS: &[&str] = &[
     "pdf-repair-corrupt",
     "markdown-to-styled-pdf",
     "pdf-table-extractor",
+    "pdf-page-organizer",
+    "pdf-signature-pad",
+    "pdf-to-images-pack",
 ];
 
 #[test]
@@ -174,9 +177,9 @@ fn test_pdf_studio_clear_files() {
 
 #[test]
 fn test_pdf_studio_all_tools_exact_list() {
-    // 1. Số lượng công cụ chính xác 22
-    assert_eq!(PDF_STUDIO_TOOLS.len(), 22);
-    assert_eq!(EXPECTED_PDF_STUDIO_SLUGS.len(), 22);
+    // 1. Số lượng công cụ chính xác 25
+    assert_eq!(PDF_STUDIO_TOOLS.len(), 25);
+    assert_eq!(EXPECTED_PDF_STUDIO_SLUGS.len(), 25);
 
     for slug in EXPECTED_PDF_STUDIO_SLUGS {
         // 2. Mọi slug phải tồn tại trong PDF_STUDIO_TOOLS
@@ -220,14 +223,15 @@ fn test_pdf_studio_category_grouping() {
         }
     }
 
-    // 2. Tổng số công cụ trên 4 danh mục phải đúng bằng 22
-    assert_eq!(total_slugs, 22);
+    // 2. Tổng số công cụ trên 4 danh mục phải đúng bằng 25
+    assert_eq!(total_slugs, 25);
 
     // 3. Kiểm tra cụ thể từng nhóm danh mục theo thiết kế
     assert_eq!(
         PdfCategory::MergeSplit.slugs(),
         &[
             "pdf-merge-split",
+            "pdf-page-organizer",
             "pdf-crop-margin",
             "pdf-booklet-imposition",
             "pdf-bookmark-toc",
@@ -239,6 +243,7 @@ fn test_pdf_studio_category_grouping() {
         PdfCategory::SecurityOptimize.slugs(),
         &[
             "pdf-protect-sign",
+            "pdf-signature-pad",
             "pdf-compress",
             "pdf-metadata-scrubber",
             "pdf-flatten-forms",
@@ -265,6 +270,7 @@ fn test_pdf_studio_category_grouping() {
             "vietnamese-ocr",
             "pdf-to-markdown",
             "pdf-to-long-image",
+            "pdf-to-images-pack",
             "pdf-table-extractor",
             "markdown-to-styled-pdf",
         ]
@@ -374,14 +380,14 @@ fn test_pdf_studio_hub_filter() {
 
     let state = PdfStudioState::new();
     let tools = state.tools();
-    assert_eq!(tools.len(), 22);
+    assert_eq!(tools.len(), 25);
 
-    // 1. Chuỗi tìm kiếm rỗng -> Khớp toàn bộ 22 công cụ
+    // 1. Chuỗi tìm kiếm rỗng -> Khớp toàn bộ 25 công cụ
     let all_filtered = filter_pdf_studio_tools(tools, "");
-    assert_eq!(all_filtered.len(), 22);
+    assert_eq!(all_filtered.len(), 25);
 
     let all_spaces = filter_pdf_studio_tools(tools, "   ");
-    assert_eq!(all_spaces.len(), 22);
+    assert_eq!(all_spaces.len(), 25);
 
     // 2. Tìm kiếm có dấu tiếng Việt "nén" -> Tìm ra pdf-compress
     let nen_results = filter_pdf_studio_tools(tools, "nén");
@@ -407,7 +413,26 @@ fn test_pdf_studio_hub_filter() {
     let table_results = filter_pdf_studio_tools(tools, "bảng");
     assert!(table_results.iter().any(|t| t.slug == "pdf-table-extractor"));
 
-    // 7. Từ khóa hoàn toàn không tồn tại -> Trả về danh sách rỗng
+    // 7. Tìm kiếm 3 công cụ mở rộng Phase 1
+    let organizer_results = filter_pdf_studio_tools(tools, "sắp xếp");
+    assert!(organizer_results.iter().any(|t| t.slug == "pdf-page-organizer"));
+    let organizer_tool = state.find_tool("pdf-page-organizer").expect("pdf-page-organizer must exist");
+    assert!(matches_pdf_tool(organizer_tool, "organizer"));
+    assert!(matches_pdf_tool(organizer_tool, "đảo trang"));
+
+    let sig_results = filter_pdf_studio_tools(tools, "ký tay");
+    assert!(sig_results.iter().any(|t| t.slug == "pdf-signature-pad"));
+    let sig_tool = state.find_tool("pdf-signature-pad").expect("pdf-signature-pad must exist");
+    assert!(matches_pdf_tool(sig_tool, "signature"));
+    assert!(matches_pdf_tool(sig_tool, "chữ ký"));
+
+    let zip_results = filter_pdf_studio_tools(tools, "gói ảnh");
+    assert!(zip_results.iter().any(|t| t.slug == "pdf-to-images-pack"));
+    let pack_tool = state.find_tool("pdf-to-images-pack").expect("pdf-to-images-pack must exist");
+    assert!(matches_pdf_tool(pack_tool, "zip"));
+    assert!(matches_pdf_tool(pack_tool, "xuất ảnh"));
+
+    // 8. Từ khóa hoàn toàn không tồn tại -> Trả về danh sách rỗng
     let not_found = filter_pdf_studio_tools(tools, "xyz_not_found_random_token_999");
     assert!(not_found.is_empty());
 }

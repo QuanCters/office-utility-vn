@@ -23,6 +23,9 @@ pub fn tool_synonyms(slug: &str) -> &'static str {
         "pdf-to-markdown" => "chuyển sang md markdown text văn bản van ban",
         "pdf-to-long-image" => "ảnh dài anh dai cuộn dọc cuon doc ghép ảnh ghep anh png jpg",
         "markdown-to-styled-pdf" => "soạn thảo soan thao tài liệu tai lieu in ấn in an css style",
+        "pdf-page-organizer" => "sắp xếp sap xep đảo trang dao trang xoay reorder rotate organize",
+        "pdf-signature-pad" => "ký tay ky tay chữ ký chu ky signature stamp vẽ ve bút but",
+        "pdf-to-images-pack" => "xuất ảnh xuat anh gói ảnh goi anh zip extract images pack png jpeg",
         _ => "",
     }
 }
