@@ -51,7 +51,7 @@ pub fn TextPiiAnonymizerView(
                 </label>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "🔒 Cam kết 100% On-Device: Dữ liệu nhạy cảm được xóa sạch khỏi bộ nhớ RAM (Zeroize Memory Scrubbing) ngay sau khi xử lý."
             </div>
         </div>

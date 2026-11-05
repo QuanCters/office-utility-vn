@@ -1,5 +1,6 @@
 /* ==========================================================================
    Launcher Dashboard & Command Palette (src/launcher/)
+   Standardized to DESIGN.md Tokens & Responsive Ergonomics
    ========================================================================== */
 
 .launcher-view-container {
@@ -7,32 +8,34 @@
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  padding: 24px 32px;
-  gap: 24px;
+  padding: var(--space-2xl) var(--space-3xl);
+  gap: var(--space-2xl);
+  background-color: var(--bg-main);
 }
 
 .launcher-header {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-md);
 }
 
 .launcher-hero-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(5, 150, 105, 0.12);
-  border: 1px solid rgba(5, 150, 105, 0.3);
-  border-radius: 20px;
+  gap: var(--space-sm);
+  background: var(--success-bg);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-full);
   padding: 4px 14px;
   font-size: 12px;
-  font-weight: 600;
-  color: #10B981;
+  font-weight: 500;
+  color: var(--success-light);
   width: fit-content;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.1);
 }
 
 .launcher-pulse-dot {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .launcher-title-row {
@@ -40,58 +43,59 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .launcher-main-title {
-  font-size: 26px;
-  font-weight: 800;
-  color: #F8FAFC;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
   display: flex;
   align-items: center;
-  gap: 8px;
-  letter-spacing: -0.5px;
+  gap: var(--space-sm);
+  letter-spacing: -0.02em;
 }
 
 .launcher-title-icon {
-  color: #F59E0B;
+  color: var(--warning);
 }
 
 .launcher-subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: var(--space-xs);
+  line-height: 1.5;
 }
 
 /* Quick Search Trigger (Ctrl+K) */
 .launcher-search-trigger {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 8px 16px;
   min-width: 280px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   user-select: none;
 }
 
 .launcher-search-trigger:hover {
   border-color: var(--primary);
-  background: #243048;
-  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.2);
+  background: var(--bg-card);
+  box-shadow: 0 4px 16px var(--primary-glow);
 }
 
 .launcher-search-trigger:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--primary-light);
   outline-offset: 2px;
 }
 
 .launcher-search-icon {
   font-size: 14px;
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .launcher-search-placeholder {
@@ -101,51 +105,67 @@
 }
 
 .launcher-search-kbd {
-  font-size: 11px;
-  background: #334155;
-  color: #E2E8F0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: inherit;
-  border: 1px solid #475569;
+  font-size: 12px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  border: 1px solid var(--border-color);
+  font-weight: 500;
 }
 
 /* Sections */
 .launcher-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .launcher-section-header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xs);
 }
 
 .launcher-section-title {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.8px;
-  color: #94A3B8;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .launcher-section-desc {
   font-size: 12px;
-  color: #64748B;
+  color: var(--text-subtle);
 }
 
 /* Micro-App Cards Grid */
 .launcher-cards-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .launcher-cards-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .launcher-cards-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+  .launcher-view-container {
+    padding: var(--space-lg) var(--space-md);
+    gap: var(--space-lg);
+  }
+  .launcher-search-trigger {
+    width: 100%;
+    min-width: unset;
   }
 }
 
@@ -154,59 +174,60 @@
   flex-direction: column;
   justify-content: space-between;
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
   cursor: pointer;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
   user-select: none;
 }
 
 .launcher-app-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-3px);
   border-color: var(--primary);
-  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.35);
+  background: var(--bg-card);
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.45);
 }
 
 .launcher-app-card:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--primary-light);
   outline-offset: 2px;
 }
 
 /* Card Accents */
 .launcher-card-vn-office:hover {
-  border-color: #F59E0B;
-  box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.2);
+  border-color: var(--warning);
+  box-shadow: 0 10px 20px -5px var(--warning-bg);
 }
 
 .launcher-card-pdf-studio:hover {
-  border-color: #EF4444;
-  box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.2);
+  border-color: var(--danger);
+  box-shadow: 0 10px 20px -5px var(--danger-bg);
 }
 
 .launcher-card-media-studio:hover {
-  border-color: #8B5CF6;
-  box-shadow: 0 10px 20px -5px rgba(139, 92, 246, 0.2);
+  border-color: var(--primary-light);
+  box-shadow: 0 10px 20px -5px var(--primary-glow);
 }
 
 .launcher-card-data-lab:hover {
-  border-color: #10B981;
-  box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.2);
+  border-color: var(--success);
+  box-shadow: 0 10px 20px -5px var(--success-bg);
 }
 
 .launcher-app-card-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-md);
 }
 
 .launcher-app-card-icon-wrap {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
@@ -220,30 +241,31 @@
 }
 
 .launcher-app-card-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94A3B8;
-  background: rgba(51, 65, 85, 0.8);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-card);
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
 }
 
 .launcher-app-card-body {
   flex: 1;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-md);
 }
 
 .launcher-app-card-title {
   font-size: 16px;
-  font-weight: 700;
-  color: #F8FAFC;
-  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: var(--space-xs);
 }
 
 .launcher-app-card-desc {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .launcher-app-card-footer {
@@ -252,9 +274,9 @@
   justify-content: space-between;
   font-size: 12px;
   font-weight: 600;
-  color: #38BDF8;
-  padding-top: 10px;
-  border-top: 1px solid rgba(71, 85, 105, 0.4);
+  color: var(--info-light);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .launcher-app-card-arrow {
@@ -269,41 +291,42 @@
 /* History Feed */
 .launcher-history-container {
   background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 16px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-xl);
 }
 
 .launcher-history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 
 .launcher-history-title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .launcher-history-icon {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .launcher-history-title {
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #CBD5E1;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-main);
 }
 
 .launcher-history-count {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
-  background: #334155;
+  background: var(--bg-card);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
 }
 
 .launcher-history-empty {
@@ -311,43 +334,44 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: var(--space-3xl) var(--space-lg);
   text-align: center;
   color: var(--text-muted);
 }
 
 .launcher-history-empty-icon {
-  font-size: 28px;
-  margin-bottom: 8px;
+  font-size: 32px;
+  margin-bottom: var(--space-sm);
 }
 
 .launcher-history-empty-title {
   font-size: 14px;
   font-weight: 600;
-  color: #E2E8F0;
-  margin-bottom: 4px;
+  color: var(--text-main);
+  margin-bottom: var(--space-xs);
 }
 
 .launcher-history-empty-desc {
-  font-size: 12px;
-  color: #94A3B8;
-  max-width: 420px;
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 440px;
+  line-height: 1.5;
 }
 
 .launcher-history-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-sm);
 }
 
 .launcher-history-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 12px;
-  border-radius: 8px;
-  background: rgba(51, 65, 85, 0.4);
-  border: 1px solid transparent;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
   transition: all 0.15s ease;
   user-select: none;
 }
@@ -357,20 +381,20 @@
 }
 
 .launcher-history-item.clickable:hover {
-  background: rgba(51, 65, 85, 0.9);
-  border-color: #475569;
+  background: var(--bg-card-hover);
+  border-color: var(--border-color);
   transform: translateX(2px);
 }
 
 .launcher-history-item:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--primary-light);
   outline-offset: 1px;
 }
 
 .launcher-history-item-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   flex: 1;
   min-width: 0;
 }
@@ -378,26 +402,26 @@
 .launcher-history-app-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid #475569;
-  padding: 2px 7px;
-  border-radius: 4px;
-  color: #E2E8F0;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--neutral-app);
+  border: 1px solid var(--border-color);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
   white-space: nowrap;
 }
 
 .launcher-history-app-badge.neutral {
-  border-color: #334155;
-  color: #94A3B8;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
 }
 
 .launcher-history-tool-name {
   font-size: 13px;
-  font-weight: 600;
-  color: #F1F5F9;
+  font-weight: 500;
+  color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -406,61 +430,63 @@
 .launcher-history-item-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   flex-shrink: 0;
 }
 
 .launcher-history-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
 .launcher-history-badge.status-success {
-  background: rgba(5, 150, 105, 0.2);
-  color: #34D399;
-  border: 1px solid rgba(5, 150, 105, 0.4);
+  background: var(--success-bg);
+  color: var(--success-light);
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .launcher-history-badge.status-failed {
-  background: rgba(225, 29, 72, 0.2);
-  color: #FB7185;
-  border: 1px solid rgba(225, 29, 72, 0.4);
+  background: var(--danger-bg);
+  color: var(--danger-light);
+  border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
 .launcher-history-badge.status-running {
-  background: rgba(2, 132, 199, 0.2);
-  color: #38BDF8;
+  background: var(--info-bg);
+  color: var(--info-light);
   border: 1px solid rgba(2, 132, 199, 0.4);
 }
 
 .launcher-history-badge.status-other {
-  background: #334155;
-  color: #94A3B8;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
 }
 
 .launcher-history-time {
-  font-size: 11px;
-  color: #94A3B8;
-  min-width: 48px;
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 54px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .launcher-history-arrow {
-  font-size: 13px;
-  color: #64748B;
+  font-size: 14px;
+  color: var(--text-subtle);
   transition: transform 0.15s ease;
 }
 
 .launcher-history-item:hover .launcher-history-arrow {
-  transform: translateX(2px);
-  color: #38BDF8;
+  transform: translateX(3px);
+  color: var(--info-light);
 }
 
 .launcher-history-arrow-placeholder {
-  width: 13px;
+  width: 14px;
 }
 
 /* Footer Shortcuts */
@@ -468,67 +494,72 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 20px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(71, 85, 105, 0.3);
+  gap: var(--space-xl);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
   font-size: 12px;
-  color: #64748B;
+  color: var(--text-muted);
   flex-wrap: wrap;
 }
 
 .launcher-shortcut-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
 }
 
 .launcher-shortcut-item .kbd {
-  font-size: 11px;
-  background: #1E293B;
-  border: 1px solid #334155;
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: #94A3B8;
+  font-size: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-weight: 500;
 }
 
-/* Command Palette overrides */
+/* Command Palette */
 .palette-search-icon {
   font-size: 16px;
-  color: #94A3B8;
+  color: var(--text-muted);
 }
 
 .palette-esc-hint {
-  font-size: 11px;
-  color: #94A3B8;
-  background: #334155;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-card);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
 }
 
 .palette-result-count {
-  font-size: 10px;
-  opacity: 0.7;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .palette-empty-state {
   text-align: center;
-  padding: 32px 16px;
+  padding: var(--space-3xl) var(--space-lg);
   color: var(--text-muted);
 }
 
 .palette-empty-icon {
-  font-size: 24px;
-  margin-bottom: 6px;
+  font-size: 28px;
+  margin-bottom: var(--space-sm);
 }
 
 .palette-empty-title {
   font-weight: 600;
-  color: #E2E8F0;
+  color: var(--text-main);
+  font-size: 14px;
 }
 
 .palette-empty-desc {
   font-size: 12px;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
+  color: var(--text-muted);
 }
 
 .palette-item-content {
@@ -544,7 +575,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #F8FAFC;
+  color: var(--text-main);
+  font-size: 13px;
 }
 
 .palette-item-app-icon {
@@ -552,23 +584,23 @@
 }
 
 .palette-item-desc {
-  font-size: 11px;
-  opacity: 0.8;
-  color: #94A3B8;
+  font-size: 12px;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .palette-item.active .palette-item-desc {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .palette-item-badge.app-badge {
-  font-size: 10px;
-  font-weight: 600;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #E2E8F0;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--neutral-app);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
 }
-

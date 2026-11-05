@@ -773,7 +773,7 @@ pub fn App() -> impl IntoView {
                 <div class="titlebar-left">
                     <span style="font-size: 16px;">"⚡"</span>
                     <span style="font-weight: 600;">"Office Utility VN"</span>
-                    <span style="font-size: 11px; color: var(--text-muted); font-weight: 400;">"v0.1.0"</span>
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">"v0.2.0"</span>
                     <button
                         class="titlebar-update-btn"
                         prop:disabled=move || is_checking_update.get()

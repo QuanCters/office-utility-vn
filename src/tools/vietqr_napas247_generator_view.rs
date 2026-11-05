@@ -84,7 +84,7 @@ pub fn VietQrNapas247GeneratorView(
                 if !res.is_empty() {
                     view! {
                         <div style="margin-top: 12px; padding: 14px; background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.3); border-radius: 6px;">
-                            <div style="font-size: 11px; color: #10B981; font-weight: 600; margin-bottom: 4px;">"CHUỖI EMVCO VIETQR CHUẨN:"</div>
+                            <div style="font-size: 12px; color: #10B981; font-weight: 600; margin-bottom: 4px;">"CHUỖI EMVCO VIETQR CHUẨN:"</div>
                             <div style="font-size: 13px; font-family: monospace; word-break: break-all; color: #F8FAFC;">{res}</div>
                         </div>
                     }.into_any()

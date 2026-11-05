@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/cargo-target}"
-
 POD_NAME=$1
 
 if [ -z "$POD_NAME" ]; then

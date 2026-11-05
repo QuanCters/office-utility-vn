@@ -49,7 +49,7 @@ pub fn ExcelVisualJoinerView(
                 </div>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Thuật toán Hash Join siêu tốc trong bộ nhớ thay thế hoàn toàn các hàm VLOOKUP/XLOOKUP phức tạp."
             </div>
         </div>

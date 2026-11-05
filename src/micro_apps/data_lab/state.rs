@@ -142,7 +142,7 @@ impl DataLabState {
             return;
         }
         self.loaded_files.update(|f| f.push(path_str));
-        if self.active_file_index.get().is_none() {
+        if self.active_file_index.get_untracked().is_none() {
             self.active_file_index.set(Some(0));
         }
     }
@@ -159,7 +159,7 @@ impl DataLabState {
                 }
             }
         });
-        if added && self.active_file_index.get().is_none() {
+        if added && self.active_file_index.get_untracked().is_none() {
             self.active_file_index.set(Some(0));
         }
     }
@@ -207,9 +207,25 @@ impl DataLabState {
         self.loaded_files.with(|files| files.get(idx).cloned())
     }
 
+    /// Lấy đường dẫn tệp dữ liệu đang được kích hoạt mà không theo dõi phản ứng (untracked).
+    pub fn active_file_path_untracked(&self) -> Option<String> {
+        let idx = self.active_file_index.get_untracked()?;
+        self.loaded_files.with_untracked(|files| files.get(idx).cloned())
+    }
+
     /// Lấy tên tệp rút gọn (basename) của tệp dữ liệu đang kích hoạt.
     pub fn active_file_name(&self) -> Option<String> {
         self.active_file_path().map(|p| {
+            p.rsplit(['/', '\\'])
+                .next()
+                .unwrap_or(&p)
+                .to_string()
+        })
+    }
+
+    /// Lấy tên tệp rút gọn (basename) mà không theo dõi phản ứng (untracked).
+    pub fn active_file_name_untracked(&self) -> Option<String> {
+        self.active_file_path_untracked().map(|p| {
             p.rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(&p)

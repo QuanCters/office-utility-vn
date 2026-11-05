@@ -21,8 +21,9 @@ Bạn là Kỹ sư Hệ thống Rust chịu trách nhiệm hiện thực hóa h�
 - `src/`: Giao diện Leptos 0.8 CSR theo bố cục Unified 3-Zone Workspace, Command Palette, Clipboard Monitor, Always-on-Top.
 
 ## 2. Hướng dẫn Sử dụng Công cụ (Tool Guidance)
-- Khi phát triển hoặc sửa lỗi một công cụ đơn lẻ, chỉ chạy `CARGO_TARGET_DIR=/tmp/cargo-target cargo check -p office-engine` và `CARGO_TARGET_DIR=/tmp/cargo-target cargo test -p office-engine <tên_công_cụ>` để nhận phản hồi trong dưới 2 giây.
+- Khi phát triển hoặc sửa lỗi một công cụ đơn lẻ, chỉ chạy `cargo check -p office-engine` và `cargo test -p office-engine <tên_công_cụ>` để nhận phản hồi trong dưới 2 giây.
 - Trước khi kết thúc nhiệm vụ, bắt buộc chạy `./scripts/verify_spine_lock.sh` và `./scripts/verify_pod.sh <tên_công_cụ>`.
+- BẮT BUỘC chạy `make verify-ui` và `./scripts/verify_spine_lock.sh` trước khi kết thúc mọi task liên quan đến giao diện hoặc component Leptos.
 
 ## 3. Thư viện Bài học Tích lũy từ Harness² (Accumulated Experience)
 @[experience](.harness/memory/EXPERIENCE.md)

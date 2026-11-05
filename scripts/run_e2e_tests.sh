@@ -8,8 +8,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/cargo-target}"
-
 echo "======================================================================"
 echo "🚀 [OFFICE UTILITY VN] KHỞI CHẠY BỘ KIỂM THỬ ĐẦU CUỐI E2E (4 TIERS)"
 echo "   Mục tiêu: 50 công cụ qua 4 phân hệ (doc-suite, media-studio, data-lab, vn-office)"

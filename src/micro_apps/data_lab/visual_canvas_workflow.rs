@@ -211,7 +211,7 @@ pub fn VisualCanvasWorkflowView(
     state: DataLabState,
 ) -> impl IntoView {
     // Khởi tạo danh sách các node ban đầu
-    let initial_nodes = create_default_canvas_nodes(state.active_file_name());
+    let initial_nodes = create_default_canvas_nodes(state.active_file_name_untracked());
     let nodes = RwSignal::new(initial_nodes);
 
     // Trạng thái mở Drawer danh mục công cụ (Node Palette)
@@ -288,7 +288,7 @@ pub fn VisualCanvasWorkflowView(
 
     // Thao tác: Đặt lại trạng thái mặc định
     let reset_pipeline = move || {
-        let default_list = create_default_canvas_nodes(state.active_file_name());
+        let default_list = create_default_canvas_nodes(state.active_file_name_untracked());
         nodes.set(default_list);
         is_pipeline_running.set(true);
         state.is_running.set(true);
@@ -306,6 +306,35 @@ pub fn VisualCanvasWorkflowView(
             }
         });
     };
+
+    // Đăng ký phím tắt Esc (đóng Palette Drawer hoặc Modal Cấu hình) và Ctrl+Enter (chạy/dừng pipeline)
+    #[cfg(target_arch = "wasm32")]
+    {
+        use leptos::ev::keydown;
+        use crate::shared_ui::keyboard_shortcuts::is_input_focused_event;
+        let _ = window_event_listener(keydown, move |ev: web_sys::KeyboardEvent| {
+            let key = ev.key();
+            let ctrl_or_meta = ev.ctrl_key() || ev.meta_key();
+            let is_input = is_input_focused_event(&ev);
+
+            if key == "Escape" {
+                if active_config_node.get().is_some() {
+                    ev.prevent_default();
+                    active_config_node.set(None);
+                } else if is_palette_open.get() {
+                    ev.prevent_default();
+                    is_palette_open.set(false);
+                }
+            } else if ctrl_or_meta && key == "Enter" && !is_input {
+                ev.prevent_default();
+                if is_pipeline_running.get() {
+                    stop_pipeline();
+                } else {
+                    run_pipeline();
+                }
+            }
+        });
+    }
 
     // Thao tác: Thêm một tool mới từ Palette vào trước Node Output
     let add_tool_node = move |slug: &'static str| {
@@ -456,6 +485,10 @@ pub fn VisualCanvasWorkflowView(
                                     // Thẻ biểu diễn Node
                                     <div
                                         class=format!("canvas-node-card {} {}", node.color.class_name(), if is_node_running { "is-running" } else { "" })
+                                        on:dblclick={
+                                            let n = node_for_config.clone();
+                                            move |_| active_config_node.set(Some(n.clone()))
+                                        }
                                     >
                                         // Cổng Input Port (bên trái)
                                         {if node.kind != CanvasNodeKind::InputSource {
@@ -537,10 +570,47 @@ pub fn VisualCanvasWorkflowView(
 
                                         // Footer của Node: Badge trạng thái và thứ tự bước
                                         <div class="canvas-node-footer">
-                                            <span class=format!("canvas-status-badge {}", node.status.badge_class())>
-                                                <span class="status-icon" aria-hidden="true">{node.status.icon()}</span>
-                                                <span class="status-label">{node.status.label()}</span>
-                                            </span>
+                                            {match &node_status {
+                                                CanvasNodeStatus::Ready => {
+                                                    view! {
+                                                        <span class="canvas-status-badge status-badge-ready">
+                                                            <span class="status-icon" aria-hidden="true">"⏱"</span>
+                                                            <span class="status-label">"Sẵn sàng"</span>
+                                                        </span>
+                                                    }.into_any()
+                                                }
+                                                CanvasNodeStatus::Running => {
+                                                    view! {
+                                                        <span class="canvas-status-badge status-badge-running">
+                                                            <span class="status-icon status-spinning" aria-hidden="true">"⚡"</span>
+                                                            <span class="status-label">"Đang chạy..."</span>
+                                                        </span>
+                                                    }.into_any()
+                                                }
+                                                CanvasNodeStatus::Completed => {
+                                                    let row_snippet = if !node.row_info.is_empty() {
+                                                        node.row_info.split('•').next().unwrap_or(&node.row_info).trim().to_string()
+                                                    } else {
+                                                        "Hoàn thành".to_string()
+                                                    };
+                                                    let tooltip = format!("{} — {}", node.name, node.row_info);
+                                                    view! {
+                                                        <span class="canvas-status-badge status-badge-completed" title=tooltip>
+                                                            <span class="status-icon" aria-hidden="true">"✓"</span>
+                                                            <span class="status-label">{format!("Hoàn thành ({})", row_snippet)}</span>
+                                                        </span>
+                                                    }.into_any()
+                                                }
+                                                CanvasNodeStatus::Error(err_msg) => {
+                                                    let tooltip = err_msg.clone();
+                                                    view! {
+                                                        <span class="canvas-status-badge status-badge-error" title=tooltip>
+                                                            <span class="status-icon" aria-hidden="true">"✕"</span>
+                                                            <span class="status-label">"Lỗi"</span>
+                                                        </span>
+                                                    }.into_any()
+                                                }
+                                            }}
 
                                             <span class="node-step-index">
                                                 {format!("Bước {}/{}", idx + 1, total)}
@@ -597,6 +667,10 @@ pub fn VisualCanvasWorkflowView(
             {move || {
                 if is_palette_open.get() {
                     view! {
+                        <div
+                            class="palette-drawer-backdrop"
+                            on:click=move |_| is_palette_open.set(false)
+                        ></div>
                         <div class="canvas-palette-drawer">
                             <div class="palette-drawer-header">
                                 <div class="palette-title-group">

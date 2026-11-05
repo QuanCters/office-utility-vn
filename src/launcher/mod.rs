@@ -66,7 +66,7 @@ pub fn LauncherView(
                         }
                     >
                         <span class="launcher-search-icon" aria-hidden="true">"🔍"</span>
-                        <span class="launcher-search-placeholder">"Tìm nhanh 51 công cụ..."</span>
+                        <span class="launcher-search-placeholder">"Tìm nhanh 55 công cụ..."</span>
                         <kbd class="launcher-search-kbd">"Ctrl+K"</kbd>
                     </div>
                 </div>

@@ -487,6 +487,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
     let selected_col_idx = RwSignal::new(1usize); // Mặc định chọn cột Họ và tên
     let facet_search = RwSignal::new(String::new());
     let active_filter = RwSignal::new(Option::<(usize, String)>::None);
+    let facet_collapsed = RwSignal::new(false);
 
     // Phân trang
     let current_page = RwSignal::new(1usize);
@@ -545,7 +546,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
     };
 
     // Làm lại (Redo)
-    let _on_redo = move || {
+    let on_redo = move || {
         let cur_idx = history_index.get();
         let max_idx = history_stack.with(|s| s.len().saturating_sub(1));
         if cur_idx < max_idx {
@@ -560,6 +561,49 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
             show_toast("↪ Đã làm lại thao tác kế tiếp.".to_string());
         }
     };
+
+    // Đăng ký phím tắt Esc (đóng modal/bộ lọc) và Ctrl+Z / Ctrl+Y (hoàn tác / làm lại)
+    #[cfg(target_arch = "wasm32")]
+    {
+        use leptos::ev::keydown;
+        use crate::shared_ui::keyboard_shortcuts::is_input_focused_event;
+        let _ = window_event_listener(keydown, move |ev: web_sys::KeyboardEvent| {
+            let key = ev.key();
+            let ctrl_or_meta = ev.ctrl_key() || ev.meta_key();
+            let is_input = is_input_focused_event(&ev);
+
+            if key == "Escape" {
+                if is_fuzzy_modal_open.get() {
+                    ev.prevent_default();
+                    is_fuzzy_modal_open.set(false);
+                } else if is_history_modal_open.get() {
+                    ev.prevent_default();
+                    is_history_modal_open.set(false);
+                } else if is_import_modal_open.get() {
+                    ev.prevent_default();
+                    is_import_modal_open.set(false);
+                } else if active_filter.get().is_some() {
+                    ev.prevent_default();
+                    active_filter.set(None);
+                }
+            } else if ctrl_or_meta && !is_input {
+                if key == "z" || key == "Z" {
+                    if ev.shift_key() {
+                        ev.prevent_default();
+                        on_redo();
+                    } else {
+                        ev.prevent_default();
+                        on_undo();
+                    }
+                } else if key == "y" || key == "Y" {
+                    ev.prevent_default();
+                    on_redo();
+                }
+            }
+        });
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (&on_undo, &on_redo);
 
     // Tải lại bộ dữ liệu Demo
     let on_reload_demo = move || {
@@ -738,30 +782,22 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
     view! {
         <div class="spreadsheet-grid-view">
-            // Header trên cùng của Spreadsheet Data Grid
-            <header class="grid-top-bar">
+            // Header hợp nhất tinh gọn 1 tầng: Thông tin file + Trang tính + Time-travel + Thao tác
+            <header class="grid-top-bar unified">
                 <div class="grid-file-info">
-                    <span style="font-size: 16px;">"📊"</span>
-                    <span style="font-weight: 700;">
+                    <span class="file-icon" aria-hidden="true">"📊"</span>
+                    <span class="file-name-title">
                         {move || state.active_file_name().unwrap_or_else(|| "demo_nhan_vien_vn.xlsx".to_string())}
                     </span>
                     <span class="grid-stat-chip">
-                        {move || format!("{} dòng", rows.with(|r| r.len()))}
+                        {move || format!("{}d × {}c", rows.with(|r| r.len()), columns.with(|c| c.len()))}
                     </span>
-                    <span class="grid-stat-chip">
-                        {move || format!("{} cột", columns.with(|c| c.len()))}
-                    </span>
-                    <span class="grid-stat-chip" style="color: var(--emerald);">
-                        "🔒 100% On-Device"
-                    </span>
-                </div>
 
-                <div style="display: flex; align-items: center; gap: 8px;">
                     // Dropdown chọn Sheet
-                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
-                        <span>"Trang tính:"</span>
+                    <label class="grid-sheet-label">
+                        <span>"Trang:"</span>
                         <select
-                            class="pagination-btn"
+                            class="grid-sheet-select"
                             prop:value=move || state.active_sheet.get()
                             on:change=move |ev| state.set_sheet(event_target_value(&ev))
                         >
@@ -773,21 +809,98 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                         </select>
                     </label>
 
-                    // Nút Tải lại mẫu demo nếu muốn khám phá
+                    <span class="grid-divider" aria-hidden="true">"|"</span>
+                </div>
+
+                // Cụm giữa: Time-travel Recipe Engine
+                <div class="time-travel-bar">
                     <button
                         type="button"
-                        class="pagination-btn"
-                        on:click=move |_| on_reload_demo()
-                        title="Tải lại bảng dữ liệu nhân sự mẫu với các lỗi thực tế"
+                        class="time-travel-btn btn-undo"
+                        disabled=move || history_index.get() == 0
+                        on:click=move |_| on_undo()
+                        title="Hoàn tác bước trước (Ctrl+Z)"
                     >
-                        "📥 Tải mẫu Demo"
+                        <span aria-hidden="true">"↩"</span>
+                        <span>"Hoàn tác"</span>
                     </button>
 
-                    // Nút Xuất CSV / Excel
                     <button
                         type="button"
-                        class="pagination-btn"
-                        style="background: var(--brand-primary); color: var(--text-white); font-weight: 600; border-color: var(--brand-primary);"
+                        class="time-travel-btn btn-redo"
+                        disabled=move || {
+                            let idx = history_index.get();
+                            let max_idx = history_stack.with(|s| s.len().saturating_sub(1));
+                            idx >= max_idx
+                        }
+                        on:click=move |_| on_redo()
+                        title="Làm lại bước tiếp theo (Ctrl+Y)"
+                    >
+                        <span aria-hidden="true">"↪"</span>
+                        <span>"Làm lại"</span>
+                    </button>
+
+                    <span class="grid-divider" aria-hidden="true">"|"</span>
+
+                    <div class="time-travel-step-group">
+                        <span class="time-travel-step-badge">
+                            {move || {
+                                let idx = history_index.get();
+                                let total = history_stack.with(|s| s.len());
+                                format!("Bước {}/{}", idx, total.saturating_sub(1))
+                            }}
+                        </span>
+                        <span class="time-travel-step-desc">
+                            {move || {
+                                let idx = history_index.get();
+                                history_stack.with(|s| s.get(idx).map(|(_, _, step)| step.description.clone()).unwrap_or_default())
+                            }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid-top-actions">
+                    <div class="recipe-action-cluster">
+                        <button
+                            type="button"
+                            class="time-travel-btn recipe-btn"
+                            on:click=move |_| is_history_modal_open.set(true)
+                            title="Xem chi tiết lịch sử và hoàn tác theo bước"
+                        >
+                            "📜 Lịch sử thao tác"
+                        </button>
+
+                        <button
+                            type="button"
+                            class="time-travel-btn recipe-btn"
+                            on:click=move |_| on_export_recipe()
+                            title="Xuất công thức các bước đã thực hiện dạng JSON"
+                        >
+                            "📋 Xuất Recipe JSON"
+                        </button>
+
+                        <button
+                            type="button"
+                            class="time-travel-btn recipe-btn"
+                            on:click=move |_| is_import_modal_open.set(true)
+                            title="Nhập chuỗi Recipe JSON để tái áp dụng liên hoàn"
+                        >
+                            "📥 Nhập Recipe"
+                        </button>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="time-travel-btn btn-demo"
+                        on:click=move |_| on_reload_demo()
+                        title="Tải lại bảng dữ liệu nhân sự mẫu demo"
+                    >
+                        "🔄 Demo"
+                    </button>
+
+                    <button
+                        type="button"
+                        class="pagination-btn grid-export-btn"
                         on:click=move |_| on_export_csv()
                         title="Xuất bảng dữ liệu hiện tại sang tệp CSV UTF-8 BOM"
                     >
@@ -796,95 +909,41 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                 </div>
             </header>
 
-            // Time-travel Bar (Undo/Redo & Recipe Engine)
-            <div class="grid-top-bar" style="background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); padding: 4px 12px;">
-                <div class="time-travel-bar">
-                    <button
-                        type="button"
-                        class="time-travel-btn"
-                        disabled=move || history_index.get() == 0
-                        on:click=move |_| on_undo()
-                        title="Hoàn tác bước trước"
-                    >
-                        "↩ Hoàn tác"
-                    </button>
-
-                    <button
-                        type="button"
-                        class="time-travel-btn"
-                        disabled=move || history_index.get() >= history_stack.with(|s| s.len().saturating_sub(1))
-                        on:click=move |_| on_redo()
-                        title="Làm lại bước tiếp theo"
-                    >
-                        "↪ Làm lại"
-                    </button>
-
-                    <span style="font-size: 12px; color: var(--border-subtle);">"|"</span>
-
-                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">
-                        {move || {
-                            let idx = history_index.get();
-                            let total = history_stack.with(|s| s.len());
-                            let desc = history_stack.with(|s| s.get(idx).map(|(_, _, step)| step.description.clone()).unwrap_or_default());
-                            format!("Bước {}/{}: {}", idx, total.saturating_sub(1), desc)
-                        }}
-                    </span>
-                </div>
-
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <button
-                        type="button"
-                        class="time-travel-btn"
-                        on:click=move |_| is_history_modal_open.set(true)
-                        title="Xem toàn bộ lịch sử các bước đã áp dụng"
-                    >
-                        "📜 Lịch sử thao tác"
-                    </button>
-
-                    <button
-                        type="button"
-                        class="time-travel-btn"
-                        on:click=move |_| on_export_recipe()
-                        title="Xuất công thức các bước đã thực hiện dạng JSON"
-                    >
-                        "📋 Xuất Recipe JSON"
-                    </button>
-
-                    <button
-                        type="button"
-                        class="time-travel-btn"
-                        on:click=move |_| is_import_modal_open.set(true)
-                        title="Nhập chuỗi Recipe JSON để tái áp dụng liên hoàn"
-                    >
-                        "📥 Nhập Recipe"
-                    </button>
-                </div>
-            </div>
-
             // Thân chính: Bố cục 2 phần (Trái: Facet/Profiling Sidebar, Phải: Interactive Data Grid)
             <div class="grid-workspace-split">
                 // Bên trái: Facet & Profiling Sidebar
-                <aside class="facet-sidebar">
+                <aside class="facet-sidebar" class:collapsed=move || facet_collapsed.get()>
                     <div class="facet-header">
-                        <span>"🔍 Facets & Bộ lọc"</span>
-                        <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">
-                            {move || format!("{} cột", columns.with(|c| c.len()))}
-                        </span>
+                        <div class="facet-header-left">
+                            <span>"🔍"</span>
+                            <span class="facet-header-title">"Facets & Bộ lọc"</span>
+                            <span class="facet-header-count">
+                                {move || format!("{} cột", columns.with(|c| c.len()))}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            class="facet-collapse-btn"
+                            title=move || if facet_collapsed.get() { "Mở rộng thanh Facets (280px)" } else { "Thu gọn thanh Facets" }
+                            on:click=move |_| facet_collapsed.update(|c| *c = !*c)
+                        >
+                            {move || if facet_collapsed.get() { "▶" } else { "◀" }}
+                        </button>
                     </div>
 
                     <div class="facet-body">
-                        // Nhóm các thao tác làm sạch nhanh (Quick Action Buttons)
+                        // Nhóm các thao tác làm sạch nhanh (Quick Action Buttons - Lưới 2x2 gọn gàng)
                         <div>
-                            <div class="facet-section-title">"⚡ THAO TÁC LÀM SẠCH NHANH"</div>
+                            <div class="facet-section-title">"⚡ LÀM SẠCH NHANH"</div>
                             <div class="facet-actions-grid">
                                 <button
                                     type="button"
                                     class="facet-action-btn"
                                     on:click=move |_| on_clean_whitespace()
-                                    title="Xóa khoảng trắng đầu cuối và nén nhiều khoảng trắng liên tiếp"
+                                    title="Xóa khoảng trắng thừa và nén nhiều khoảng trắng liên tiếp trên toàn bảng"
                                 >
-                                    <span>"✨"</span>
-                                    <span>"Làm sạch khoảng trắng"</span>
+                                    <span aria-hidden="true">"✨"</span>
+                                    <span>"Khoảng trắng"</span>
                                 </button>
 
                                 <button
@@ -893,8 +952,8 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                     on:click=move |_| on_normalize_dates()
                                     title="Đưa ngày tháng YYYY-MM-DD, MM/DD/YYYY về chuẩn DD/MM/YYYY"
                                 >
-                                    <span>"📅"</span>
-                                    <span>"Chuẩn hóa ngày (DD/MM/YYYY)"</span>
+                                    <span aria-hidden="true">"📅"</span>
+                                    <span>"Chuẩn ngày"</span>
                                 </button>
 
                                 <button
@@ -903,8 +962,8 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                     on:click=move |_| on_split_names()
                                     title="Tách cột Họ và tên thành Họ, Tên đệm, Tên nhận diện họ kép"
                                 >
-                                    <span>"🇻🇳"</span>
-                                    <span>"Tách họ tên tiếng Việt"</span>
+                                    <span aria-hidden="true">"🇻🇳"</span>
+                                    <span>"Tách họ tên"</span>
                                 </button>
 
                                 <button
@@ -913,8 +972,8 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                     on:click=move |_| is_fuzzy_modal_open.set(true)
                                     title="Gom cụm các biến thể chính tả, gõ dấu hoặc không dấu (Cluster & Edit)"
                                 >
-                                    <span>"🔍"</span>
-                                    <span>"Gom cụm Fuzzy (Cluster & Edit)"</span>
+                                    <span aria-hidden="true">"🔍"</span>
+                                    <span>"Gom cụm"</span>
                                 </button>
                             </div>
                         </div>
@@ -936,11 +995,11 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                                     facet_search.set(String::new());
                                                 }
                                             >
-                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                <div class="facet-col-content">
                                                     <span class="col-type-badge">{col.col_type.icon()}</span>
-                                                    <span style="font-weight: 600;">{col.name}</span>
+                                                    <span class="facet-col-name">{col.name}</span>
                                                 </div>
-                                                <span style="font-size: 12px; color: var(--text-muted);">
+                                                <span class="facet-col-count">
                                                     {move || {
                                                         let prof = calculate_column_profile(idx, &rows.get());
                                                         format!("{}/{}", prof.valid_count, prof.total)
@@ -955,8 +1014,8 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                         // Bảng phân phối tần suất các giá trị của cột đang chọn
                         <div>
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <div class="facet-section-title" style="margin-bottom: 0;">
+                            <div class="facet-header-group">
+                                <div class="facet-section-title">
                                     "📊 PHÂN PHỐI TẦN SUẤT"
                                 </div>
                                 {move || {
@@ -998,12 +1057,29 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                             }}
 
                             // Ô tìm kiếm giá trị trong Facet (IME-Safe)
-                            <div style="margin-bottom: 8px;">
+                            <div class="facet-search-wrapper" style="margin-bottom: 8px;">
+                                <span class="facet-search-icon" aria-hidden="true">"🔍"</span>
                                 <ImeSafeSearchInput
                                     value=facet_search
                                     placeholder="Tìm giá trị trong cột..."
                                     class="facet-search-box"
                                 />
+                                {move || {
+                                    if !facet_search.get().is_empty() {
+                                        view! {
+                                            <button
+                                                type="button"
+                                                class="facet-search-clear-btn"
+                                                title="Xóa tìm kiếm"
+                                                on:click=move |_| facet_search.set(String::new())
+                                            >
+                                                "✕"
+                                            </button>
+                                        }.into_any()
+                                    } else {
+                                        view! { <span style="display: none;"></span> }.into_any()
+                                    }
+                                }}
                             </div>
 
                             // Danh sách các giá trị phân phối tần suất
@@ -1019,7 +1095,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                                     if filtered_top.is_empty() {
                                         view! {
-                                            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 12px;">
+                                            <div class="modal-empty-state">
                                                 "Không có giá trị nào phù hợp."
                                             </div>
                                         }.into_any()
@@ -1032,8 +1108,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                                             view! {
                                                 <div
-                                                    class="facet-dist-item"
-                                                    style=if is_currently_filtered { "border: 1px solid var(--brand-primary); cursor: pointer;" } else { "cursor: pointer;" }
+                                                    class=if is_currently_filtered { "facet-dist-item active" } else { "facet-dist-item" }
                                                     on:click=move |_| {
                                                         if is_currently_filtered {
                                                             active_filter.set(None);
@@ -1061,18 +1136,59 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                 // Bên phải: Interactive Data Grid
                 <main class="data-grid-main">
+                    // Chip trạng thái đang lọc dữ liệu (Active Filter Chip Bar)
+                    {move || {
+                        if let Some((f_col, ref f_val)) = active_filter.get() {
+                            let col_name = columns.with(|c| c.get(f_col).map(|col| col.name.clone()).unwrap_or_default());
+                            let all_rows = rows.get();
+                            let match_count = all_rows.iter().filter(|r| r.get(f_col).map(|c| c.trim() == f_val.as_str()).unwrap_or(false)).count();
+                            let val_display = f_val.clone();
+
+                            view! {
+                                <div class="grid-active-filter-bar">
+                                    <div class="filter-chip-content">
+                                        <span class="filter-chip-icon" aria-hidden="true">"🔍"</span>
+                                        <span class="filter-chip-text">
+                                            "Đang lọc: "
+                                            <strong class="filter-col-name">{col_name}</strong>
+                                            " = \""
+                                            <span class="filter-col-val">{val_display}</span>
+                                            "\""
+                                        </span>
+                                        <span class="filter-chip-count">{format!("({}/{} dòng khớp)", match_count, all_rows.len())}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="filter-chip-clear-btn"
+                                        on:click=move |_| active_filter.set(None)
+                                        title="Xóa bộ lọc để hiển thị toàn bộ dữ liệu"
+                                    >
+                                        "✕ Bỏ lọc"
+                                    </button>
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! { <span style="display: none;"></span> }.into_any()
+                        }
+                    }}
+
                     <div class="data-grid-table-wrap">
-                        <table class="data-grid-table">
+                        <table
+                            class="data-grid-table"
+                            role="grid"
+                            aria-label="Lưới dữ liệu bảng tính tương tác OpenRefine"
+                        >
                             <thead>
                                 <tr>
-                                    <th style="width: 44px; text-align: center;">"#"</th>
+                                    <th class="grid-th-index">"#"</th>
                                     {move || {
                                         let cur_rows = rows.get();
                                         columns.get().into_iter().enumerate().map(|(col_idx, col)| {
                                             let profile = calculate_column_profile(col_idx, &cur_rows);
                                             let valid_w = format!("{:.1}%", profile.valid_percentage);
                                             let tooltip = format!(
-                                                "Hợp lệ: {:.1}% ({}/{}) | Trống/Null: {:.1}% ({}/{})",
+                                                "Cột \"{}\": Hợp lệ {:.1}% ({}/{}) | Trống/Null: {:.1}% ({}/{})",
+                                                col.name,
                                                 profile.valid_percentage, profile.valid_count, profile.total,
                                                 profile.null_percentage, profile.null_count, profile.total
                                             );
@@ -1081,9 +1197,9 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                                 <th>
                                                     <div class="col-header-wrap">
                                                         <div class="col-header-top">
-                                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                            <div class="col-header-meta">
                                                                 <span class="col-type-badge">{col.col_type.icon()}</span>
-                                                                <span>{col.name}</span>
+                                                                <span class="col-name-label">{col.name}</span>
                                                             </div>
                                                         </div>
                                                         // Mini-profiling Bar dưới mỗi tiêu đề cột
@@ -1124,7 +1240,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                     if total_filtered == 0 {
                                         view! {
                                             <tr>
-                                                <td colspan="10" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                                                <td colspan="10" class="grid-empty-state-cell">
                                                     "Không có dòng dữ liệu nào khớp với bộ lọc."
                                                 </td>
                                             </tr>
@@ -1134,7 +1250,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                             let is_highlighted = filter.is_some();
                                             view! {
                                                 <tr class=if is_highlighted { "grid-row-highlight" } else { "" }>
-                                                    <td style="text-align: center; color: var(--text-muted); font-size: 12px;">
+                                                    <td class="grid-cell-index">
                                                         {orig_idx + 1}
                                                     </td>
                                                     {row.into_iter().map(|cell| {
@@ -1164,8 +1280,8 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                     // Thanh phân trang ở chân bảng (Pagination Bar)
                     <footer class="grid-pagination-bar">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="color: var(--text-muted);">
+                        <div class="pagination-group">
+                            <span class="pagination-status-text">
                                 {move || {
                                     let all_len = rows.with(|r| r.len());
                                     if let Some((f_col, ref f_val)) = active_filter.get() {
@@ -1181,9 +1297,9 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                             </span>
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div class="pagination-group">
                             // Chọn số dòng mỗi trang
-                            <label style="display: flex; align-items: center; gap: 4px; color: var(--text-muted);">
+                            <label class="pagination-select-label">
                                 <span>"Số dòng:"</span>
                                 <select
                                     class="pagination-btn"
@@ -1212,7 +1328,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                 "◀ Trước"
                             </button>
 
-                            <span style="font-weight: 600; color: var(--text-main);">
+                            <span class="pagination-page-indicator">
                                 {move || {
                                     let filter = active_filter.get();
                                     let filtered_len = rows.with(|r| {
@@ -1261,9 +1377,14 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                     view! {
                         <div class="fuzzy-modal-backdrop">
-                            <div class="fuzzy-modal-card">
+                            <div
+                                class="fuzzy-modal-card"
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Gom cụm và chuẩn hóa chính tả"
+                            >
                                 <div class="fuzzy-modal-header">
-                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div class="modal-header-title-group">
                                         <span>"🔍"</span>
                                         <span>{format!("Gom cụm & Chuẩn hóa Chính tả — Cột \"{}\"", col_name)}</span>
                                     </div>
@@ -1277,13 +1398,13 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                 </div>
 
                                 <div class="fuzzy-modal-body">
-                                    <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px 0;">
+                                    <p class="modal-lead-desc">
                                         "Thuật toán phát hiện các giá trị có lỗi chính tả, sai dấu hoặc biến thể không dấu tương đồng trong tiếng Việt và đề xuất giá trị chuẩn để hợp nhất."
                                     </p>
 
                                     {if clusters.is_empty() {
                                         view! {
-                                            <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px;">
+                                            <div class="modal-empty-state">
                                                 "Không phát hiện biến thể chính tả nào trong cột này."
                                             </div>
                                         }.into_any()
@@ -1294,7 +1415,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                                     <div class="fuzzy-cluster-title">
                                                         {format!("Cụm chuẩn: \"{}\" (Tổng {} dòng)", cluster.canonical, cluster.total_occurrences)}
                                                     </div>
-                                                    <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">
+                                                    <div class="modal-section-label">
                                                         "Các biến thể tương đồng phát hiện được:"
                                                     </div>
                                                     <div class="fuzzy-cluster-items">
@@ -1322,8 +1443,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                     </button>
                                     <button
                                         type="button"
-                                        class="pagination-btn"
-                                        style="background: var(--brand-primary); color: var(--text-white); font-weight: 600;"
+                                        class="pagination-btn modal-btn-primary"
                                         on:click=move |_| on_apply_fuzzy_merge()
                                     >
                                         "✓ Áp dụng gom cụm (Merge All)"
@@ -1346,9 +1466,17 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                     view! {
                         <div class="fuzzy-modal-backdrop">
-                            <div class="recipe-history-modal-card">
+                            <div
+                                class="recipe-history-modal-card"
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Lịch sử thao tác Recipe"
+                            >
                                 <div class="fuzzy-modal-header">
-                                    <span>"📜 Lịch sử thao tác (Recipe History)"</span>
+                                    <div class="modal-header-title-group">
+                                        <span>"📜"</span>
+                                        <span>"Lịch sử thao tác (Recipe History)"</span>
+                                    </div>
                                     <button
                                         type="button"
                                         class="pagination-btn"
@@ -1402,9 +1530,17 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                 if is_import_modal_open.get() {
                     view! {
                         <div class="fuzzy-modal-backdrop">
-                            <div class="fuzzy-modal-card">
+                            <div
+                                class="fuzzy-modal-card"
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Nhập Recipe JSON để tái áp dụng"
+                            >
                                 <div class="fuzzy-modal-header">
-                                    <span>"📥 Nhập Recipe JSON để Tái áp dụng"</span>
+                                    <div class="modal-header-title-group">
+                                        <span>"📥"</span>
+                                        <span>"Nhập Recipe JSON để Tái áp dụng"</span>
+                                    </div>
                                     <button
                                         type="button"
                                         class="pagination-btn"
@@ -1415,12 +1551,11 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                 </div>
 
                                 <div class="fuzzy-modal-body">
-                                    <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 8px 0;">
+                                    <p class="modal-lead-desc">
                                         "Dán chuỗi Recipe JSON chứa các bước làm sạch dữ liệu để thực thi liên hoàn:"
                                     </p>
                                     <textarea
-                                        class="facet-search-box"
-                                        style="height: 180px; font-family: monospace; font-size: 12px; resize: vertical;"
+                                        class="facet-search-box recipe-import-textarea"
                                         placeholder="[{\"id\": \"step-1\", \"action\": \"trim_spaces\", ...}]"
                                         prop:value=move || import_recipe_text.get()
                                         on:input=move |ev| import_recipe_text.set(event_target_value(&ev))
@@ -1437,8 +1572,7 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                     </button>
                                     <button
                                         type="button"
-                                        class="pagination-btn"
-                                        style="background: var(--brand-primary); color: var(--text-white); font-weight: 600;"
+                                        class="pagination-btn modal-btn-primary"
                                         on:click=move |_| on_execute_import_recipe()
                                     >
                                         "✓ Thực thi Recipe"

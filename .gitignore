@@ -2,3 +2,5 @@
 /target/
 .superpowers/
 .worktrees/
+.playwright-mcp/
+

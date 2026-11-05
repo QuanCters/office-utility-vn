@@ -188,6 +188,11 @@ pub struct MediaStudioState {
 
     pub audio_silence_threshold_db: RwSignal<f32>,
     pub audio_min_silence_duration_ms: RwSignal<u32>,
+    pub audio_manual_trim_enabled: RwSignal<bool>,
+    pub audio_start_time_s: RwSignal<f32>,
+    pub audio_end_time_s: RwSignal<f32>,
+    pub audio_volume_boost_db: RwSignal<f32>,
+    pub audio_enable_limiter: RwSignal<bool>,
 
     pub video_fps: RwSignal<u32>,
     pub video_max_width: RwSignal<Option<u32>>,
@@ -260,6 +265,11 @@ impl MediaStudioState {
 
             audio_silence_threshold_db: RwSignal::new(-40.0),
             audio_min_silence_duration_ms: RwSignal::new(500),
+            audio_manual_trim_enabled: RwSignal::new(false),
+            audio_start_time_s: RwSignal::new(0.0),
+            audio_end_time_s: RwSignal::new(0.0),
+            audio_volume_boost_db: RwSignal::new(0.0),
+            audio_enable_limiter: RwSignal::new(true),
 
             video_fps: RwSignal::new(15),
             video_max_width: RwSignal::new(Some(480)),

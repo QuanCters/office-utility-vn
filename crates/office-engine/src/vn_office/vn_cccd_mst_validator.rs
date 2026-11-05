@@ -306,6 +306,8 @@ impl OfficeTool for VnCccdMstValidatorTool {
             s.to_string()
         } else if let Some(s) = request.options.get("input").and_then(|v| v.as_str()) {
             s.to_string()
+        } else if let Some(s) = request.options.get("cccd").and_then(|v| v.as_str()) {
+            s.to_string()
         } else if let Some(path) = request.input_paths.first() {
             std::fs::read_to_string(path).map_err(|e| CommandError::IoError {
                 details: format!("Không thể đọc tệp '{path}': {e}"),
@@ -447,5 +449,39 @@ mod tests {
         let tool = VnCccdMstValidatorTool;
         assert_eq!(tool.slug(), "vn-cccd-mst-validator");
         assert_eq!(tool.name(), "Kiểm tra Hợp lệ CCCD & Mã số thuế");
+    }
+
+    #[test]
+    fn test_vn_cccd_mst_validator_options_key_compatibility() {
+        let tool = VnCccdMstValidatorTool;
+        let cancel = AtomicBool::new(false);
+
+        // 1. Thử nghiệm với key "cccd"
+        let req_cccd = DispatchTaskRequest {
+            task_id: "test-opts-cccd".to_string(),
+            tool_slug: "vn-cccd-mst-validator".to_string(),
+            input_paths: vec![],
+            output_directory: None,
+            options: json!({ "cccd": "079195654321" }),
+        };
+        let resp_cccd = tool.execute(&req_cccd, &cancel, None).expect("execute cccd");
+        assert_eq!(resp_cccd.status, "SUCCESS");
+        let out_str = &resp_cccd.output_paths[0];
+        assert!(out_str.contains("TP. Hồ Chí Minh"));
+        assert!(out_str.contains("Nữ"));
+
+        // 2. Thử nghiệm với MST qua key "input_string"
+        let req_mst = DispatchTaskRequest {
+            task_id: "test-opts-mst".to_string(),
+            tool_slug: "vn-cccd-mst-validator".to_string(),
+            input_paths: vec![],
+            output_directory: None,
+            options: json!({ "input_string": "0100109106" }),
+        };
+        let resp_mst = tool.execute(&req_mst, &cancel, None).expect("execute mst");
+        assert_eq!(resp_mst.status, "SUCCESS");
+        let out_mst = &resp_mst.output_paths[0];
+        assert!(out_mst.contains("\"is_valid\": true"));
+        assert!(out_mst.contains("Doanh nghiệp / Cá nhân (10 số)"));
     }
 }

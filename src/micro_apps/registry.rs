@@ -385,7 +385,7 @@ impl ToolRegistry {
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-form-manager",
-                name: "Quản lý & Điền Biểu mẫu PDF",
+                name: "Quản lý & Điền Biểu mẫu AcroForm",
                 domain: "doc-suite",
                 description: "Khảo sát trường AcroForm, xuất dữ liệu JSON/CSV và tự động điền form hàng loạt.",
                 is_pinned: false,

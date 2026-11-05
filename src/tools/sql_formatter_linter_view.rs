@@ -41,7 +41,7 @@ pub fn SqlFormatterLinterView(
                 </div>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
                 "💡 Linter tích hợp tự động phân tích cú pháp AST, phát hiện ngoặc đơn lồng nhau chưa đóng, lỗi vị trí WHERE/FROM và các chuỗi literal chưa đóng nháy."
             </div>
         </div>

@@ -32,7 +32,7 @@ pub fn MarkdownToStyledPdfView() -> impl IntoView {
                     <option value="Sách báo">"Sách báo & Tạp chí (Trang trọng, tiêu đề lớn)"</option>
                 </select>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
                 "💡 Tự động nhận dạng phông chữ tiếng Việt Unicode, chia cột bảng và đánh số trang chân trang."
             </div>
         </div>

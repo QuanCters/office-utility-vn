@@ -29,7 +29,7 @@ pub fn DiffCheckerTextSheetsView(
                 </label>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Thuật toán Myers/Patience Diff nhận diện chính xác từng ô bảng tính bị thêm mới (+), xóa bỏ (-) hoặc sửa đổi (~)."
             </div>
         </div>

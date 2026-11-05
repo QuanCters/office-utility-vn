@@ -8,6 +8,8 @@ use crate::micro_apps::data_lab::state::DataLabState;
 pub fn DataLabFileListPanel(
     state: DataLabState,
 ) -> impl IntoView {
+    let is_collapsed = RwSignal::new(false);
+
     // Kích hoạt hộp thoại chọn file của hệ điều hành
     let on_add_file_click = move |_| {
         #[cfg(target_arch = "wasm32")]
@@ -33,7 +35,11 @@ pub fn DataLabFileListPanel(
     };
 
     view! {
-        <aside class="data-lab-file-panel" aria-label="Quản lý danh sách tệp dữ liệu">
+        <aside
+            class="data-lab-file-panel"
+            class:collapsed=move || is_collapsed.get()
+            aria-label="Quản lý danh sách tệp dữ liệu"
+        >
             // Thẻ input ẩn chọn tệp dữ liệu đa định dạng
             <input
                 type="file"
@@ -51,9 +57,19 @@ pub fn DataLabFileListPanel(
                         <span class="data-panel-icon" aria-hidden="true">"📊"</span>
                         <h3 class="data-panel-title">"Dữ liệu & Bảng tính"</h3>
                     </div>
-                    <span class="data-panel-count-badge">
-                        {move || format!("{} tệp", state.loaded_files_count())}
-                    </span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span class="data-panel-count-badge">
+                            {move || format!("{} tệp", state.loaded_files_count())}
+                        </span>
+                        <button
+                            type="button"
+                            class="data-panel-collapse-btn"
+                            title=move || if is_collapsed.get() { "Mở rộng danh sách tệp (290px)" } else { "Thu gọn danh sách tệp" }
+                            on:click=move |_| is_collapsed.update(|c| *c = !*c)
+                        >
+                            {move || if is_collapsed.get() { "▶" } else { "◀" }}
+                        </button>
+                    </div>
                 </div>
 
                 <div class="data-panel-actions-row">

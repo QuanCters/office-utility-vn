@@ -6,7 +6,7 @@ use office_shared::{
     FileMetadataResponse, TaskHistoryRecord, TaskProgress, ToolPreset, ToolSettingRecord,
     WorkflowDag,
 };
-use office_engine::vn_office::number_to_words::VietnameseNumberToWordsTool;
+use office_engine::vn_office::{VietnameseNumberToWordsTool, VnCccdMstValidatorTool};
 use office_engine::OfficeTool;
 
 pub mod updater;
@@ -41,6 +41,10 @@ pub async fn dispatch_tool_task(
         match tool_slug.as_str() {
             "vietnamese-number-to-words" => {
                 let tool = VietnameseNumberToWordsTool::default();
+                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
+            }
+            "vn-cccd-mst-validator" => {
+                let tool = VnCccdMstValidatorTool::default();
                 tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
             }
             _ => {

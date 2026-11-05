@@ -25,7 +25,7 @@ pub fn PdfBookmarkTocView() -> impl IntoView {
                     placeholder="Nhập cây mục lục, ví dụ:\nChương 1: Mở đầu - Trang 1\n  1.1 Mục tiêu - Trang 1\nChương 2: Nội dung - Trang 2"
                 />
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
                 "💡 Thụt lề 2 dấu cách để tạo cấp mục lục con (Nested Outlines)."
             </div>
         </div>

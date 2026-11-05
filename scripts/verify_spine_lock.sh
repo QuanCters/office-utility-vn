@@ -16,7 +16,7 @@ CMD_FILE="${PROJECT_ROOT}/src-tauri/src/commands/mod.rs"
 
 EXPECTED_SHARED="26a8aed81fceb200951f4581f80635b42f3344186d3cb0a7c84d1016629e32c6"
 EXPECTED_DB="38bcd07c7358503b46664e407ed6d84e641661d82a95a428299d15f61df0c5d1"
-EXPECTED_CMD="416a5b194219e596d00004d9cdbbc7f3442d87cc747c5500c1430edae9034bf2"
+EXPECTED_CMD="fc781f666bd65fd8e7d66695c853750aaae463aef8fad2343872996f7ae29540"
 
 ACTUAL_SHARED="$(sha256sum "${SHARED_FILE}" | awk '{print $1}')"
 ACTUAL_DB="$(sha256sum "${DB_FILE}" | awk '{print $1}')"
@@ -47,7 +47,7 @@ fi
 echo "✓ src-tauri/src/commands: Hợp lệ (SHA-256 khớp chuẩn)"
 
 echo "=== [SPINE GUARD] KIỂM TRA UNIT TEST TOÀN WORKSPACE ==="
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --workspace --manifest-path "${PROJECT_ROOT}/Cargo.toml"
+cargo test --workspace --manifest-path "${PROJECT_ROOT}/Cargo.toml"
 
 echo "🎉 [SPINE GUARD] XÁC NHẬN TOÀN BỘ KHUNG XƯƠNG SỐNG AN TOÀN 100%!"
 exit 0

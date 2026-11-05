@@ -131,24 +131,25 @@ pub fn CommandPalette(
     #[cfg(target_arch = "wasm32")]
     {
         use leptos::ev::keydown;
-        let _ = window_event_listener(keydown, move |ev: web_sys::KeyboardEvent| {
+        let handle = window_event_listener(keydown, move |ev: web_sys::KeyboardEvent| {
             let ctrl_or_meta = ev.ctrl_key() || ev.meta_key();
             let key = ev.key();
 
             if ctrl_or_meta && (key == "k" || key == "K") {
                 ev.prevent_default();
-                open.update(|is_open| {
+                let _ = open.try_update(|is_open| {
                     *is_open = !*is_open;
                     if *is_open {
-                        search_query.set(String::new());
-                        selected_index.set(0);
+                        let _ = search_query.try_set(String::new());
+                        let _ = selected_index.try_set(0);
                     }
                 });
-            } else if open.get() && key == "Escape" {
+            } else if key == "Escape" && open.try_get().unwrap_or(false) {
                 ev.prevent_default();
-                open.set(false);
+                let _ = open.try_set(false);
             }
         });
+        on_cleanup(move || drop(handle));
     }
 
     #[derive(Clone, Copy)]
@@ -271,11 +272,17 @@ pub fn CommandPalette(
                                 autofocus=true
                                 prop:value=move || search_query.get()
                                 on:input=move |ev| {
+                                    if !is_ime_composing.get_untracked() {
+                                        search_query.set(event_target_value(&ev));
+                                        selected_index.set(0);
+                                    }
+                                }
+                                on:compositionstart=move |_| is_ime_composing.set(true)
+                                on:compositionend=move |ev| {
+                                    is_ime_composing.set(false);
                                     search_query.set(event_target_value(&ev));
                                     selected_index.set(0);
                                 }
-                                on:compositionstart=move |_| is_ime_composing.set(true)
-                                on:compositionend=move |_| is_ime_composing.set(false)
                             />
                             <span class="palette-esc-hint">"Esc để đóng"</span>
                         </div>

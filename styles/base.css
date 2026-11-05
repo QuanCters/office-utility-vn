@@ -1,22 +1,78 @@
 :root {
+  /* Brand Primary Tokens */
   --primary: #4F46E5;
   --primary-hover: #4338CA;
-  --emerald: #059669;
-  --emerald-bg: #ECFDF5;
-  --sky: #0284C7;
-  --rose: #E11D48;
-  --amber: #D97706;
-  --purple: #9333EA;
-  
+  --primary-light: #6366F1;
+  --primary-glow: rgba(99, 102, 241, 0.25);
+
+  /* Slate Neutrals */
+  --neutral-app: #0B1120;
   --bg-main: #0F172A;
   --bg-surface: #1E293B;
   --bg-card: #334155;
+  --bg-card-hover: #3B4D66;
   --border-color: #475569;
+  --border-subtle: #334155;
   --text-main: #F8FAFC;
-  --text-muted: #94A3B8;
+  --text-secondary: #E2E8F0;
+  --text-muted: #CBD5E1;
+  --text-subtle: #94A3B8;
+  --text-white: #FFFFFF;
 
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Semantics */
+  --emerald: #10B981;
+  --emerald-bg: rgba(16, 185, 129, 0.12);
+  --success: #10B981;
+  --success-hover: #059669;
+  --success-light: #34D399;
+  --success-surface: #064E3B;
+  --success-bg: rgba(16, 185, 129, 0.12);
+
+  --amber: #F59E0B;
+  --warning: #F59E0B;
+  --warning-hover: #D97706;
+  --warning-light: #FBBF24;
+  --warning-surface: #78350F;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+
+  --rose: #EF4444;
+  --danger: #EF4444;
+  --danger-hover: #DC2626;
+  --danger-light: #F87171;
+  --danger-surface: #7F1D1D;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+
+  --sky: #0284C7;
+  --info: #0284C7;
+  --info-light: #38BDF8;
+  --info-surface: #0C4A6E;
+  --info-bg: rgba(2, 132, 199, 0.12);
+
+  --purple: #6366F1;
+
+  /* Spacing Scale (4pt/8pt Rhythm) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  /* Radius Scale */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Typography Stacks */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  font-family: var(--font-sans);
   font-size: 14px;
+  line-height: 1.5;
   color: var(--text-main);
   background-color: var(--bg-main);
   user-select: none;
@@ -50,15 +106,19 @@ input, textarea, .selectable-text {
   align-items: center;
   justify-content: space-between;
   height: 38px;
-  background: #0B1120;
+  background: var(--neutral-app);
   padding: 0 12px;
-  border-bottom: 1px solid #1E293B;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
 }
 
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-weight: 600;
   font-size: 13px;
 }
@@ -69,50 +129,167 @@ input, textarea, .selectable-text {
   align-items: center;
   justify-content: center;
   height: 100%;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 .titlebar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
+}
+
+/* Explicit No-Drag Regions on interactive elements to prevent Tauri WebView from swallowing clicks */
+.titlebar button,
+.titlebar a,
+.titlebar input,
+.titlebar select,
+.titlebar-update-btn,
+.pin-btn,
+.window-control-btn,
+.trust-badge {
+  -webkit-app-region: no-drag !important;
+  app-region: no-drag !important;
+  pointer-events: auto !important;
+}
+
+.titlebar-update-btn {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: var(--primary-light);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.titlebar-update-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: var(--primary-light);
+  color: var(--text-white);
 }
 
 .pin-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.pin-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-main);
 }
 
 .pin-btn.pinned {
-  background: var(--purple);
-  color: #FFF;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-white);
 }
 
 .window-control-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
 }
 
 .window-control-btn:hover {
-  background: #334155;
-  color: #FFF;
+  background: var(--bg-card);
+  color: var(--text-white);
 }
 
 .window-control-btn.close:hover {
-  background: var(--rose);
-  color: #FFF;
+  background: var(--danger);
+  color: var(--text-white);
+}
+
+@media (max-width: 640px) {
+  .titlebar {
+    padding: 0 8px;
+  }
+  .titlebar-left {
+    gap: 4px;
+    font-size: 12px;
+  }
+  .titlebar-update-btn {
+    font-size: 12px;
+    padding: 2px 6px;
+  }
+}
+
+/* =========================================================================
+   Universal Anti-Wrap & Layout Stability (12px Floor Rule Safeguard)
+   ========================================================================= */
+.badge,
+.badge-count,
+.app-badge,
+.tool-badge,
+.tool-count-badge,
+.format-pill,
+.shortcut-chip,
+.shortcut-pill,
+.shortcut-key,
+.kbd,
+.key-badge,
+.pin-btn,
+.trust-badge,
+.security-badge,
+.hero-badge,
+.status-badge,
+.status-tag,
+.history-badge,
+.detection-badge,
+.target-card-ext,
+.recent-tool-chip,
+.sidebar-badge,
+.dag-port-badge,
+.tag,
+.pill,
+.pinned-tab {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+/* =========================================================================
+   Flexbox Layout Stability & Text Ellipsis (Anti-Blowout Rules)
+   ========================================================================= */
+.card-title,
+.tool-title,
+.tool-name,
+.file-name,
+.file-item-name,
+.queue-item-name,
+.app-card-name,
+.app-card-title,
+.app-title,
+.dag-node-title,
+.target-card-name,
+.home-card-name,
+.sidebar-tool-label,
+.sidebar-domain-label,
+.truncate-text {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 /* Pinned Bar */
@@ -180,14 +357,15 @@ input, textarea, .selectable-text {
 .trust-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(5, 150, 105, 0.15);
-  color: #10B981;
-  border: 1px solid rgba(5, 150, 105, 0.3);
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
+  gap: var(--space-xs);
+  background: var(--success-bg);
+  color: var(--success-light);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .preset-selector {
@@ -499,23 +677,24 @@ input, textarea, .selectable-text {
 }
 
 .palette-item-badge {
-  font-size: 10px;
+  font-size: 12px;
   background: #334155;
-  padding: 2px 6px;
+  padding: 2px 8px;
   border-radius: 4px;
-  color: #94A3B8;
+  color: #CBD5E1;
+  white-space: nowrap;
 }
 
 .palette-item.active .palette-item-badge {
   background: rgba(255, 255, 255, 0.2);
-  color: #FFF;
+  color: var(--text-white);
 }
 
 .palette-section-header {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #94A3B8;
+  color: #CBD5E1;
   padding: 8px 12px 4px 12px;
   letter-spacing: 0.5px;
   display: flex;
@@ -527,9 +706,9 @@ input, textarea, .selectable-text {
 
 .palette-item-badge.recent,
 .palette-item-badge.pinned {
-  background: rgba(168, 85, 247, 0.2);
-  color: #C084FC;
-  border: 1px solid rgba(168, 85, 247, 0.4);
+  background: rgba(99, 102, 241, 0.15);
+  color: #818CF8;
+  border: 1px solid rgba(99, 102, 241, 0.35);
   font-weight: 600;
 }
 
@@ -547,7 +726,7 @@ input, textarea, .selectable-text {
 
 .dashboard-recent-label {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -565,7 +744,7 @@ input, textarea, .selectable-text {
   color: #CBD5E1;
   padding: 3px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s ease;
@@ -613,10 +792,10 @@ input, textarea, .selectable-text {
   background: rgba(99, 102, 241, 0.15);
   border: 1px solid rgba(99, 102, 241, 0.35);
   color: #818CF8;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -776,7 +955,7 @@ input, textarea, .selectable-text {
 }
 
 .result-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #10B981;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -1014,8 +1193,8 @@ input, textarea, .selectable-text {
 }
 
 .id-field-label {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: #CBD5E1;
   text-transform: uppercase;
 }
 
@@ -1093,7 +1272,7 @@ input, textarea, .selectable-text {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .dag-port-badge {
@@ -1187,7 +1366,7 @@ input, textarea, .selectable-text {
 .history-badge {
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1329,7 +1508,7 @@ input, textarea, .selectable-text {
 }
 
 .sidebar-search-icon {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -1348,7 +1527,7 @@ input, textarea, .selectable-text {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   padding: 0 2px;
 }
 
@@ -1382,10 +1561,10 @@ input, textarea, .selectable-text {
   align-items: center;
   justify-content: space-between;
   padding: 6px 14px 4px 14px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #64748B;
+  color: #CBD5E1;
   text-transform: uppercase;
   user-select: none;
 }
@@ -1396,10 +1575,10 @@ input, textarea, .selectable-text {
 
 .sidebar-badge {
   background: #1E293B;
-  color: #94A3B8;
-  font-size: 9px;
+  color: #CBD5E1;
+  font-size: 12px;
   font-weight: 600;
-  padding: 1px 5px;
+  padding: 2px 6px;
   border-radius: 10px;
 }
 
@@ -1471,7 +1650,7 @@ input, textarea, .selectable-text {
   border: none;
   color: #475569;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 4px;
   border-radius: 4px;
   opacity: 0;
@@ -1505,7 +1684,7 @@ input, textarea, .selectable-text {
 
 .sidebar-empty-hint {
   padding: 12px 14px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   text-align: center;
 }
@@ -1524,7 +1703,7 @@ input, textarea, .selectable-text {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #94A3B8;
+  color: #CBD5E1;
   font-size: 12px;
   font-weight: 600;
   border-radius: 6px;
@@ -1532,7 +1711,7 @@ input, textarea, .selectable-text {
 }
 
 .sidebar-domain-header:hover {
-  background: #141E33;
+  background: var(--bg-card);
   color: #F1F5F9;
 }
 
@@ -1568,8 +1747,8 @@ input, textarea, .selectable-text {
 }
 
 .sidebar-arrow {
-  font-size: 10px;
-  color: #64748B;
+  font-size: 12px;
+  color: #94A3B8;
 }
 
 .sidebar-domain-items {
@@ -1685,13 +1864,13 @@ input, textarea, .selectable-text {
   color: #34D399;
   padding: 3px 10px;
   border-radius: 9999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   margin-bottom: 12px;
 }
 
 .pulse-dot {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .home-hero-title {
@@ -1704,7 +1883,7 @@ input, textarea, .selectable-text {
 
 .home-hero-subtitle {
   font-size: 13px;
-  color: #94A3B8;
+  color: #CBD5E1;
   line-height: 1.6;
   max-width: 780px;
 }
@@ -1731,8 +1910,8 @@ input, textarea, .selectable-text {
 }
 
 .home-section-sub {
-  font-size: 11px;
-  color: #64748B;
+  font-size: 12px;
+  color: #94A3B8;
 }
 
 /* Quick Resume Cards Grid */
@@ -1772,10 +1951,10 @@ input, textarea, .selectable-text {
 }
 
 .home-card-domain-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   background: #0F172A;
-  color: #94A3B8;
+  color: #CBD5E1;
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid #334155;
@@ -1790,8 +1969,8 @@ input, textarea, .selectable-text {
 }
 
 .home-card-desc {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: #CBD5E1;
   line-height: 1.5;
   flex: 1;
   display: -webkit-box;
@@ -1805,7 +1984,7 @@ input, textarea, .selectable-text {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #818CF8;
   padding-top: 8px;
@@ -1855,13 +2034,13 @@ input, textarea, .selectable-text {
 }
 
 .home-suite-desc {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: #CBD5E1;
   line-height: 1.5;
 }
 
 .home-suite-count {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #38BDF8;
   margin-top: 4px;
@@ -1869,8 +2048,8 @@ input, textarea, .selectable-text {
 
 /* Keyboard Shortcuts Row */
 .shortcuts-panel {
-  background: #141E33;
-  border: 1px solid #293548;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 14px 18px;
 }
@@ -1890,14 +2069,14 @@ input, textarea, .selectable-text {
   border: 1px solid #334155;
   border-radius: 6px;
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: #CBD5E1;
 }
 
 .kbd {
   font-family: monospace;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   background: #1E293B;
   color: #F8FAFC;
   padding: 1px 5px;
@@ -1906,7 +2085,7 @@ input, textarea, .selectable-text {
 }
 
 .shortcut-desc {
-  color: #94A3B8;
+  color: #CBD5E1;
   margin-left: 2px;
 }
 
@@ -1956,7 +2135,7 @@ input, textarea, .selectable-text {
 }
 
 .detection-badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 4px;
@@ -2061,7 +2240,7 @@ input, textarea, .selectable-text {
 }
 
 .target-card-ext {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #818CF8;
   background: rgba(99, 102, 241, 0.15);
@@ -2080,8 +2259,8 @@ input, textarea, .selectable-text {
 }
 
 .target-card-desc {
-  font-size: 11px;
-  color: #94A3B8;
+  font-size: 12px;
+  color: #CBD5E1;
   line-height: 1.4;
 }
 
@@ -2100,7 +2279,7 @@ input, textarea, .selectable-text {
 .matrix-guide-title {
   font-size: 12px;
   font-weight: 700;
-  color: #64748B;
+  color: #CBD5E1;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -2136,8 +2315,8 @@ input, textarea, .selectable-text {
 }
 
 .route-dest {
-  color: #94A3B8;
-  font-size: 11px;
+  color: #CBD5E1;
+  font-size: 12px;
 }
 
 /* ==========================================================================
@@ -2150,7 +2329,7 @@ input, textarea, .selectable-text {
   align-items: center;
   gap: 8px;
   background: #1E293B;
-  color: #94A3B8;
+  color: #CBD5E1;
   border: 1px solid #334155;
   border-radius: 6px;
   padding: 6px 14px;
@@ -2233,7 +2412,7 @@ input, textarea, .selectable-text {
 
 .task-run-btn .kbd-hint,
 .task-cancel-btn .kbd-hint {
-  font-size: 11px;
+  font-size: 12px;
   background: rgba(0, 0, 0, 0.25);
   padding: 2px 6px;
   border-radius: 4px;

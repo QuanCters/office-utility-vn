@@ -50,7 +50,7 @@ pub fn Base64FileCodecView(
                 </div>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
                 "💡 Xử lý theo luồng (Streaming Codec) với bộ đệm cố định 48 KB, hỗ trợ tệp dung lượng lên đến hàng trăm Megabytes mà không làm tăng vọt RAM."
             </div>
         </div>

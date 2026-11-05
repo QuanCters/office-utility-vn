@@ -567,8 +567,8 @@ mod tests {
     }
 
     #[test]
-    fn test_all_51_tools_mapped() {
-        assert_eq!(ALL_TOOLS.len(), 51);
+    fn test_all_55_tools_mapped() {
+        assert_eq!(ALL_TOOLS.len(), 55);
         for tool in ALL_TOOLS.iter() {
             assert!(
                 tool_slug_to_micro_app(tool.slug).is_some(),
@@ -581,7 +581,7 @@ mod tests {
     #[test]
     fn test_tools_count_per_app() {
         assert_eq!(micro_app_tools(MicroAppId::VnOffice).len(), 11);
-        assert_eq!(micro_app_tools(MicroAppId::PdfStudio).len(), 18);
+        assert_eq!(micro_app_tools(MicroAppId::PdfStudio).len(), 22);
         assert_eq!(micro_app_tools(MicroAppId::MediaStudio).len(), 9);
         assert_eq!(micro_app_tools(MicroAppId::DataLab).len(), 13);
     }

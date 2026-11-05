@@ -18,7 +18,7 @@ pub fn ExcelSplitByColumnView(
                 />
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Mỗi giá trị duy nhất trong cột này sẽ được tách thành một file Excel/CSV riêng biệt, bảo tồn nguyên vẹn dòng tiêu đề gốc."
             </div>
         </div>

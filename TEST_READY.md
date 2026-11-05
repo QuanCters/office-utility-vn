@@ -84,10 +84,10 @@ cd /home/quan/workspace/tauri-v2/office-utility-vn
 ./scripts/run_e2e_tests.sh
 
 # 2. Thực thi trực tiếp qua Cargo:
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e
+cargo test --test e2e
 
 # 3. Thực thi có hiển thị chi tiết (verbose output):
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e -- --nocapture
+cargo test --test e2e -- --nocapture
 
 # 4. Kiểm tra khóa bảo vệ khung xương sống (Phase 0 Spine Lock):
 ./scripts/verify_spine_lock.sh

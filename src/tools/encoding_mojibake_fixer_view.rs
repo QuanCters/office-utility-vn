@@ -18,7 +18,7 @@ pub fn EncodingMojibakeFixerView(
                 </label>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Sửa triệt để các văn bản dính lỗi font như "<code style="color: #F8FAFC;">"Tiáº¿ng Viá»‡t"</code>" về lại "<code style="color: #10B981;">"Tiếng Việt"</code>" chuẩn đọc được."
             </div>
         </div>

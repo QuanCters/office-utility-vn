@@ -45,7 +45,7 @@ pub fn ExcelMultiMergerView(
                 </label>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Khi gộp nối tiếp dòng, dòng tiêu đề của các tệp sau sẽ tự động được bỏ qua để đảm bảo tính toàn vẹn dữ liệu."
             </div>
         </div>

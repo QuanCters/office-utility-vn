@@ -43,7 +43,7 @@ pub fn DataStructureConverterView(
                 }}
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Tự động nhận diện kiểu số, boolean, chuỗi và thoát ký tự SQL nháy đơn an toàn."
             </div>
         </div>

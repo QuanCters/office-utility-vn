@@ -365,6 +365,8 @@ pub fn VnOfficeLayout(
             }
             "vn-cccd-mst-validator" => {
                 serde_json::json!({
+                    "input_string": cccd_input.get(),
+                    "input": cccd_input.get(),
                     "cccd": cccd_input.get()
                 })
             }

@@ -129,8 +129,21 @@ pub fn DataLabLayout(
                                 .map(|c| c.label())
                                 .unwrap_or("Dữ liệu & Bảng tính");
 
+                            let is_wide_tool = move || {
+                                let cur = state.active_tool.get();
+                                let cat = category_for_tool(&cur);
+                                (cat == Some(DataLabCategory::Spreadsheet) && grid_view_mode.get())
+                                    || matches!(
+                                        cur.as_str(),
+                                        "data-structure-converter"
+                                            | "base64-file-codec"
+                                            | "sql-formatter-linter"
+                                            | "diff-checker-text-sheets"
+                                    )
+                            };
+
                             view! {
-                                <div class="data-lab-tool-workspace">
+                                <div class="data-lab-tool-workspace" class:wide-workspace=is_wide_tool>
                                     // Header của thẻ công cụ
                                     <div class="data-lab-tool-card-header">
                                         <div class="data-lab-tool-title-row">
@@ -146,11 +159,11 @@ pub fn DataLabLayout(
                                                 let cat = category_for_tool(&cur);
                                                 if cat == Some(DataLabCategory::Spreadsheet) {
                                                     view! {
-                                                        <div class="data-lab-view-mode-toggle" style="display: flex; gap: 4px; background: var(--neutral-app); padding: 2px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-right: 6px;">
+                                                        <div class="data-lab-view-mode-toggle">
                                                             <button
                                                                 type="button"
-                                                                class="time-travel-btn"
-                                                                style=move || if grid_view_mode.get() { "background: var(--brand-primary); color: #fff; font-weight: 600;" } else { "font-size: 12px;" }
+                                                                class="time-travel-btn view-toggle-btn"
+                                                                class:active=move || grid_view_mode.get()
                                                                 on:click=move |_| grid_view_mode.set(true)
                                                                 title="Xem chế độ bảng tính tương tác OpenRefine với Data Profiling & Facet"
                                                             >
@@ -158,8 +171,8 @@ pub fn DataLabLayout(
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                class="time-travel-btn"
-                                                                style=move || if !grid_view_mode.get() { "background: var(--brand-primary); color: #fff; font-weight: 600;" } else { "font-size: 12px;" }
+                                                                class="time-travel-btn view-toggle-btn"
+                                                                class:active=move || !grid_view_mode.get()
                                                                 on:click=move |_| grid_view_mode.set(false)
                                                                 title="Xem biểu mẫu cài đặt tham số công cụ hàng loạt"
                                                             >
@@ -191,26 +204,26 @@ pub fn DataLabLayout(
                                                     String::new()
                                                 };
                                                 let bound_path = state.active_file_path().unwrap_or_default();
+                                                let bound_tooltip = bound_path.clone();
 
                                                 view! {
-                                                    <div class="context-banner-active">
+                                                    <div class="context-banner-active single-line">
                                                         <span class="context-icon" aria-hidden="true">"📁"</span>
-                                                        <div class="context-text-group">
-                                                            <span class="context-title">
-                                                                "Đang áp dụng cho tệp dữ liệu: "
-                                                                <strong>{active_name}</strong>
-                                                                <span class="context-sheet-tag">{sheet_info}</span>
-                                                            </span>
-                                                            <span class="context-subtitle">
-                                                                {format!("(Tệp {}/{} trong danh sách dùng chung)", current_idx, total)}
-                                                            </span>
-                                                            <div class="context-bound-path" style="margin-top: 4px; font-size: 12px; color: #94A3B8; font-family: monospace; display: flex; align-items: center; gap: 6px;">
-                                                                <span>"🔗 Đường dẫn liên kết:"</span>
-                                                                <code style="background: rgba(15, 23, 42, 0.6); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">
-                                                                    {bound_path}
-                                                                </code>
-                                                            </div>
-                                                        </div>
+                                                        <span class="context-filename">
+                                                            "Tệp: "
+                                                            <strong>{active_name}</strong>
+                                                        </span>
+                                                        {if is_table {
+                                                            view! { <span class="context-sheet-tag">{sheet_info}</span> }.into_any()
+                                                        } else {
+                                                            view! { <span style="display: none;"></span> }.into_any()
+                                                        }}
+                                                        <span class="context-file-counter">{format!("(Tệp {}/{})", current_idx, total)}</span>
+                                                        <span class="context-divider">"•"</span>
+                                                        <span class="context-bound-path-compact" title=bound_tooltip>
+                                                            <span class="context-link-icon" aria-hidden="true">"🔗"</span>
+                                                            <code class="context-bound-code-compact">{bound_path}</code>
+                                                        </span>
                                                     </div>
                                                 }.into_any()
                                             } else {
@@ -302,19 +315,41 @@ pub fn DataLabLayout(
                                         }}
                                     </div>
 
-                                    // Thanh thực thi tác vụ Data Lab On-Device
-                                    <TaskExecutor
-                                        tool_slug=Signal::derive(move || state.active_tool.get())
-                                        input_files=Signal::derive(move || {
-                                            let mut files = state.loaded_files.get();
-                                            if let Some(pos) = state.active_file_path().and_then(|p| files.iter().position(|f| f == &p)) {
-                                                let active = files.remove(pos);
-                                                files.insert(0, active);
-                                            }
-                                            files
-                                        })
-                                        external_is_running=state.is_running
-                                    />
+                                    // Thanh thực thi tác vụ Data Lab On-Device (chỉ hiển thị ở chế độ Form cấu hình hàng loạt)
+                                    {move || {
+                                        let cur_slug = state.active_tool.get();
+                                        let cat = category_for_tool(&cur_slug);
+                                        let is_interactive = (cat == Some(DataLabCategory::Spreadsheet) && grid_view_mode.get())
+                                            || matches!(
+                                                cur_slug.as_str(),
+                                                "data-profiler"
+                                                    | "fuzzy-clustering"
+                                                    | "recipe-replay"
+                                                    | "data-structure-converter"
+                                                    | "base64-file-codec"
+                                                    | "sql-formatter-linter"
+                                                    | "diff-checker-text-sheets"
+                                            );
+
+                                        if is_interactive {
+                                            view! { <span style="display: none;"></span> }.into_any()
+                                        } else {
+                                            view! {
+                                                <TaskExecutor
+                                                    tool_slug=Signal::derive(move || state.active_tool.get())
+                                                    input_files=Signal::derive(move || {
+                                                        let mut files = state.loaded_files.get();
+                                                        if let Some(pos) = state.active_file_path().and_then(|p| files.iter().position(|f| f == &p)) {
+                                                             let active = files.remove(pos);
+                                                             files.insert(0, active);
+                                                        }
+                                                        files
+                                                    })
+                                                    external_is_running=state.is_running
+                                                />
+                                            }.into_any()
+                                        }
+                                    }}
                                 </div>
                             }.into_any()
                         }

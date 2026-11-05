@@ -23,7 +23,7 @@ pub fn DocxTemplateMailmergeView() -> impl IntoView {
                     placeholder="Ví dụ: Hop_dong_{{ho_ten}}_{{ma_nv}}.docx"
                 />
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
                 "💡 Các biến trong {{...}} sẽ tự động được thay thế tương ứng với tên cột trong bảng tính dữ liệu."
             </div>
         </div>

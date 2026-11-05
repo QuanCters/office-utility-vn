@@ -29,7 +29,7 @@ pub fn PdfRepairCorruptView() -> impl IntoView {
                     </label>
                 </div>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
                 "💡 Thuật toán tự động tìm các cặp thẻ obj / endobj và tái tạo lại toàn bộ bảng tham chiếu chéo chỉ mục."
             </div>
         </div>

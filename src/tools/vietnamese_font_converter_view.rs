@@ -43,7 +43,7 @@ pub fn VietnameseFontConverterView(
                 </div>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
                 "💡 Giữ nguyên 100% định dạng in đậm, in nghiêng, màu sắc và công thức khi chuyển đổi tệp .docx và .xlsx."
             </div>
         </div>

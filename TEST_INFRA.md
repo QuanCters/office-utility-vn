@@ -210,30 +210,30 @@ To support parallel development during Phase 1:
 
 ### Standard Cargo Integration Test
 ```bash
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e
+cargo test --test e2e
 ```
 
 ### Run With Full Output Logging
 ```bash
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e -- --nocapture
+cargo test --test e2e -- --nocapture
 ```
 
 ### Filter By Tier or Subsystem
 ```bash
 # Run only Tier 1 tests:
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e tier1
+cargo test --test e2e tier1
 
 # Run only Tier 2 boundary tests:
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e tier2
+cargo test --test e2e tier2
 
 # Run only Tier 3 pairwise pipelines:
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e tier3
+cargo test --test e2e tier3
 
 # Run only Tier 4 real-world scenarios:
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e tier4
+cargo test --test e2e tier4
 
 # Run tests for a specific subsystem:
-CARGO_TARGET_DIR=/tmp/cargo-target cargo test --test e2e vn_office
+cargo test --test e2e vn_office
 ```
 
 ### Dedicated Runner Script

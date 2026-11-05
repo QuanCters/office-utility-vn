@@ -44,45 +44,45 @@ pub fn UniversalFileConverterHubView(
                 </div>
             </div>
 
-            <div class="matrix-empty-guide" style="margin-top: 14px; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid #334155; border-radius: 8px;">
-                <div style="font-size: 12px; font-weight: 600; color: #94A3B8; margin-bottom: 8px;">
+            <div class="matrix-empty-guide" style="margin-top: 14px; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">
                     "⚡ Ma trận Chuyển đổi Tệp Vạn năng (100% On-Device):"
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; font-size: 11px;">
-                    <div style="padding: 6px 8px; background: #1E293B; border-radius: 4px; border: 1px solid #334155;">
-                        <span style="color: #EF4444; font-weight: 600;">"📄 PDF "</span>
-                        <span style="color: #64748B;">"➔ "</span>
-                        <span style="color: #CBD5E1;">"Excel (.xlsx), CSV, Markdown, OCR Text"</span>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; font-size: 12px;">
+                    <div style="padding: 6px 8px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                        <span style="color: var(--danger-light); font-weight: 600;">"📄 PDF "</span>
+                        <span style="color: var(--text-muted);">"➔ "</span>
+                        <span style="color: var(--text-main);">"Excel (.xlsx), CSV, Markdown, OCR Text"</span>
                     </div>
-                    <div style="padding: 6px 8px; background: #1E293B; border-radius: 4px; border: 1px solid #334155;">
-                        <span style="color: #3B82F6; font-weight: 600;">"📘 Word (.docx) "</span>
-                        <span style="color: #64748B;">"➔ "</span>
-                        <span style="color: #CBD5E1;">"Markdown (.md), Text thuần, PDF"</span>
+                    <div style="padding: 6px 8px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                        <span style="color: var(--info-light); font-weight: 600;">"📘 Word (.docx) "</span>
+                        <span style="color: var(--text-muted);">"➔ "</span>
+                        <span style="color: var(--text-main);">"Markdown (.md), Text thuần, PDF"</span>
                     </div>
-                    <div style="padding: 6px 8px; background: #1E293B; border-radius: 4px; border: 1px solid #334155;">
-                        <span style="color: #10B981; font-weight: 600;">"📗 Excel (.xlsx) "</span>
-                        <span style="color: #64748B;">"➔ "</span>
-                        <span style="color: #CBD5E1;">"Bảng CSV, JSON, SQL INSERT, Markdown"</span>
+                    <div style="padding: 6px 8px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                        <span style="color: var(--success-light); font-weight: 600;">"📗 Excel (.xlsx) "</span>
+                        <span style="color: var(--text-muted);">"➔ "</span>
+                        <span style="color: var(--text-main);">"Bảng CSV, JSON, SQL INSERT, Markdown"</span>
                     </div>
-                    <div style="padding: 6px 8px; background: #1E293B; border-radius: 4px; border: 1px solid #334155;">
-                        <span style="color: #06B6D4; font-weight: 600;">"📊 CSV "</span>
-                        <span style="color: #64748B;">"➔ "</span>
-                        <span style="color: #CBD5E1;">"JSON, SQL INSERT, Excel .xlsx"</span>
+                    <div style="padding: 6px 8px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                        <span style="color: var(--brand-primary); font-weight: 600;">"📊 CSV "</span>
+                        <span style="color: var(--text-muted);">"➔ "</span>
+                        <span style="color: var(--text-main);">"JSON, SQL INSERT, Excel .xlsx"</span>
                     </div>
-                    <div style="padding: 6px 8px; background: #1E293B; border-radius: 4px; border: 1px solid #334155;">
-                        <span style="color: #A855F7; font-weight: 600;">"📝 Markdown / TXT "</span>
-                        <span style="color: #64748B;">"➔ "</span>
-                        <span style="color: #CBD5E1;">"PDF Chuẩn Công vụ VN (A4), Unicode NFC"</span>
+                    <div style="padding: 6px 8px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                        <span style="color: var(--primary-light); font-weight: 600;">"📝 Markdown / TXT "</span>
+                        <span style="color: var(--text-muted);">"➔ "</span>
+                        <span style="color: var(--text-main);">"PDF Chuẩn Công vụ VN (A4), Unicode NFC"</span>
                     </div>
-                    <div style="padding: 6px 8px; background: #1E293B; border-radius: 4px; border: 1px solid #334155;">
-                        <span style="color: #F59E0B; font-weight: 600;">"🖼️ Hình ảnh "</span>
-                        <span style="color: #64748B;">"➔ "</span>
-                        <span style="color: #CBD5E1;">"WebP, PNG không vỡ nét, JPEG, BMP"</span>
+                    <div style="padding: 6px 8px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                        <span style="color: var(--warning-light); font-weight: 600;">"🖼️ Hình ảnh "</span>
+                        <span style="color: var(--text-muted);">"➔ "</span>
+                        <span style="color: var(--text-main);">"WebP, PNG không vỡ nét, JPEG, BMP"</span>
                     </div>
                 </div>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "🔒 100% On-Device: Không gửi dữ liệu qua Internet. Tự động nhận diện chữ ký file (Magic bytes)."
             </div>
         </div>

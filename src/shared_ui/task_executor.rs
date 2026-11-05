@@ -315,6 +315,7 @@ pub fn TaskExecutor(
     let btn_label = raw_label.trim_start_matches("🚀").trim();
 
     let is_running = RwSignal::new(false);
+    let is_cancelling = RwSignal::new(false);
     let active_task_id = RwSignal::new(None::<String>);
     let progress = RwSignal::new(0.0f32);
     let progress_msg = RwSignal::new(String::new());
@@ -325,9 +326,11 @@ pub fn TaskExecutor(
     let input_files_sig = input_files.unwrap_or_else(|| Signal::derive(Vec::new));
     let status_message_sig = status_message.unwrap_or_else(|| RwSignal::new(String::new()));
 
-    // Xử lý hủy tác vụ
+    // Xử lý hủy tác vụ (phản hồi tức thì < 100ms với cờ is_cancelling chống bấm kép)
     let do_cancel = move || {
-        if is_running.get() {
+        if is_running.get() && !is_cancelling.get() {
+            is_cancelling.set(true);
+            progress_msg.set("Đang dừng tác vụ...".to_string());
             if let Some(tid) = active_task_id.get() {
                 cancel_task_ipc(&tid);
             }
@@ -338,6 +341,7 @@ pub fn TaskExecutor(
             progress.set(0.0);
             progress_msg.set("Đã dừng tác vụ".to_string());
             error_msg.set(Some("Tác vụ đã bị người dùng hủy bỏ.".to_string()));
+            is_cancelling.set(false);
         }
     };
 
@@ -382,6 +386,7 @@ pub fn TaskExecutor(
         let task_id_str = "task-local-1".to_string();
 
         active_task_id.set(Some(task_id_str.clone()));
+        is_cancelling.set(false);
         is_running.set(true);
         if let Some(ext) = external_is_running {
             ext.set(true);
@@ -536,9 +541,10 @@ pub fn TaskExecutor(
                             type="button"
                             class="btn-danger task-cancel-btn"
                             title="Hủy tác vụ đang chạy (phím Esc)"
+                            disabled=move || is_cancelling.get()
                             on:click=move |_| do_cancel()
                         >
-                            <span>"✕ Hủy tác vụ"</span>
+                            <span>{move || if is_cancelling.get() { "⏳ Đang dừng..." } else { "✕ Hủy tác vụ" }}</span>
                             <kbd class="kbd-hint">"Esc"</kbd>
                         </button>
                     }.into_any()

@@ -51,7 +51,7 @@ pub fn ExcelCleanerNormalizerView(
                 </label>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Nhận diện chính xác họ kép: Nguyễn Phước, Phan Huy, Hoàng Phủ, Võ Đình, Đặng Vũ..."
             </div>
         </div>

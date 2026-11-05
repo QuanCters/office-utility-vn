@@ -45,7 +45,7 @@ pub fn ListSetOperationsView(
                 </label>
             </div>
 
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
                 "💡 Xử lý tập hợp cực nhanh cho hàng trăm ngàn email, SĐT, mã định danh chỉ trong vài mili-giây."
             </div>
         </div>

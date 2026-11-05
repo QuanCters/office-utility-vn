@@ -4,11 +4,11 @@ use office_utility_vn_ui::micro_apps::{
 };
 
 #[test]
-fn test_all_51_tools_registered_in_registry_entries() {
+fn test_all_55_tools_registered_in_registry_entries() {
     assert_eq!(
         ToolRegistry::ENTRIES.len(),
-        51,
-        "ToolRegistry::ENTRIES phải chứa đúng 51 công cụ"
+        55,
+        "ToolRegistry::ENTRIES phải chứa đúng 55 công cụ"
     );
 
     // Mọi công cụ trong ALL_TOOLS phải xuất hiện trong ToolRegistry::ENTRIES với cùng slug
@@ -28,7 +28,7 @@ fn test_all_51_tools_registered_in_registry_entries() {
 }
 
 #[test]
-fn test_lookup_app_for_all_51_slugs() {
+fn test_lookup_app_for_all_55_slugs() {
     for tool in ALL_TOOLS.iter() {
         let app = ToolRegistry::lookup_app(tool.slug);
         assert!(
@@ -58,8 +58,8 @@ fn test_count_for_app_matches_exact_distribution() {
     );
     assert_eq!(
         ToolRegistry::count_for_app(MicroAppId::PdfStudio),
-        18,
-        "PDF Studio phải có chính xác 18 công cụ"
+        22,
+        "PDF Studio phải có chính xác 22 công cụ"
     );
     assert_eq!(
         ToolRegistry::count_for_app(MicroAppId::MediaStudio),
@@ -76,13 +76,13 @@ fn test_count_for_app_matches_exact_distribution() {
         .iter()
         .map(|&app| ToolRegistry::count_for_app(app))
         .sum();
-    assert_eq!(total, 51, "Tổng số công cụ phân bổ cho 4 Micro-Apps phải là 51");
+    assert_eq!(total, 55, "Tổng số công cụ phân bổ cho 4 Micro-Apps phải là 55");
 }
 
 #[test]
 fn test_tools_for_app_and_all_tools() {
     let all = ToolRegistry::all_tools();
-    assert_eq!(all.len(), 51, "ToolRegistry::all_tools() phải trả về 51 công cụ");
+    assert_eq!(all.len(), 55, "ToolRegistry::all_tools() phải trả về 55 công cụ");
 
     let vn_tools = ToolRegistry::tools_for_app(MicroAppId::VnOffice);
     assert_eq!(vn_tools.len(), 11);
@@ -91,7 +91,7 @@ fn test_tools_for_app_and_all_tools() {
     }
 
     let pdf_tools = ToolRegistry::tools_for_app(MicroAppId::PdfStudio);
-    assert_eq!(pdf_tools.len(), 18);
+    assert_eq!(pdf_tools.len(), 22);
     for t in &pdf_tools {
         assert_eq!(ToolRegistry::lookup_app(t.slug), Some(MicroAppId::PdfStudio));
     }

@@ -94,6 +94,11 @@ pub fn ImageBatchView(
                     <span>"Xóa thông tin EXIF/GPS bảo vệ quyền riêng tư"</span>
                 </label>
             </div>
+
+            <div style="margin-top: 12px; padding: 10px 12px; background: rgba(30, 41, 59, 0.5); border-radius: 6px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 14px;">"💡"</span>
+                <span>"Hỗ trợ giải mã: " <strong style="color: #38BDF8;">"PNG, JPG, BMP, WebP, HEIC/HEIF (iPhone)"</strong> ". Tự động nén và chuyển đổi song song trên toàn bộ lõi CPU."</span>
+            </div>
         </div>
     }
 }

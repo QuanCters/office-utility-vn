@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T12:13:30Z",
+  "title": "Design System: Office Utility VN",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Indigo Brand",
+        "canonical": "#4F46E5",
+        "tonalRamp": ["#1E1B4B", "#312E81", "#3730A3", "#4338CA", "#4F46E5", "#6366F1", "#818CF8", "#A5B4FC"]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Canvas Main",
+        "canonical": "#0F172A",
+        "tonalRamp": ["#020617", "#0B1120", "#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8"]
+      },
+      "neutral-surface": {
+        "role": "neutral",
+        "displayName": "Surface Zone",
+        "canonical": "#1E293B",
+        "tonalRamp": ["#0B1120", "#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1"]
+      },
+      "neutral-card": {
+        "role": "neutral",
+        "displayName": "Card & Resting",
+        "canonical": "#334155",
+        "tonalRamp": ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#F8FAFC"]
+      },
+      "success": {
+        "role": "accent",
+        "displayName": "Emerald Guard",
+        "canonical": "#10B981",
+        "tonalRamp": ["#022C22", "#064E3B", "#065F46", "#047857", "#059669", "#10B981", "#34D399", "#6EE7B7"]
+      },
+      "danger": {
+        "role": "accent",
+        "displayName": "Rose Alert",
+        "canonical": "#EF4444",
+        "tonalRamp": ["#450A0A", "#7F1D1D", "#991B1B", "#B91C1C", "#DC2626", "#EF4444", "#F87171", "#FCA5A5"]
+      },
+      "warning": {
+        "role": "accent",
+        "displayName": "Amber Notice",
+        "canonical": "#F59E0B",
+        "tonalRamp": ["#451A03", "#78350F", "#92400E", "#B45309", "#D97706", "#F59E0B", "#FBBF24", "#FCD34D"]
+      },
+      "info": {
+        "role": "accent",
+        "displayName": "Sky Precision",
+        "canonical": "#0284C7",
+        "tonalRamp": ["#082F49", "#0C4A6E", "#075985", "#0369A1", "#0284C7", "#0EA5E9", "#38BDF8", "#7DD3FC"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headlines, welcome modals, and high-impact analytics figures (24px/700)." },
+      "headline": { "displayName": "Headline", "purpose": "Zone 1 tool titles and major category section headers (20px/600)." },
+      "title": { "displayName": "Title", "purpose": "Card titles, subsection headers, file group titles (16px/600)." },
+      "body": { "displayName": "Body", "purpose": "Primary readable interface text, descriptions, table contents (14px/400)." },
+      "body-medium": { "displayName": "Body Medium", "purpose": "Option labels, button text, table column headers (14px/500)." },
+      "label": { "displayName": "Label & Badge", "purpose": "Trust badges, keyboard shortcuts, metadata, file sizes, tooltips (12px/500)." },
+      "mono": { "displayName": "Tabular Mono", "purpose": "Vietnamese currency figures, tax IDs, hashes, file paths with tabular numerals (13px/400)." }
+    },
+    "shadows": [
+      { "name": "panel-dropdown", "value": "0 10px 25px -5px rgba(0, 0, 0, 0.5)", "purpose": "Floating command palette, context menus, and tooltips." },
+      { "name": "focus-indigo", "value": "0 0 0 3px rgba(99, 102, 241, 0.2)", "purpose": "Keyboard focus ring on input fields and buttons." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default timing curve for buttons and view transitions (150ms)." },
+      { "name": "ease-progress", "value": "linear", "purpose": "Continuous progress bar animation." }
+    ],
+    "breakpoints": [
+      { "name": "desktop-standard", "value": "1024px" },
+      { "name": "desktop-wide", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Nút thực thi tác vụ chính trong Zone 3 (Ctrl + Enter).",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polygon points=\"5 3 19 12 5 21 5 3\"/></svg><span>Thực thi tác vụ</span><kbd class=\"ds-kbd\">Ctrl+Enter</kbd></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; background: #4F46E5; color: #FFFFFF; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s ease; } .ds-btn-primary:hover { background: #4338CA; } .ds-btn-primary:focus-visible { outline: 2px solid #6366F1; outline-offset: 2px; } .ds-kbd { background: rgba(0,0,0,0.25); color: #E0E7FF; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-family: monospace; }"
+    },
+    {
+      "name": "Trust Security Badge",
+      "kind": "chip",
+      "refersTo": "badge-trust",
+      "description": "Huy hiệu bảo chứng 100% On-Device Native định vị tại Zone 1.",
+      "html": "<div class=\"ds-badge-trust\"><span class=\"ds-dot-pulse\"></span><span>100% On-Device Native (Rayon)</span></div>",
+      "css": ".ds-badge-trust { display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34D399; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 9999px; } .ds-dot-pulse { width: 6px; height: 6px; background: #10B981; border-radius: 50%; box-shadow: 0 0 8px #10B981; }"
+    },
+    {
+      "name": "Accounting Amount Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Ô nhập số tiền định dạng kế toán với dấu phân cách và đơn vị VNĐ.",
+      "html": "<div class=\"ds-input-group\"><input type=\"text\" class=\"ds-input-accounting\" value=\"1.250.000\" /><span class=\"ds-currency-suffix\">₫</span></div>",
+      "css": ".ds-input-group { position: relative; display: inline-flex; align-items: center; width: 100%; max-width: 320px; } .ds-input-accounting { width: 100%; background: #1E293B; border: 1px solid #334155; color: #F8FAFC; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; padding: 8px 32px 8px 12px; border-radius: 6px; font-variant-numeric: tabular-nums; text-align: right; } .ds-input-accounting:focus { outline: none; border-color: #6366F1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); } .ds-currency-suffix { position: absolute; right: 12px; color: #94A3B8; font-size: 14px; pointer-events: none; }"
+    },
+    {
+      "name": "Smart File Dropzone",
+      "kind": "custom",
+      "refersTo": "dropzone-canvas",
+      "description": "Vùng kéo thả tệp thông minh hỗ trợ kích hoạt Native Picker khi click.",
+      "html": "<div class=\"ds-dropzone\"><svg width=\"32\" height=\"32\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#94A3B8\" stroke-width=\"1.5\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"17 8 12 3 7 8\"/><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"15\"/></svg><p class=\"ds-dropzone-title\">Kéo thả tệp vào đây hoặc <span class=\"ds-link\">chọn từ máy tính</span></p><p class=\"ds-dropzone-subtitle\">Hỗ trợ PDF, Excel XLSX, Word DOCX, Ảnh, Text</p></div>",
+      "css": ".ds-dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #1E293B; border: 1.5px dashed #475569; border-radius: 8px; padding: 24px; cursor: pointer; transition: border-color 0.15s, background 0.15s; } .ds-dropzone:hover { border-color: #6366F1; background: #334155; } .ds-dropzone-title { color: #F8FAFC; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; margin: 0; } .ds-link { color: #818CF8; text-decoration: underline; } .ds-dropzone-subtitle { color: #94A3B8; font-family: 'Inter', sans-serif; font-size: 12px; margin: 0; }"
+    },
+    {
+      "name": "Result Output Box",
+      "kind": "card",
+      "refersTo": "result-box",
+      "description": "Khung hiển thị kết quả cho phép bôi đen chọn chữ và nút sao chép.",
+      "html": "<div class=\"ds-result-box\"><div class=\"ds-result-header\"><span class=\"ds-result-badge\">✓ KẾT QUẢ CHUẨN</span><button class=\"ds-btn-copy\">Sao chép (Ctrl+C)</button></div><div class=\"ds-result-content\">Một triệu hai trăm năm mươi nghìn đồng chẵn.</div></div>",
+      "css": ".ds-result-box { background: #1E293B; border: 1px solid #10B981; border-radius: 8px; padding: 16px; font-family: 'Inter', sans-serif; } .ds-result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; } .ds-result-badge { color: #34D399; font-size: 12px; font-weight: 600; } .ds-btn-copy { background: #334155; border: 1px solid #475569; color: #F8FAFC; font-size: 12px; padding: 4px 10px; border-radius: 4px; cursor: pointer; } .ds-btn-copy:hover { background: #475569; } .ds-result-content { color: #F8FAFC; font-size: 15px; line-height: 1.5; font-weight: 500; user-select: text !important; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Sovereign Workspace Cockpit",
+    "overview": "Office Utility VN là không gian làm việc chuyên nghiệp, khép kín và an toàn tuyệt đối cho nhân sự kế toán, hành chính và quản lý doanh nghiệp Việt Nam. Giao diện được thiết kế với phong thái điềm tĩnh, chính xác và chuẩn mực của một công cụ văn phòng cao cấp: loại bỏ hoàn toàn các yếu tố đồ họa thừa thãi, tối ưu hóa công thái học thị giác khi người dùng phải đối chiếu song song với bảng tính Excel và phần mềm kế toán trong nhiều giờ liên tục.\n\nHệ thống thị giác chuyển từ cảm giác 'template AI công nghệ đen tối' sang phong cách phòng điều hành bản địa (Native Sovereign Cockpit): nền Slate phân tầng sắc nét, đường viền cấu trúc 1px thanh mảnh, màu nhấn Indigo Brand sang trọng và tín hiệu bảo mật xanh ngọc Emerald củng cố cam kết Zero-Cloud.",
+    "keyCharacteristics": [
+      "Điềm tĩnh & Tập trung (Sovereign Calm): Tông màu nền Slate đậm nhiều tầng triệt tiêu chói sáng nhưng vẫn giữ độ tương phản chữ đạt chuẩn WCAG 2.1 AA.",
+      "Chuẩn hóa Nghiệp vụ Kế toán (Accounting Grade Precision): Mọi con số, đơn vị tiền tệ, mã thuế và ngày tháng đều sử dụng font số đơn cách (tabular numerals) kèm phân định dấu chấm/phẩy theo chuẩn Việt Nam.",
+      "Phản hồi Tức thì & Không Bẫy Tương tác (Zero-Trap Responsiveness): Không có component chết hay dữ liệu mẫu bị gán cứng. Mọi nút bấm, phím tắt và vùng kéo thả đều kết nối trực tiếp với năng lực thật của hệ thống."
+    ],
+    "rules": [
+      {
+        "name": "The Slate Sanctum Rule",
+        "body": "Nền ứng dụng chỉ sử dụng duy nhất bảng màu Slate trung tính. Không pha sắc độ xanh lam sáng hay xám tro vào nền để tránh sai lệch cảm nhận màu sắc chứng từ của người dùng.",
+        "section": "colors"
+      },
+      {
+        "name": "The 10% Accent Restraint Rule",
+        "body": "Màu nhấn chính Indigo (#4F46E5) không chiếm quá 10% diện tích màn hình. Màu sắc rực rỡ chỉ xuất hiện để dẫn dắt hành động cốt lõi, không dùng để trang trí tràn lan.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status Truth Rule",
+        "body": "Không bao giờ ngụy trang lỗi thành thành công. Khung thông báo lỗi bắt buộc dùng viền Rose #EF4444 và nền #7F1D1D, tuyệt đối không bao giờ hiển thị thông điệp lỗi trong khung xanh lá #10B981.",
+        "section": "colors"
+      },
+      {
+        "name": "The 12px Ergonomic Floor Rule",
+        "body": "Không có bất kỳ thành phần giao diện hay nhãn văn bản chức năng nào được phép có cỡ chữ dưới 12px. Loại bỏ triệt để các cỡ chữ siêu nhỏ 10px và 11px vốn gây mỏi mắt cho nhân sự kế toán/văn phòng.",
+        "section": "typography"
+      },
+      {
+        "name": "The Vietnamese Accent Preservation Rule",
+        "body": "Cấm áp dụng text-transform: uppercase trên các chuỗi tiếng Việt có độ dài trên 2 từ. Chữ in hoa làm các dấu mũ, dấu móc và dấu thanh bị dính chùm hoặc mất cân đối thị giác.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Doctrine",
+        "body": "Mọi trường dữ liệu số tài chính, số tiền kế toán hoặc thông số kỹ thuật bắt buộc áp dụng thuộc tính font-variant-numeric: tabular-nums và tự động phân tách hàng nghìn bằng dấu chấm ngay khi người dùng gõ phím.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Nested-Cards Rule",
+        "body": "Nghiêm cấm lồng một thẻ có viền và nền đậm bên trong một thẻ khác có cùng tính chất. Vùng thả tệp phải trở thành một phần tự nhiên của Canvas với viền nét đứt tinh tế thay vì đóng khung nặng nề.",
+        "section": "elevation"
+      },
+      {
+        "name": "The 1px Precision Border Rule",
+        "body": "Mọi đường viền phân tách cấu trúc đều có độ dày đúng 1px với màu #334155 hoặc #475569. Không dùng viền dày > 1px gây cảm giác thô kệch.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do giữ cỡ chữ tối thiểu của mọi nhãn văn bản chức năng ở mức >= 12px.",
+      "Do định dạng mọi số tiền kế toán với dấu phân cách hàng nghìn (1.250.000 ₫) và kích hoạt font số tabular-nums.",
+      "Do cho phép bôi đen chọn chữ (user-select: text) và cung cấp nút Sao chép ở tất cả các khung kết quả đầu ra.",
+      "Do mở hộp thoại chọn tệp hệ thống Native File Picker khi người dùng click vào Dropzone.",
+      "Do phân tách rạch ròi trạng thái Thành công (viền Emerald) và trạng thái Lỗi (viền Rose) trong khung kết quả.",
+      "Do tuân thủ thang đo khoảng cách nhịp 4pt/8pt (4px, 8px, 12px, 16px, 20px, 24px, 32px).",
+      "Do đảm bảo tỷ lệ tương phản chữ đạt chuẩn WCAG 2.1 AA (>= 4.5:1)."
+    ],
+    "donts": [
+      "Don't sử dụng cỡ chữ siêu nhỏ 10px hoặc 11px trên giao diện.",
+      "Don't dùng text-transform: uppercase trên các chuỗi tiếng Việt dài hơn 2 từ.",
+      "Don't tự ý thêm các mã màu nền ngẫu nhiên ngoài 4 sắc độ Slate chuẩn (#0B1120, #0F172A, #1E293B, #334155).",
+      "Don't hiển thị thông báo lỗi bên trong khung kết quả xanh lá ngọc lục bảo.",
+      "Don't chèn cứng tệp mẫu giả lập vào Dropzone khi người dùng tương tác thực tế.",
+      "Don't lồng hộp Dropzone có viền đậm bên trong Vùng 2 (tránh lỗi nested-cards).",
+      "Don't chiếm dụng các phím tắt hệ thống quen thuộc như Ctrl + P (Print) cho các tính năng không liên quan."
+    ]
+  }
+}

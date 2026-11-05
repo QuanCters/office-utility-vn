@@ -35,7 +35,7 @@ pub fn PdfTableExtractorView() -> impl IntoView {
                     "Đồng thời xuất thêm bản sao tệp dữ liệu CSV (.csv)"
                 </label>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
                 "💡 Tự động phân tích tọa độ đường kẻ vector và phân nhóm dữ liệu thành cột/hàng bảng tính Excel (.xlsx)."
             </div>
         </div>

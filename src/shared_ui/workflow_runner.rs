@@ -218,7 +218,7 @@ pub fn WorkflowRunner(
                                         <div class="dag-node-card">
                                             <div class="dag-node-header">
                                                 <span class="dag-node-title">{format!("{}. {}", idx + 1, step.name)}</span>
-                                                <span style="font-size: 11px; color: #10B981;">{format!("Bước {}", idx + 1)}</span>
+                                                <span style="font-size: 12px; color: #10B981; font-weight: 600;">{format!("Bước {}", idx + 1)}</span>
                                             </div>
 
                                             <div class="dag-node-ports">
@@ -237,7 +237,7 @@ pub fn WorkflowRunner(
                                                     <button
                                                         type="button"
                                                         class="btn-secondary dag-reorder-btn"
-                                                        style="padding: 2px 6px; font-size: 11px;"
+                                                        style="padding: 2px 6px; font-size: 12px;"
                                                         title="Di chuyển sang trước"
                                                         prop:disabled=is_first
                                                         on:click=move |_| move_up(idx)
@@ -247,7 +247,7 @@ pub fn WorkflowRunner(
                                                     <button
                                                         type="button"
                                                         class="btn-secondary dag-reorder-btn"
-                                                        style="padding: 2px 6px; font-size: 11px;"
+                                                        style="padding: 2px 6px; font-size: 12px;"
                                                         title="Di chuyển sang sau"
                                                         prop:disabled=is_last
                                                         on:click=move |_| move_down(idx)
@@ -259,7 +259,7 @@ pub fn WorkflowRunner(
                                                 <button
                                                     type="button"
                                                     class="btn-danger dag-remove-btn"
-                                                    style="padding: 2px 8px; font-size: 11px;"
+                                                    style="padding: 2px 8px; font-size: 12px;"
                                                     title="Xóa bước này khỏi chuỗi"
                                                     on:click=move |_| remove_step(idx)
                                                 >
@@ -305,7 +305,7 @@ pub fn WorkflowRunner(
                                     class="dag-tool-picker-menu"
                                     style="position: absolute; top: calc(100% + 8px); left: 0; min-width: 280px; max-height: 320px; overflow-y: auto; background: #0F172A; border: 1px solid #334155; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 50; padding: 6px;"
                                 >
-                                    <div style="padding: 6px 10px; font-size: 11px; font-weight: 600; color: #94A3B8; border-bottom: 1px solid #1E293B; margin-bottom: 4px;">
+                                    <div style="padding: 6px 10px; font-size: 12px; font-weight: 600; color: #CBD5E1; border-bottom: 1px solid #1E293B; margin-bottom: 4px;">
                                         "Chọn công cụ để thêm vào chuỗi:"
                                     </div>
                                     {available_tools.iter().map(|tool| {
@@ -317,7 +317,7 @@ pub fn WorkflowRunner(
                                                 on:click=move |_| add_tool_step(tool)
                                             >
                                                 <div style="font-size: 12px; font-weight: 600;">{tool.name}</div>
-                                                <div style="font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                <div style="font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                                     {tool.description}
                                                 </div>
                                             </button>

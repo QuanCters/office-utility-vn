@@ -80,6 +80,11 @@ pub fn MediaStudioLayout(
             "audio-silence-trimmer" => serde_json::json!({
                 "silence_threshold_db": state.audio_silence_threshold_db.get(),
                 "min_silence_duration_ms": state.audio_min_silence_duration_ms.get(),
+                "manual_trim_enabled": state.audio_manual_trim_enabled.get(),
+                "start_time_ms": (state.audio_start_time_s.get() * 1000.0) as u32,
+                "end_time_ms": if state.audio_end_time_s.get() > 0.0 { Some((state.audio_end_time_s.get() * 1000.0) as u32) } else { None },
+                "volume_boost_db": if state.audio_volume_boost_db.get() > 0.0 { Some(state.audio_volume_boost_db.get()) } else { None },
+                "enable_limiter": state.audio_enable_limiter.get(),
             }),
             "video-to-gif-webp" => serde_json::json!({
                 "fps": state.video_fps.get(),
@@ -333,6 +338,11 @@ pub fn MediaStudioLayout(
                                                 <AudioSilenceTrimmerView
                                                     silence_threshold_db=state.audio_silence_threshold_db
                                                     min_silence_duration_ms=state.audio_min_silence_duration_ms
+                                                    manual_trim_enabled=state.audio_manual_trim_enabled
+                                                    start_time_s=state.audio_start_time_s
+                                                    end_time_s=state.audio_end_time_s
+                                                    volume_boost_db=state.audio_volume_boost_db
+                                                    enable_limiter=state.audio_enable_limiter
                                                 />
                                             }.into_any(),
 

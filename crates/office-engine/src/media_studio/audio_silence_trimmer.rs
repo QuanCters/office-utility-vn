@@ -10,13 +10,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::OfficeTool;
 
-/// Tùy chọn cấu hình cắt bỏ khoảng lặng ghi âm
+/// Tùy chọn cấu hình cắt & xử lý âm thanh (khoảng lặng, mốc thời gian thủ công, khuếch đại volume)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioTrimOptions {
     #[serde(default = "default_silence_threshold")]
     pub silence_threshold_db: f32, // Ngưỡng decibel xem là im lặng (ví dụ -40.0 dB)
     #[serde(default = "default_min_silence_duration_ms")]
     pub min_silence_duration_ms: u32, // Thời lượng khoảng lặng tối thiểu cần cắt (ms)
+    // Chế độ cắt theo mốc thời gian thủ công (Manual Trim)
+    #[serde(default)]
+    pub manual_trim_enabled: bool,
+    #[serde(default)]
+    pub start_time_ms: Option<u32>,
+    #[serde(default)]
+    pub end_time_ms: Option<u32>,
+    // Khuếch đại âm lượng (Volume Booster)
+    #[serde(default)]
+    pub volume_boost_db: Option<f32>,
+    #[serde(default)]
+    pub enable_limiter: bool,
 }
 
 fn default_silence_threshold() -> f32 {
@@ -317,6 +329,86 @@ pub fn trim_silence(
     }
 }
 
+/// Cắt âm thanh theo khoảng thời gian thủ công (start_ms đến end_ms)
+pub fn trim_by_time_range(audio: &PcmAudio, start_ms: u32, end_ms: Option<u32>) -> PcmAudio {
+    let channels = audio.channels.max(1) as usize;
+    let sample_rate = audio.sample_rate.max(8000) as usize;
+    let total_frames = audio.samples.len() / channels;
+
+    let start_frame = ((start_ms as usize).saturating_mul(sample_rate) / 1000).min(total_frames);
+    let end_frame = match end_ms {
+        Some(end) => ((end as usize).saturating_mul(sample_rate) / 1000).clamp(start_frame, total_frames),
+        None => total_frames,
+    };
+
+    let start_sample = start_frame * channels;
+    let end_sample = end_frame * channels;
+
+    let trimmed_samples = if start_sample < end_sample && start_sample < audio.samples.len() {
+        audio.samples[start_sample..end_sample.min(audio.samples.len())].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    PcmAudio {
+        channels: audio.channels,
+        sample_rate: audio.sample_rate,
+        samples: trimmed_samples,
+    }
+}
+
+/// Khuếch đại âm lượng (Volume Booster) kèm Soft-clipping Limiter chống vỡ tiếng
+pub fn boost_volume_with_limiter(audio: &mut PcmAudio, boost_db: f32, enable_limiter: bool) {
+    if boost_db <= 0.0 {
+        return;
+    }
+    let gain = 10.0f32.powf(boost_db / 20.0);
+
+    for sample in &mut audio.samples {
+        let val = *sample as f32 * gain;
+        if enable_limiter {
+            let norm = val / 32768.0;
+            let limited = if norm.abs() > 0.8 {
+                let sign = norm.signum();
+                let excess = norm.abs() - 0.8;
+                sign * (0.8 + 0.2 * (excess / 0.2).tanh())
+            } else {
+                norm
+            };
+            *sample = (limited.clamp(-1.0, 1.0) * 32767.0) as i16;
+        } else {
+            *sample = val.clamp(-32768.0, 32767.0) as i16;
+        }
+    }
+}
+
+/// Hợp nhất/Ghép nối nhiều đoạn âm thanh PCM thành một luồng duy nhất
+pub fn join_audio(tracks: &[PcmAudio]) -> Result<PcmAudio, CommandError> {
+    if tracks.is_empty() {
+        return Err(CommandError::ValidationFailed {
+            reason: "Danh sách track âm thanh rỗng".to_string(),
+        });
+    }
+    let base = &tracks[0];
+    let mut merged_samples = Vec::new();
+    for track in tracks {
+        if track.channels != base.channels || track.sample_rate != base.sample_rate {
+            return Err(CommandError::ValidationFailed {
+                reason: format!(
+                    "Không thể ghép file khác thông số: {} kênh/{}Hz vs {} kênh/{}Hz",
+                    base.channels, base.sample_rate, track.channels, track.sample_rate
+                ),
+            });
+        }
+        merged_samples.extend_from_slice(&track.samples);
+    }
+    Ok(PcmAudio {
+        channels: base.channels,
+        sample_rate: base.sample_rate,
+        samples: merged_samples,
+    })
+}
+
 impl OfficeTool for AudioSilenceTrimmerTool {
     fn slug(&self) -> &'static str {
         "audio-silence-trimmer"
@@ -420,14 +512,32 @@ impl OfficeTool for AudioSilenceTrimmerTool {
                 return Err(CommandError::TaskCancelled);
             }
 
-            // Thực hiện cắt tỉa khoảng lặng
-            let trimmed = trim_silence(
-                &audio,
-                options.silence_threshold_db,
-                options.min_silence_duration_ms,
-            );
+            // Bước 1: Cắt theo mốc thời gian thủ công hoặc cắt bỏ khoảng lặng
+            let mut processed = if options.manual_trim_enabled
+                || options.start_time_ms.is_some()
+                || options.end_time_ms.is_some()
+            {
+                let start = match options.start_time_ms {
+                    Some(s) => s,
+                    None => 0,
+                };
+                trim_by_time_range(&audio, start, options.end_time_ms)
+            } else {
+                trim_silence(
+                    &audio,
+                    options.silence_threshold_db,
+                    options.min_silence_duration_ms,
+                )
+            };
 
-            let out_bytes = encode_wav(&trimmed);
+            // Bước 2: Khuếch đại âm lượng nếu có yêu cầu Volume Booster
+            if let Some(boost_db) = options.volume_boost_db {
+                if boost_db > 0.0 {
+                    boost_volume_with_limiter(&mut processed, boost_db, options.enable_limiter);
+                }
+            }
+
+            let out_bytes = encode_wav(&processed);
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("trimmed_audio");
             let out_name = format!("{stem}_trimmed.wav");
             let out_path = output_dir.join(out_name);
@@ -657,5 +767,88 @@ mod tests {
             CommandError::InvalidFileSignature { .. } => {}
             other => panic!("Kỳ vọng InvalidFileSignature cho short file nhưng nhận được: {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_backward_compatible_preset_deserialization() {
+        // Kiểm tra nạp cấu hình cũ chỉ có 2 trường (không có manual trim & volume boost)
+        let old_json = json!({
+            "silence_threshold_db": -35.0,
+            "min_silence_duration_ms": 400
+        });
+
+        let opts: AudioTrimOptions = serde_json::from_value(old_json).expect("deserialize old json");
+        assert_eq!(opts.silence_threshold_db, -35.0);
+        assert_eq!(opts.min_silence_duration_ms, 400);
+        assert!(!opts.manual_trim_enabled);
+        assert_eq!(opts.start_time_ms, None);
+        assert_eq!(opts.end_time_ms, None);
+        assert_eq!(opts.volume_boost_db, None);
+        assert!(!opts.enable_limiter);
+    }
+
+    #[test]
+    fn test_audio_manual_trim_and_volume_boost() {
+        let tool = AudioSilenceTrimmerTool;
+        let tmp = std::env::temp_dir().join("test_audio_manual_trim");
+        let _ = fs::create_dir_all(&tmp);
+
+        // Tạo tệp wav 1000ms (8000Hz, mono -> 8000 samples)
+        let sample_rate = 8000u32;
+        let mut samples = Vec::new();
+        for i in 0..8000 {
+            let val = (1000.0 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin()) as i16;
+            samples.push(val);
+        }
+        let initial_audio = PcmAudio {
+            channels: 1,
+            sample_rate,
+            samples,
+        };
+        let wav_bytes = encode_wav(&initial_audio);
+        let file_path = tmp.join("tone.wav");
+        fs::write(&file_path, wav_bytes).expect("write tone wav");
+
+        // 1. Kiểm thử cắt thủ công: từ 100ms đến 300ms (200ms = 1600 samples)
+        let trimmed_audio = trim_by_time_range(&initial_audio, 100, Some(300));
+        assert_eq!(trimmed_audio.samples.len(), 1600);
+
+        // 2. Kiểm thử Volume Booster với Limiter
+        let mut boosted_audio = trimmed_audio.clone();
+        boost_volume_with_limiter(&mut boosted_audio, 12.0, true);
+        assert_eq!(boosted_audio.samples.len(), 1600);
+        // Biên độ phải tăng lên nhưng không bị vượt quá giới hạn i16
+        let max_orig = trimmed_audio.samples.iter().map(|s| s.abs()).max().unwrap_or(0);
+        let max_boosted = boosted_audio.samples.iter().map(|s| s.abs()).max().unwrap_or(0);
+        assert!(max_boosted > max_orig);
+        assert!(max_boosted > 0);
+
+        // 3. Kiểm thử qua execute() với options đầy đủ
+        let req = DispatchTaskRequest {
+            task_id: "task-manual-trim-test".to_string(),
+            tool_slug: "audio-silence-trimmer".to_string(),
+            input_paths: vec![file_path.to_string_lossy().to_string()],
+            output_directory: Some(tmp.to_string_lossy().to_string()),
+            options: json!({
+                "manual_trim_enabled": true,
+                "start_time_ms": 100,
+                "end_time_ms": 500,
+                "volume_boost_db": 6.0,
+                "enable_limiter": true
+            }),
+        };
+
+        let cancel = AtomicBool::new(false);
+        let res = tool.execute(&req, &cancel, None).expect("execute manual trim");
+        assert_eq!(res.status, "SUCCESS");
+
+        let out_bytes = fs::read(&res.output_paths[0]).expect("read out wav");
+        let out_audio = decode_wav(&out_bytes).expect("decode out wav");
+        // 400ms = 3200 samples
+        assert_eq!(out_audio.samples.len(), 3200);
+
+        // 4. Kiểm thử ghép file join_audio
+        let joined = join_audio(&[out_audio.clone(), out_audio.clone()]).expect("join audio");
+        assert_eq!(joined.samples.len(), 6400);
     }
 }
