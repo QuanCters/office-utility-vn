@@ -10,6 +10,7 @@ pub mod vn_ribbon;
 pub use bridge::{IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge};
 pub use canvas_frame::PdfCraftCanvasFrame;
 pub use file_list_panel::PdfStudioFileListPanel;
+#[allow(deprecated)]
 pub use hub_view::{filter_pdf_studio_tools, matches_pdf_tool, PdfStudioHubView};
 pub use layout::PdfStudioLayout;
 pub use state::{category_for_tool, PdfCategory, PdfStudioState, PdfViewMode};
@@ -53,6 +54,7 @@ pub fn PdfStudioApp(
     if let Some(ref slug) = initial_tool {
         app_state.select_tool(slug);
     }
+    app_state.open_visual_workspace();
 
     view! {
         <layout::PdfStudioLayout state=app_state on_back=on_back />

@@ -1,3 +1,4 @@
+use leptos::prelude::*;
 use office_utility_vn_ui::app::{TaskHistoryUi, ALL_TOOLS};
 use office_utility_vn_ui::launcher::{
     filter_tools, format_elapsed_time, format_history_status, remove_vietnamese_diacritics,
@@ -261,4 +262,95 @@ fn test_history_deep_link_derivation() {
     };
     let app = history_empty_slug.tool_slug.as_deref().and_then(tool_slug_to_micro_app);
     assert_eq!(app, None);
+}
+
+#[test]
+fn test_launcher_navigation_to_pdf_studio_visual_workspace() {
+    let app_state = office_utility_vn_ui::app::AppState::new();
+    assert_eq!(app_state.current_view(), office_utility_vn_ui::app::AppView::Launcher);
+
+    // 1. Khi chọn PDF Studio từ Launcher (qua AppCard / navigate_to)
+    app_state.navigate_to(MicroAppId::PdfStudio);
+    assert_eq!(
+        app_state.current_view(),
+        office_utility_vn_ui::app::AppView::MicroApp(MicroAppId::PdfStudio)
+    );
+    assert!(app_state.pdf_studio_state.is_visual_workspace());
+    assert_eq!(
+        app_state.pdf_studio_state.view_mode.get(),
+        office_utility_vn_ui::micro_apps::pdf_studio::PdfViewMode::VisualWorkspace
+    );
+}
+
+#[test]
+fn test_launcher_command_palette_pdf_tools_deep_link_to_visual_workspace() {
+    use office_utility_vn_ui::micro_apps::ToolRegistry;
+
+    let app_state = office_utility_vn_ui::app::AppState::new();
+
+    // Lấy toàn bộ 25 công cụ của PDF Studio
+    let pdf_tools = ToolRegistry::tools_for_app(MicroAppId::PdfStudio);
+    assert_eq!(pdf_tools.len(), 25);
+
+    for tool in pdf_tools {
+        // Điều hướng deep-link từ Launcher bằng slug
+        let handled = app_state.deep_link_by_slug(tool.slug);
+        assert!(handled, "Công cụ PDF '{}' phải được deep_link_by_slug xử lý", tool.slug);
+
+        // Đảm bảo mở đúng MicroAppId::PdfStudio
+        assert_eq!(
+            app_state.current_view(),
+            office_utility_vn_ui::app::AppView::MicroApp(MicroAppId::PdfStudio),
+            "Slug '{}' phải điều hướng vào PdfStudio",
+            tool.slug
+        );
+
+        // Đảm bảo mở ở chế độ visual workspace mode
+        assert!(
+            app_state.pdf_studio_state.is_visual_workspace(),
+            "Slug '{}' phải mở trong chế độ visual workspace",
+            tool.slug
+        );
+        assert_eq!(
+            app_state.pdf_studio_state.active_tool_slug(),
+            tool.slug,
+            "Active tool slug phải khớp với '{}'",
+            tool.slug
+        );
+
+        // Reset về Launcher để thử công cụ tiếp theo
+        app_state.back_to_launcher();
+        assert_eq!(app_state.current_view(), office_utility_vn_ui::app::AppView::Launcher);
+    }
+}
+
+#[test]
+fn test_pdfcraft_visual_tools_marking_in_registry() {
+    use office_utility_vn_ui::micro_apps::ToolRegistry;
+
+    // Các công cụ chuẩn của PDF (ghép, tách, nén, mã hóa...) được đánh dấu xử lý trực quan trên PDFCraft Canvas
+    let standard_slugs = [
+        "pdf-merge-split",
+        "pdf-protect-sign",
+        "pdf-compress",
+        "pdf-crop-margin",
+        "pdf-metadata-scrubber",
+        "pdf-flatten-forms",
+        "pdf-visual-diff",
+        "pdf-bookmark-toc",
+        "pdf-form-manager",
+        "pdf-redaction",
+        "pdf-archive-linearize",
+        "pdf-pki-sign",
+        "pdf-page-organizer",
+        "pdf-signature-pad",
+    ];
+
+    for slug in standard_slugs {
+        assert!(
+            ToolRegistry::is_pdfcraft_visual_tool(slug),
+            "Công cụ chuẩn '{}' phải được đánh dấu xử lý trực quan trên Canvas của PDFCraft",
+            slug
+        );
+    }
 }

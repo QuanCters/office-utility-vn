@@ -91,7 +91,9 @@ pub fn category_for_tool(slug: &str) -> Option<PdfCategory> {
 /// Chế độ hiển thị chính của PDF Studio.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum PdfViewMode {
-    /// Trang chủ Hub/Portal hiển thị danh mục dạng lưới thẻ (iLovePDF model)
+    /// Không gian làm việc đồ họa trực quan PDFCraft Canvas (Visual Workspace)
+    VisualWorkspace,
+    /// Trang chủ Hub/Portal (được giữ tương thích ngược, ánh xạ vào VisualWorkspace)
     Hub,
     /// Không gian làm việc tập trung của công cụ cụ thể
     ToolWorkspace,
@@ -142,17 +144,11 @@ impl PdfStudioState {
 
     /// Khởi tạo trạng thái PDF Studio với công cụ ban đầu tùy chọn.
     pub fn with_initial_tool(initial_tool: Option<String>) -> Self {
-        let has_custom_tool = initial_tool.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false);
         let initial_slug = initial_tool
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "pdf-merge-split".to_string());
 
         let category = category_for_tool(&initial_slug).unwrap_or(PdfCategory::MergeSplit);
-        let view_mode = if has_custom_tool {
-            PdfViewMode::ToolWorkspace
-        } else {
-            PdfViewMode::Hub
-        };
 
         Self {
             loaded_files: RwSignal::new(Vec::new()),
@@ -162,7 +158,7 @@ impl PdfStudioState {
             is_running: RwSignal::new(false),
             status_message: RwSignal::new(String::new()),
             active_category: RwSignal::new(category),
-            view_mode: RwSignal::new(view_mode),
+            view_mode: RwSignal::new(PdfViewMode::VisualWorkspace),
             sidebar_collapsed: RwSignal::new(true),
             is_canvas_ready: RwSignal::new(false),
             has_unsaved_changes: RwSignal::new(false),
@@ -295,10 +291,15 @@ impl PdfStudioState {
         self.view_mode.set(PdfViewMode::ToolWorkspace);
     }
 
-    /// Mở trang chủ Hub/Portal (lưới thẻ phân loại theo danh mục).
-    pub fn open_hub(&self) {
-        self.view_mode.set(PdfViewMode::Hub);
+    /// Mở không gian làm việc đồ họa trực quan PDFCraft Canvas (Visual Workspace).
+    pub fn open_visual_workspace(&self) {
+        self.view_mode.set(PdfViewMode::VisualWorkspace);
         self.is_workflow_active.set(false);
+    }
+
+    /// Mở trang chủ Hub/Portal (được chuyển giao trực tiếp sang không gian làm việc trực quan PDFCraft).
+    pub fn open_hub(&self) {
+        self.open_visual_workspace();
     }
 
     /// Mở không gian làm việc tập trung của công cụ, tự động thu gọn sidebar về mini.
@@ -313,9 +314,17 @@ impl PdfStudioState {
         self.sidebar_collapsed.update(|c| *c = !*c);
     }
 
-    /// Kiểm tra xem có đang ở trang Hub Portal không.
+    /// Kiểm tra xem có đang ở không gian làm việc đồ họa trực quan PDFCraft Canvas hay không.
+    pub fn is_visual_workspace(&self) -> bool {
+        matches!(
+            self.view_mode.get_untracked(),
+            PdfViewMode::VisualWorkspace | PdfViewMode::Hub
+        )
+    }
+
+    /// Kiểm tra xem có đang ở trang Hub Portal / Visual Workspace không.
     pub fn is_hub(&self) -> bool {
-        self.view_mode.get_untracked() == PdfViewMode::Hub
+        self.is_visual_workspace()
     }
 
     /// Kiểm tra xem có đang ở không gian công cụ tập trung không.

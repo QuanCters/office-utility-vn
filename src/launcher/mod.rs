@@ -14,9 +14,9 @@ use crate::micro_apps::MicroAppId;
 
 /// Màn hình Launcher trung tâm (Command Center) của Office Utility VN:
 /// - Header: Logo, tiêu đề, badge bảo mật "100% On-Device Native · Zero-Cloud Security" và thanh tìm kiếm nhanh Ctrl+K
-/// - 4 Micro-App Cards: VN Office (11 tools), PDF Studio (18 tools), Media Studio (9 tools), Data Lab (13 tools)
+/// - 4 Micro-App Cards: VN Office (11 tools), PDF Studio (25 tools), Media Studio (9 tools), Data Lab (13 tools)
 /// - Unified Task History Feed: Lịch sử tác vụ tổng hợp, suy luận icon MicroApp từ `tool_slug` và hỗ trợ deep-link
-/// - Global Command Palette: Tìm kiếm nhanh trên 51 công cụ với hỗ trợ tiếng Việt không dấu, phím mũi tên và Enter
+/// - Global Command Palette: Tìm kiếm nhanh trên 58 công cụ với hỗ trợ tiếng Việt không dấu, phím mũi tên và Enter
 #[component]
 pub fn LauncherView(
     /// Callback khi người dùng nhấp chọn 1 trong 4 Micro-Apps
@@ -66,7 +66,7 @@ pub fn LauncherView(
                         }
                     >
                         <span class="launcher-search-icon" aria-hidden="true">"🔍"</span>
-                        <span class="launcher-search-placeholder">"Tìm nhanh 55 công cụ..."</span>
+                        <span class="launcher-search-placeholder">"Tìm nhanh 58 công cụ..."</span>
                         <kbd class="launcher-search-kbd">"Ctrl+K"</kbd>
                     </div>
                 </div>

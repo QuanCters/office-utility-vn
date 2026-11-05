@@ -171,24 +171,24 @@ impl ToolRegistry {
                 slug: "pdf-merge-split",
                 name: "Ghép, Tách & Xoay trang PDF",
                 domain: "doc-suite",
-                description: "Ghép nhiều file PDF hoặc tách trang theo dải lựa chọn cực nhanh.",
+                description: "Ghép nhiều file PDF hoặc tách trang theo dải lựa chọn trực quan trên PDFCraft Canvas.",
                 is_pinned: true,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "ghep", "tach", "xoay"],
+            tags: &["pdf", "ghep", "tach", "xoay", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-protect-sign",
                 name: "Bảo mật & Mở khóa PDF",
                 domain: "doc-suite",
-                description: "Áp dụng mã hóa AES-256 hoặc mở khóa mật khẩu PDF an toàn on-device.",
+                description: "Áp dụng mã hóa AES-256 hoặc mở khóa mật khẩu PDF trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "bao-mat", "mat-khau", "ma-hoa"],
+            tags: &["pdf", "bao-mat", "mat-khau", "ma-hoa", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
@@ -207,12 +207,12 @@ impl ToolRegistry {
                 slug: "pdf-compress",
                 name: "Nén giảm Dung lượng PDF",
                 domain: "doc-suite",
-                description: "Nén lại các luồng FlateDecode và tái lấy mẫu ảnh nhúng giảm dung lượng file.",
+                description: "Nén lại các luồng FlateDecode và tối ưu dung lượng trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "nen", "dung-luong", "toi-uu"],
+            tags: &["pdf", "nen", "dung-luong", "toi-uu", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
@@ -255,36 +255,36 @@ impl ToolRegistry {
                 slug: "pdf-metadata-scrubber",
                 name: "Tẩy sạch Metadata ẩn PDF",
                 domain: "doc-suite",
-                description: "Xóa sạch Trailer Info và luồng XML metadata XMP bảo mật danh tính tác giả.",
+                description: "Xóa sạch Trailer Info và luồng XML metadata XMP trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "metadata", "xmp", "bao-mat"],
+            tags: &["pdf", "metadata", "xmp", "bao-mat", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-flatten-forms",
                 name: "Làm phẳng PDF (Flatten Forms)",
                 domain: "doc-suite",
-                description: "Làm phẳng biểu mẫu AcroForm, hợp nhất dữ liệu nhập liệu thành văn bản tĩnh.",
+                description: "Làm phẳng biểu mẫu AcroForm thành văn bản tĩnh trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "flatten", "acroform", "bieu-mau"],
+            tags: &["pdf", "flatten", "acroform", "bieu-mau", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-crop-margin",
                 name: "Cắt Viền Trắng Thừa (Auto-Crop)",
                 domain: "doc-suite",
-                description: "Tìm hộp giới hạn Bounding Box nội dung và cập nhật lại CropBox cắt lề chính xác.",
+                description: "Tìm hộp giới hạn Bounding Box và cắt lề trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "crop", "vien-trang", "cat-le"],
+            tags: &["pdf", "crop", "vien-trang", "cat-le", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
@@ -303,24 +303,24 @@ impl ToolRegistry {
                 slug: "pdf-visual-diff",
                 name: "So sánh Đối soát 2 Bản PDF",
                 domain: "doc-suite",
-                description: "Hỗ trợ Text Diff và Visual Pixel Diff so sánh sự sai lệch giữa hai tài liệu.",
+                description: "Hỗ trợ Text Diff và Visual Pixel Diff trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "so-sanh", "diff", "doi-soat"],
+            tags: &["pdf", "so-sanh", "diff", "doi-soat", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-bookmark-toc",
                 name: "Tạo Cây Mục lục PDF (Bookmark TOC)",
                 domain: "doc-suite",
-                description: "Khởi tạo và liên kết cấu trúc cây từ điển Outlines đa cấp trong PDF Catalog.",
+                description: "Khởi tạo và liên kết cấu trúc cây từ điển Outlines trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "muc-luc", "toc", "bookmark"],
+            tags: &["pdf", "muc-luc", "toc", "bookmark", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
@@ -387,72 +387,72 @@ impl ToolRegistry {
                 slug: "pdf-form-manager",
                 name: "Quản lý & Điền Biểu mẫu AcroForm",
                 domain: "doc-suite",
-                description: "Khảo sát trường AcroForm, xuất dữ liệu JSON/CSV và tự động điền form hàng loạt.",
+                description: "Khảo sát trường AcroForm và tự động điền form trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "acroform", "bieu-mau", "autofill", "form"],
+            tags: &["pdf", "acroform", "bieu-mau", "autofill", "form", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-redaction",
                 name: "Xóa Dữ liệu Nhạy cảm PDF",
                 domain: "doc-suite",
-                description: "Cắt bỏ triệt để chuỗi ký tự nhạy cảm khỏi stream PDF và phủ hộp đen bảo mật.",
+                description: "Cắt bỏ triệt để chuỗi ký tự nhạy cảm và che đen trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "redact", "bao-mat", "xoa-du-lieu", "che-den"],
+            tags: &["pdf", "redact", "bao-mat", "xoa-du-lieu", "che-den", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-archive-linearize",
                 name: "Chuẩn hóa Lưu trữ PDF/A & Fast Web View",
                 domain: "doc-suite",
-                description: "Chuyển đổi luồng siêu dữ liệu sang chuẩn quốc tế PDF/A-1b và tuyến tính hóa tải nhanh trên web.",
+                description: "Chuẩn hóa PDF/A và tuyến tính hóa tải nhanh trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "pdfa", "archive", "linearize", "fast-web-view"],
+            tags: &["pdf", "pdfa", "archive", "linearize", "fast-web-view", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-pki-sign",
                 name: "Chữ ký số PKI & Xác thực Toàn vẹn",
                 domain: "doc-suite",
-                description: "Gắn chữ ký số chuẩn PKCS#7 với /ByteRange, kiểm tra toàn vẹn và phát hiện tài liệu bị giả mạo.",
+                description: "Gắn chữ ký số chuẩn PKCS#7 với /ByteRange trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "pki", "chu-ky-so", "xac-thuc", "toan-veng"],
+            tags: &["pdf", "pki", "chu-ky-so", "xac-thuc", "toan-veng", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-page-organizer",
                 name: "Sắp xếp & Đảo trang PDF Trực quan",
                 domain: "doc-suite",
-                description: "Trực quan hóa danh sách trang, xoay góc 90°/180°/270°, kéo thả đổi thứ tự và xóa trang thừa.",
+                description: "Trực quan hóa danh sách trang, xoay góc và đổi thứ tự trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "sap-xep", "dao-trang", "organizer", "xoay"],
+            tags: &["pdf", "sap-xep", "dao-trang", "organizer", "xoay", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
                 slug: "pdf-signature-pad",
                 name: "Ký tay Điện tử & Dán Chữ ký PDF",
                 domain: "doc-suite",
-                description: "Ký tay tự do trên canvas HTML5 và dán chữ ký số dạng ảnh vào các trang PDF theo preset.",
+                description: "Ký tay tự do trên canvas và dán chữ ký số trực quan trên PDFCraft Canvas.",
                 is_pinned: false,
             },
             primary_app: MicroAppId::PdfStudio,
             secondary_apps: &[],
-            tags: &["pdf", "ky-tay", "chu-ky", "signature", "stamp"],
+            tags: &["pdf", "ky-tay", "chu-ky", "signature", "stamp", "pdfcraft", "canvas", "visual"],
         },
         ToolRegistration {
             tool: ToolItem {
@@ -780,6 +780,15 @@ impl ToolRegistry {
             .filter(|e| e.tags.contains(&tag))
             .map(|e| e.tool.clone())
             .collect()
+    }
+
+    /// Kiểm tra xem một công cụ PDF có được xử lý trực quan trên PDFCraft Canvas hay không.
+    pub fn is_pdfcraft_visual_tool(slug: &str) -> bool {
+        Self::ENTRIES.iter().any(|e| {
+            e.tool.slug == slug
+                && e.primary_app == MicroAppId::PdfStudio
+                && (e.tags.contains(&"pdfcraft") || e.tags.contains(&"canvas"))
+        })
     }
 
     /// Trả về slice tĩnh các công cụ cho một Micro-App cụ thể (tương thích backward).

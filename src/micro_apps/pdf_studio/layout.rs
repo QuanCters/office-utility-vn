@@ -45,7 +45,7 @@ pub fn PdfStudioLayout(
     view! {
         <div class="pdf-studio-app-container">
             {move || match state.view_mode.get() {
-                PdfViewMode::Hub => view! {
+                PdfViewMode::VisualWorkspace | PdfViewMode::Hub => view! {
                     // =========================================================
                     // CHẾ ĐỘ 1: PDFCRAFT CANVAS WORKSPACE (Toàn màn hình)
                     // =========================================================

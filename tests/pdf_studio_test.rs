@@ -338,8 +338,9 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
 
     let state = PdfStudioState::new();
 
-    // 1. Mặc định khi khởi tạo là chế độ Hub (Portal View)
-    assert_eq!(state.view_mode.get(), PdfViewMode::Hub);
+    // 1. Mặc định khi khởi tạo là chế độ Visual Workspace (thay thế Hub cũ)
+    assert!(state.is_visual_workspace());
+    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
     assert!(state.is_hub());
     assert!(!state.is_tool_workspace());
 
@@ -357,9 +358,10 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
     state.toggle_sidebar();
     assert!(state.sidebar_collapsed.get(), "Sau khi toggle lần 2, sidebar phải thu gọn lại");
 
-    // 4. Quay lại Hub
+    // 4. Quay lại Visual Workspace (thay thế Hub cũ)
     state.open_hub();
-    assert_eq!(state.view_mode.get(), PdfViewMode::Hub);
+    assert!(state.is_visual_workspace());
+    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
     assert!(state.is_hub());
     assert!(!state.is_tool_workspace());
 
@@ -373,10 +375,32 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
     assert!(!state.is_workflow());
     assert!(state.is_tool_workspace());
 
-    // 7. Mở lại Hub
-    state.open_hub();
-    assert_eq!(state.view_mode.get(), PdfViewMode::Hub);
+    // 7. Mở lại Visual Workspace tường minh
+    state.open_visual_workspace();
+    assert!(state.is_visual_workspace());
+    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
     assert!(state.is_hub());
+}
+
+#[test]
+fn test_pdf_studio_visual_workspace_transition() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::PdfViewMode;
+
+    // 1. Mặc định khởi tạo ở Visual Workspace mode
+    let state = PdfStudioState::new();
+    assert!(state.is_visual_workspace());
+    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
+
+    // 2. Khởi tạo kèm tool ban đầu cũng ở Visual Workspace mode
+    let state_with_tool = PdfStudioState::with_initial_tool(Some("pdf-merge-split".to_string()));
+    assert!(state_with_tool.is_visual_workspace());
+    assert_eq!(state_with_tool.view_mode.get(), PdfViewMode::VisualWorkspace);
+    assert_eq!(state_with_tool.active_tool_slug(), "pdf-merge-split");
+
+    // 3. Mở visual workspace tường minh
+    state.open_visual_workspace();
+    assert!(state.is_visual_workspace());
+    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
 }
 
 #[test]
@@ -612,7 +636,7 @@ fn test_read_file_bytes_zero_cloud_rejection() {
         "http://evil.com/remote.pdf",
     ));
     let waker = std::task::Waker::noop();
-    let mut cx = std::task::Context::from_waker(&waker);
+    let mut cx = std::task::Context::from_waker(waker);
     let res_http = match fut_http.as_mut().poll(&mut cx) {
         std::task::Poll::Ready(res) => res,
         std::task::Poll::Pending => panic!("Expected Ready"),

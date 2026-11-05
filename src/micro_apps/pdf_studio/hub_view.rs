@@ -85,9 +85,13 @@ pub fn category_description(cat: PdfCategory) -> &'static str {
     }
 }
 
-/// Component hiển thị Trang chủ Hub/Portal của PDF Studio theo mô hình Categorized Card Grid.
+/// [Deprecated] Component hiển thị Trang chủ Hub/Portal của PDF Studio theo mô hình Categorized Card Grid cũ.
 ///
-/// Người dùng chọn công cụ nghiệp vụ trước rồi mới nạp tệp vào không gian xử lý tập trung.
+/// Đã được thay thế hoàn toàn bằng không gian làm việc đồ họa trực quan PDFCraft Canvas (Visual Workspace).
+#[deprecated(
+    since = "0.2.0",
+    note = "PdfStudioHubView đã bị loại bỏ; PDF Studio hiện chuyển hướng trực tiếp vào không gian làm việc đồ họa PDFCraft Canvas"
+)]
 #[component]
 pub fn PdfStudioHubView(
     state: PdfStudioState,

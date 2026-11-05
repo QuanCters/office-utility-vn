@@ -80,6 +80,11 @@ impl VnRibbonTool {
     pub fn is_pdf_output(&self) -> bool {
         matches!(self, Self::BookletImposition | Self::GrayscalePrint | Self::RepairCorrupt)
     }
+
+    /// Khởi tạo VnRibbonTool từ slug công cụ nếu thuộc 6 tiện ích Việt Nam.
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|t| t.slug() == slug)
+    }
 }
 
 /// Component `PdfVnExtensionRibbon` hiển thị thanh Action Bar chứa 6 công cụ tiện ích độc bản Việt Nam
@@ -88,8 +93,20 @@ impl VnRibbonTool {
 pub fn PdfVnExtensionRibbon(
     state: PdfStudioState,
 ) -> impl IntoView {
-    // Trạng thái ngăn drawer/popover cấu hình nhanh đang mở
-    let active_tool = RwSignal::new(None::<VnRibbonTool>);
+    // Trạng thái ngăn drawer/popover cấu hình nhanh đang mở (đồng bộ với initial tool nếu có)
+    let initial_ribbon = VnRibbonTool::from_slug(&state.active_tool.get_untracked());
+    let active_tool = RwSignal::new(initial_ribbon);
+
+    // Đồng bộ reactive khi deep link hoặc state.active_tool thay đổi trong môi trường browser/WASM
+    #[cfg(target_arch = "wasm32")]
+    {
+        Effect::new(move |_| {
+            let current_slug = state.active_tool.get();
+            if let Some(tool) = VnRibbonTool::from_slug(&current_slug) {
+                active_tool.set(Some(tool));
+            }
+        });
+    }
 
     // Trạng thái thực thi tác vụ
     let is_executing = RwSignal::new(false);
