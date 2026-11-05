@@ -600,11 +600,16 @@ impl OfficeTool for PdfPageOrganizerTool {
                 let final_rot = (existing_rot + action.rotation_deg).rem_euclid(360);
                 if let Some(rot_pos) = page_obj.content.find("/Rotate") {
                     let after_rot = &page_obj.content[rot_pos + 7..];
-                    let num_end = after_rot
+                    let ws_len = after_rot.len() - after_rot.trim_start().len();
+                    let digits_part = &after_rot[ws_len..];
+                    let digits_len = match digits_part
                         .find(|c: char| !c.is_ascii_digit() && c != '-')
-                        .unwrap_or(after_rot.len());
+                    {
+                        Some(len) => len,
+                        None => digits_part.len(),
+                    };
                     page_obj.content.replace_range(
-                        rot_pos..rot_pos + 7 + num_end,
+                        rot_pos..rot_pos + 7 + ws_len + digits_len,
                         &format!("/Rotate {final_rot}"),
                     );
                 } else if let Some(dict_end) = page_obj.content.rfind(">>") {
@@ -968,5 +973,51 @@ mod tests {
         };
         let err_missing = tool.execute(&req_missing, &cancel, None).unwrap_err();
         assert!(matches!(err_missing, CommandError::FileNotFound { .. }));
+    }
+
+    #[test]
+    fn test_pdf_page_organizer_accumulate_existing_rotation() {
+        let tool = PdfPageOrganizerTool;
+        let tmp = std::env::temp_dir().join("test_organizer_accumulate_rot");
+        let _ = fs::create_dir_all(&tmp);
+
+        // Tạo PDF với trang 1 đã có sẵn /Rotate 90
+        let pdf_content = "\
+%PDF-1.4\n\
+1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\
+3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 90 >>\nendobj\n\
+xref\n0 4\n0000000000 65535 f \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n250\n%%EOF\n";
+
+        let pdf_path = tmp.join("doc_with_existing_rot.pdf");
+        fs::write(&pdf_path, pdf_content.as_bytes()).expect("write pdf with rot");
+
+        let req = DispatchTaskRequest {
+            task_id: "task-accumulate-rot".to_string(),
+            tool_slug: "pdf-page-organizer".to_string(),
+            input_paths: vec![pdf_path.to_string_lossy().to_string()],
+            output_directory: Some(tmp.to_string_lossy().to_string()),
+            options: json!({
+                "pages": [
+                    { "source_page": 1, "rotation_deg": 90 }
+                ]
+            }),
+        };
+
+        let cancel = AtomicBool::new(false);
+        let res = tool.execute(&req, &cancel, None).expect("organizer succeeds");
+        assert_eq!(res.output_paths.len(), 1);
+
+        let out_bytes = fs::read(&res.output_paths[0]).expect("read output file");
+        let out_str = String::from_utf8_lossy(&out_bytes);
+
+        // Đảm bảo chứa /Rotate 180 và KHÔNG chứa "/Rotate 180 90" hoặc " 90" sau /Rotate
+        assert!(out_str.contains("/Rotate 180"), "Phải chứa /Rotate 180");
+        assert!(!out_str.contains("/Rotate 180 90"), "Không được để sót giá trị 90 cũ");
+        assert!(!out_str.contains("/Rotate 90"), "Không còn /Rotate 90");
+
+        let infos = get_pdf_page_info(&PathBuf::from(&res.output_paths[0])).expect("infos");
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].rotation_deg, 180);
     }
 }
