@@ -61,6 +61,14 @@ pub struct PdfSignaturePadOptions {
     #[serde(default)]
     pub placement: SignaturePlacement,
 
+    /// Tọa độ X tùy biến (point)
+    #[serde(default)]
+    pub custom_x_pt: Option<f64>,
+
+    /// Tọa độ Y tùy biến (point)
+    #[serde(default)]
+    pub custom_y_pt: Option<f64>,
+
     /// Trang áp dụng: -1 là trang cuối, 0 là tất cả các trang, >=1 là số thứ tự trang cụ thể
     #[serde(default = "default_target_page")]
     pub target_page: i32,
@@ -79,6 +87,8 @@ impl Default for PdfSignaturePadOptions {
         Self {
             signature_png_base64: String::new(),
             placement: SignaturePlacement::BottomRight,
+            custom_x_pt: None,
+            custom_y_pt: None,
             target_page: -1,
             width_pt: 160.0,
             height_pt: 60.0,
@@ -347,21 +357,23 @@ fn attach_signature_to_page(
         let trimmed_rest = rest.trim_start();
         if trimmed_rest.starts_with("<<") {
             // Direct dictionary
-            if let Some(xobj_pos) = page_content[res_pos..].find("/XObject") {
-                let abs_xobj = res_pos + xobj_pos;
-                let after_xobj = &page_content[abs_xobj + 8..];
-                if let Some(dict_open) = after_xobj.find("<<") {
-                    let insert_pos = abs_xobj + 8 + dict_open + 2;
-                    page_content.insert_str(insert_pos, &format!(" /SigImage {} 0 R ", img_id));
-                }
-            } else {
-                let after_res = &page_content[res_pos + 10..];
-                if let Some(dict_open) = after_res.find("<<") {
-                    let insert_pos = res_pos + 10 + dict_open + 2;
-                    page_content.insert_str(
-                        insert_pos,
-                        &format!(" /XObject << /SigImage {} 0 R >> ", img_id),
-                    );
+            if !page_content.contains("/SigImage") {
+                if let Some(xobj_pos) = page_content[res_pos..].find("/XObject") {
+                    let abs_xobj = res_pos + xobj_pos;
+                    let after_xobj = &page_content[abs_xobj + 8..];
+                    if let Some(dict_open) = after_xobj.find("<<") {
+                        let insert_pos = abs_xobj + 8 + dict_open + 2;
+                        page_content.insert_str(insert_pos, &format!(" /SigImage {} 0 R ", img_id));
+                    }
+                } else {
+                    let after_res = &page_content[res_pos + 10..];
+                    if let Some(dict_open) = after_res.find("<<") {
+                        let insert_pos = res_pos + 10 + dict_open + 2;
+                        page_content.insert_str(
+                            insert_pos,
+                            &format!(" /XObject << /SigImage {} 0 R >> ", img_id),
+                        );
+                    }
                 }
             }
         } else {
@@ -373,32 +385,36 @@ fn attach_signature_to_page(
                 if let Ok(res_id) = id_str.parse::<usize>() {
                     if let Some(res_obj) = objects.iter_mut().find(|o| o.id == res_id) {
                         let mut res_str = String::from_utf8_lossy(&res_obj.data).to_string();
-                        if let Some(xobj_pos) = res_str.find("/XObject") {
-                            let after_xobj = &res_str[xobj_pos + 8..];
-                            if let Some(dict_open) = after_xobj.find("<<") {
-                                let insert_pos = xobj_pos + 8 + dict_open + 2;
+                        if !res_str.contains("/SigImage") {
+                            if let Some(xobj_pos) = res_str.find("/XObject") {
+                                let after_xobj = &res_str[xobj_pos + 8..];
+                                if let Some(dict_open) = after_xobj.find("<<") {
+                                    let insert_pos = xobj_pos + 8 + dict_open + 2;
+                                    res_str.insert_str(
+                                        insert_pos,
+                                        &format!(" /SigImage {} 0 R ", img_id),
+                                    );
+                                }
+                            } else if let Some(dict_open) = res_str.find("<<") {
+                                let insert_pos = dict_open + 2;
                                 res_str.insert_str(
                                     insert_pos,
-                                    &format!(" /SigImage {} 0 R ", img_id),
+                                    &format!(" /XObject << /SigImage {} 0 R >> ", img_id),
                                 );
                             }
-                        } else if let Some(dict_open) = res_str.find("<<") {
-                            let insert_pos = dict_open + 2;
-                            res_str.insert_str(
-                                insert_pos,
-                                &format!(" /XObject << /SigImage {} 0 R >> ", img_id),
-                            );
+                            res_obj.data = res_str.into_bytes();
                         }
-                        res_obj.data = res_str.into_bytes();
                     }
                 }
             }
         }
-    } else if let Some(dict_end) = page_content.rfind(">>") {
-        page_content.insert_str(
-            dict_end,
-            &format!(" /Resources << /XObject << /SigImage {} 0 R >> >> ", img_id),
-        );
+    } else if !page_content.contains("/SigImage") {
+        if let Some(dict_end) = page_content.rfind(">>") {
+            page_content.insert_str(
+                dict_end,
+                &format!(" /Resources << /XObject << /SigImage {} 0 R >> >> ", img_id),
+            );
+        }
     }
 
     // 2. Bổ sung lệnh kết xuất vào /Contents
@@ -739,14 +755,17 @@ impl OfficeTool for PdfSignaturePadTool {
                 let h = options.height_pt;
                 let margin = 36.0;
 
-                let (x, y) = match options.placement {
-                    SignaturePlacement::BottomRight => (max_x - margin - w, min_y + margin),
-                    SignaturePlacement::BottomLeft => (min_x + margin, min_y + margin),
-                    SignaturePlacement::Center => {
-                        (min_x + (page_w - w) / 2.0, min_y + (page_h - h) / 2.0)
-                    }
-                    SignaturePlacement::TopRight => (max_x - margin - w, max_y - margin - h),
-                    SignaturePlacement::Custom { x_pt, y_pt } => (x_pt, y_pt),
+                let (x, y) = match (options.custom_x_pt, options.custom_y_pt) {
+                    (Some(cx), Some(cy)) => (cx, cy),
+                    _ => match options.placement {
+                        SignaturePlacement::BottomRight => (max_x - margin - w, min_y + margin),
+                        SignaturePlacement::BottomLeft => (min_x + margin, min_y + margin),
+                        SignaturePlacement::Center => {
+                            (min_x + (page_w - w) / 2.0, min_y + (page_h - h) / 2.0)
+                        }
+                        SignaturePlacement::TopRight => (max_x - margin - w, max_y - margin - h),
+                        SignaturePlacement::Custom { x_pt, y_pt } => (x_pt, y_pt),
+                    },
                 };
 
                 // Tạo đối tượng luồng nội dung kết xuất chữ ký: q <w> 0 0 <h> <x> <y> cm /SigImage Do Q
@@ -777,7 +796,11 @@ impl OfficeTool for PdfSignaturePadTool {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("document");
-            let out_filename = format!("{file_stem}_signed.pdf");
+            let out_filename = if request.input_paths.len() > 1 {
+                format!("{file_stem}_signed_{idx}.pdf")
+            } else {
+                format!("{file_stem}_signed.pdf")
+            };
             let out_path = output_dir.join(out_filename);
             fs::write(&out_path, out_bytes).map_err(|e| CommandError::IoError {
                 details: format!("Không thể ghi tệp PDF đã ký {}: {e}", out_path.display()),
@@ -1043,5 +1066,104 @@ trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n",
         assert!(out_text.contains("596.00") && out_text.contains("36.00"));
         // Portrait page 2 (612x792): 612 - 36 - 160 = 416.00, y = 36.00
         assert!(out_text.contains("416.00") && out_text.contains("36.00"));
+    }
+
+    #[test]
+    fn test_pdf_signature_pad_custom_coords_fallback() {
+        let temp_dir = get_unique_test_dir("custom_coords");
+        let pdf_path = temp_dir.join("input.pdf");
+        fs::write(&pdf_path, create_test_pdf(false, false)).unwrap();
+
+        let sig_b64 = create_dummy_png_base64();
+        let tool = PdfSignaturePadTool::default();
+        let cancel_flag = AtomicBool::new(false);
+
+        let request = DispatchTaskRequest {
+            task_id: "test-custom-coords".to_string(),
+            tool_slug: "pdf-signature-pad".to_string(),
+            input_paths: vec![pdf_path.to_string_lossy().to_string()],
+            output_directory: Some(temp_dir.to_string_lossy().to_string()),
+            options: json!({
+                "signature_png_base64": sig_b64,
+                "placement": "bottom_right", // Should be overridden by custom coordinates
+                "custom_x_pt": 123.45,
+                "custom_y_pt": 67.89,
+                "width_pt": 100.0,
+                "height_pt": 50.0
+            }),
+        };
+
+        let resp = tool.execute(&request, &cancel_flag, None).unwrap();
+        let out_bytes = fs::read(&resp.output_paths[0]).unwrap();
+        let out_text = String::from_utf8_lossy(&out_bytes);
+        assert!(out_text.contains("123.45") && out_text.contains("67.89"));
+    }
+
+    #[test]
+    fn test_pdf_signature_pad_multiple_files_batch_suffix() {
+        let temp_dir = get_unique_test_dir("batch_suffix");
+        let pdf1_path = temp_dir.join("doc.pdf");
+        let pdf2_path = temp_dir.join("doc_copy.pdf");
+        fs::write(&pdf1_path, create_test_pdf(false, false)).unwrap();
+        fs::write(&pdf2_path, create_test_pdf(false, false)).unwrap();
+
+        let sig_b64 = create_dummy_png_base64();
+        let tool = PdfSignaturePadTool::default();
+        let cancel_flag = AtomicBool::new(false);
+
+        let request = DispatchTaskRequest {
+            task_id: "test-batch-suffix".to_string(),
+            tool_slug: "pdf-signature-pad".to_string(),
+            input_paths: vec![
+                pdf1_path.to_string_lossy().to_string(),
+                pdf2_path.to_string_lossy().to_string(),
+            ],
+            output_directory: Some(temp_dir.to_string_lossy().to_string()),
+            options: json!({
+                "signature_png_base64": sig_b64,
+            }),
+        };
+
+        let resp = tool.execute(&request, &cancel_flag, None).unwrap();
+        assert_eq!(resp.output_paths.len(), 2);
+        assert!(resp.output_paths[0].ends_with("_signed_0.pdf"));
+        assert!(resp.output_paths[1].ends_with("_signed_1.pdf"));
+    }
+
+    #[test]
+    fn test_pdf_signature_pad_no_duplicate_sigimage() {
+        let temp_dir = get_unique_test_dir("dup_sigimage");
+        // Create PDF where page has /Resources << /XObject << /SigImage 99 0 R >> >>
+        let custom_pdf = b"%PDF-1.4\n\
+1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\
+3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /SigImage 99 0 R >> >> /Contents 4 0 R >>\nendobj\n\
+4 0 obj\n<< /Length 26 >>\nstream\nBT /F1 12 Tf (Page 1) Tj ET\nendstream\nendobj\n\
+xref\n0 5\n0000000000 65535 f \n\
+trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n350\n%%EOF\n";
+        let pdf_path = temp_dir.join("already_signed.pdf");
+        fs::write(&pdf_path, custom_pdf).unwrap();
+
+        let sig_b64 = create_dummy_png_base64();
+        let tool = PdfSignaturePadTool::default();
+        let cancel_flag = AtomicBool::new(false);
+
+        let request = DispatchTaskRequest {
+            task_id: "test-dup-sig".to_string(),
+            tool_slug: "pdf-signature-pad".to_string(),
+            input_paths: vec![pdf_path.to_string_lossy().to_string()],
+            output_directory: Some(temp_dir.to_string_lossy().to_string()),
+            options: json!({
+                "signature_png_base64": sig_b64,
+            }),
+        };
+
+        let resp = tool.execute(&request, &cancel_flag, None).unwrap();
+        let out_bytes = fs::read(&resp.output_paths[0]).unwrap();
+        let out_text = String::from_utf8_lossy(&out_bytes);
+        // Only 1 occurrence of /SigImage in page dictionary
+        let occurrences = out_text.matches("/SigImage").count();
+        // 1 in /Resources, and 1 in stream Do operator -> total 2, NOT 3 (which would be duplicate in dictionary)
+        assert_eq!(occurrences, 2, "Chỉ xuất hiện 1 lần trong Resources và 1 lần trong toán tử Do");
     }
 }

@@ -266,6 +266,27 @@ pub const ALL_TOOLS: &[ToolItem] = &[
         is_pinned: false,
     },
     ToolItem {
+        slug: "pdf-page-organizer",
+        name: "Sắp xếp & Đảo trang PDF Trực quan",
+        domain: "doc-suite",
+        description: "Trực quan hóa danh sách trang, xoay góc 90°/180°/270°, kéo thả đổi thứ tự và xóa trang thừa.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-signature-pad",
+        name: "Ký tay Điện tử & Dán Chữ ký PDF",
+        domain: "doc-suite",
+        description: "Ký tay tự do trên canvas HTML5 và dán chữ ký số dạng ảnh vào các trang PDF theo preset.",
+        is_pinned: false,
+    },
+    ToolItem {
+        slug: "pdf-to-images-pack",
+        name: "Xuất Toàn bộ Trang PDF sang Gói Ảnh ZIP",
+        domain: "doc-suite",
+        description: "Kết xuất từng trang PDF thành ảnh PNG/JPEG chất lượng cao và đóng gói thành file ZIP tiện lợi.",
+        is_pinned: false,
+    },
+    ToolItem {
         slug: "image-batch",
         name: "Nén & Đổi Định dạng Ảnh Hàng loạt",
         domain: "media-studio",

@@ -588,8 +588,8 @@ mod tests {
     }
 
     #[test]
-    fn test_all_55_tools_mapped() {
-        assert_eq!(ALL_TOOLS.len(), 55);
+    fn test_all_58_tools_mapped() {
+        assert_eq!(ALL_TOOLS.len(), 58);
         for tool in ALL_TOOLS.iter() {
             assert!(
                 tool_slug_to_micro_app(tool.slug).is_some(),

@@ -106,8 +106,8 @@ pub fn create_pkzip_archive(entries: &[ZipFileEntry]) -> Result<Vec<u8>, Command
         zip_data.extend_from_slice(&[0x50, 0x4b, 0x03, 0x04]);
         // Version needed to extract: 20 (PKZIP 2.0)
         zip_data.extend_from_slice(&20u16.to_le_bytes());
-        // General purpose bit flag: 0
-        zip_data.extend_from_slice(&0u16.to_le_bytes());
+        // General purpose bit flag: 0x0800 (Language Encoding Flag UTF-8)
+        zip_data.extend_from_slice(&0x0800u16.to_le_bytes());
         // Compression method: 8 (Deflated)
         zip_data.extend_from_slice(&8u16.to_le_bytes());
         // Last mod file time
@@ -136,8 +136,8 @@ pub fn create_pkzip_archive(entries: &[ZipFileEntry]) -> Result<Vec<u8>, Command
         central_directory.extend_from_slice(&20u16.to_le_bytes());
         // Version needed to extract: 20
         central_directory.extend_from_slice(&20u16.to_le_bytes());
-        // General purpose bit flag: 0
-        central_directory.extend_from_slice(&0u16.to_le_bytes());
+        // General purpose bit flag: 0x0800 (Language Encoding Flag UTF-8)
+        central_directory.extend_from_slice(&0x0800u16.to_le_bytes());
         // Compression method: 8
         central_directory.extend_from_slice(&8u16.to_le_bytes());
         // Last mod time
@@ -680,6 +680,20 @@ impl OfficeTool for PdfToImagesPackTool {
             _ => "trang_",
         };
 
+        // Thu thập các đối tượng ảnh JPEG nhúng (DCTDecode)
+        let mut dct_objects: Vec<&[u8]> = Vec::new();
+        for obj in &objects {
+            if (obj.content.contains("/DCTDecode") || obj.content.contains("/Filter/DCTDecode"))
+                && obj.stream_data.is_some()
+            {
+                if let Some(ref s_bytes) = obj.stream_data {
+                    if s_bytes.len() >= 3 && &s_bytes[0..3] == b"\xFF\xD8\xFF" {
+                        dct_objects.push(s_bytes.as_slice());
+                    }
+                }
+            }
+        }
+
         for page_idx in 0..total_pages {
             if cancel_flag.load(Ordering::Relaxed) {
                 return Err(CommandError::TaskCancelled);
@@ -722,17 +736,57 @@ impl OfficeTool for PdfToImagesPackTool {
                 page_stream_content = s.clone();
             }
 
-            // Quét tìm ảnh JPEG nhúng (DCTDecode) trong các object liên quan
-            for obj in &objects {
-                if (obj.content.contains("/DCTDecode") || obj.content.contains("/Filter/DCTDecode"))
-                    && obj.stream_data.is_some()
-                {
-                    if let Some(ref s_bytes) = obj.stream_data {
-                        if s_bytes.len() >= 3 && &s_bytes[0..3] == b"\xFF\xD8\xFF" {
-                            page_embedded_jpeg = Some(s_bytes.clone());
-                            break;
+            // Quét tìm ảnh JPEG nhúng (DCTDecode) cho trang này
+            // 1. Kiểm tra các object được tham chiếu trong /Resources hoặc /Contents của trang
+            if let Some(page_id) = page_ids.get(page_idx) {
+                if let Some(page_obj) = obj_map.get(page_id) {
+                    let mut referenced_ids = Vec::new();
+                    if let Some(res_pos) = page_obj.content.find("/Resources") {
+                        let res_rest = &page_obj.content[res_pos..];
+                        // Nếu là tham chiếu gián tiếp /Resources X 0 R
+                        let tokens: Vec<&str> = res_rest.split_whitespace().take(6).collect();
+                        if tokens.len() >= 3 && tokens[2] == "R" {
+                            if let Ok(res_id) = tokens[1].parse::<usize>() {
+                                if let Some(res_obj) = obj_map.get(&res_id) {
+                                    for word in res_obj.content.split_whitespace() {
+                                        if let Ok(id) = word.parse::<usize>() {
+                                            referenced_ids.push(id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Hoặc direct dictionary
+                        for word in res_rest.split_whitespace() {
+                            if let Ok(id) = word.parse::<usize>() {
+                                referenced_ids.push(id);
+                            }
                         }
                     }
+
+                    for ref_id in referenced_ids {
+                        if let Some(img_obj) = obj_map.get(&ref_id) {
+                            if (img_obj.content.contains("/DCTDecode") || img_obj.content.contains("/Filter/DCTDecode"))
+                                && img_obj.stream_data.is_some()
+                            {
+                                if let Some(ref s_bytes) = img_obj.stream_data {
+                                    if s_bytes.len() >= 3 && &s_bytes[0..3] == b"\xFF\xD8\xFF" {
+                                        page_embedded_jpeg = Some(s_bytes.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback: Ánh xạ tương ứng theo chỉ số trang (page_idx) từ danh sách dct_objects
+            if page_embedded_jpeg.is_none() {
+                if let Some(&img_bytes) = dct_objects.get(page_idx) {
+                    page_embedded_jpeg = Some(img_bytes.to_vec());
+                } else if total_pages == 1 && !dct_objects.is_empty() {
+                    page_embedded_jpeg = Some(dct_objects[0].to_vec());
                 }
             }
 

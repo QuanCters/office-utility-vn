@@ -61,7 +61,7 @@ fn test_data_lab_routing() {
 
 #[test]
 fn test_all_tools_mapped_and_distributed() {
-    assert_eq!(ALL_TOOLS.len(), 55, "Tổng số công cụ trong ALL_TOOLS phải là 55");
+    assert_eq!(ALL_TOOLS.len(), 58, "Tổng số công cụ trong ALL_TOOLS phải là 58");
 
     let mut vn_office_count = 0;
     let mut pdf_studio_count = 0;
@@ -81,13 +81,13 @@ fn test_all_tools_mapped_and_distributed() {
     }
 
     assert_eq!(vn_office_count, 11, "VnOffice phải có chính xác 11 công cụ");
-    assert_eq!(pdf_studio_count, 22, "PdfStudio phải có chính xác 22 công cụ");
+    assert_eq!(pdf_studio_count, 25, "PdfStudio phải có chính xác 25 công cụ");
     assert_eq!(media_studio_count, 9, "MediaStudio phải có chính xác 9 công cụ");
     assert_eq!(data_lab_count, 13, "DataLab phải có chính xác 13 công cụ");
     assert_eq!(
         vn_office_count + pdf_studio_count + media_studio_count + data_lab_count,
-        55,
-        "Tổng số công cụ phân bổ phải khớp 55"
+        58,
+        "Tổng số công cụ phân bổ phải khớp 58"
     );
 }
 
@@ -100,7 +100,7 @@ fn test_micro_app_tools_consistency() {
     }
 
     let pdf_tools = micro_app_tools(MicroAppId::PdfStudio);
-    assert_eq!(pdf_tools.len(), 22);
+    assert_eq!(pdf_tools.len(), 25);
     for tool in pdf_tools {
         assert_eq!(tool_slug_to_micro_app(tool.slug), Some(MicroAppId::PdfStudio));
     }
