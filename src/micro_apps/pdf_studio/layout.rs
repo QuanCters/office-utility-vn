@@ -74,7 +74,7 @@ pub fn PdfStudioLayout(
 
                     <main class="pdf-studio-canvas-main">
                         <PdfVnExtensionRibbon state=state />
-                        <PdfCraftCanvasFrame />
+                        <PdfCraftCanvasFrame state=state />
                     </main>
                 }.into_any(),
 
