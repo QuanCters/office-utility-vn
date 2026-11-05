@@ -10,6 +10,9 @@ pub mod vn_office;
 pub use doc_suite::pdf_page_organizer::{
     get_pdf_page_info, PageAction, PageInfo, PdfPageOrganizerOptions, PdfPageOrganizerTool,
 };
+pub use doc_suite::pdf_signature_pad::{
+    PdfSignaturePadOptions, PdfSignaturePadTool, SignaturePlacement,
+};
 
 /// Trait chuẩn cho mọi công cụ thuộc các phân hệ trong `office-engine`
 pub trait OfficeTool: Send + Sync {

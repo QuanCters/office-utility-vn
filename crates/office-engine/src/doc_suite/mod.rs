@@ -22,6 +22,7 @@ pub mod pdf_redaction;
 pub mod pdf_archive_linearize;
 pub mod pdf_pki_sign;
 pub mod pdf_page_organizer;
+pub mod pdf_signature_pad;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -48,6 +49,9 @@ pub use pdf_archive_linearize::{PdfArchiveLinearizeOptions, PdfArchiveLinearizeT
 pub use pdf_pki_sign::{PdfPkiSignOptions, PdfPkiSignTool, PkiAction, PkiVerificationReport};
 pub use pdf_page_organizer::{
     get_pdf_page_info, PageAction, PageInfo, PdfPageOrganizerOptions, PdfPageOrganizerTool,
+};
+pub use pdf_signature_pad::{
+    PdfSignaturePadOptions, PdfSignaturePadTool, SignaturePlacement,
 };
 
 
