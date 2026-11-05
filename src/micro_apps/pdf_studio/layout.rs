@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use crate::launcher::CommandPalette;
+use crate::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use crate::micro_apps::pdf_studio::file_list_panel::PdfStudioFileListPanel;
-use crate::micro_apps::pdf_studio::hub_view::PdfStudioHubView;
 use crate::micro_apps::pdf_studio::state::{category_for_tool, PdfStudioState, PdfViewMode};
 use crate::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
 use crate::micro_apps::{micro_app_tools, MicroAppId};
@@ -46,24 +46,24 @@ pub fn PdfStudioLayout(
             {move || match state.view_mode.get() {
                 PdfViewMode::Hub => view! {
                     // =========================================================
-                    // CHẾ ĐỘ 1: HUB PORTAL VIEW (Toàn màn hình)
+                    // CHẾ ĐỘ 1: PDFCRAFT CANVAS WORKSPACE (Toàn màn hình)
                     // =========================================================
                     <header class="pdf-studio-header">
                         <div class="pdf-studio-header-left">
                             <BackButton on_back=on_back label="← Về Launcher" />
                             <div class="pdf-studio-header-title-group">
                                 <h1 class="pdf-studio-header-title">
-                                    "📄 PDF Studio — Xưởng Tài liệu PDF"
+                                    "📄 PDF Studio — Xưởng Đồ Họa & Tài Liệu PDF"
                                 </h1>
                                 <span class="pdf-studio-header-tagline">
-                                    "Ghép tách • Nén • Bảo mật • Đóng dấu • OCR • Chuyển đổi PDF 100% On-Device"
+                                    "Biên tập trực quan PDFCraft • Ghép tách • Nén • Bảo mật • OCR 100% On-Device"
                                 </span>
                             </div>
                         </div>
 
                         <div class="pdf-studio-header-right">
                             <span class="pdf-studio-header-badge">
-                                "25 Công cụ PDF"
+                                "PDFCraft Studio"
                             </span>
                             <span class="pdf-studio-privacy-badge">
                                 "🔒 100% On-Device"
@@ -71,8 +71,8 @@ pub fn PdfStudioLayout(
                         </div>
                     </header>
 
-                    <main class="pdf-studio-hub-main">
-                        <PdfStudioHubView state=state />
+                    <main class="pdf-studio-canvas-main">
+                        <PdfCraftCanvasFrame />
                     </main>
                 }.into_any(),
 

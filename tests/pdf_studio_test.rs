@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use office_utility_vn_ui::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use office_utility_vn_ui::micro_apps::pdf_studio::state::{category_for_tool, PdfCategory, PdfStudioState};
 use office_utility_vn_ui::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
 use office_utility_vn_ui::micro_apps::{tool_slug_to_micro_app, MicroAppId, PDF_STUDIO_TOOLS};
@@ -435,4 +436,16 @@ fn test_pdf_studio_hub_filter() {
     // 8. Từ khóa hoàn toàn không tồn tại -> Trả về danh sách rỗng
     let not_found = filter_pdf_studio_tools(tools, "xyz_not_found_random_token_999");
     assert!(not_found.is_empty());
+}
+
+#[test]
+fn test_pdfcraft_canvas_frame_renders() {
+    let html = view! { <PdfCraftCanvasFrame /> }.to_html();
+    assert!(html.contains("<iframe"));
+    assert!(html.contains("id=\"pdfcraft-frame\""));
+    assert!(html.contains("src=\"/pdfcraft/index.html?host=parent\""));
+    assert!(html.contains("allow=\"clipboard-read; clipboard-write\""));
+    assert!(html.contains("w-full h-full border-none"));
+    assert!(html.contains("pdfcraft-loading-skeleton"));
+    assert!(html.contains("Đang tải PDFCraft Studio"));
 }

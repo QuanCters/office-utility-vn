@@ -1528,3 +1528,91 @@
     flex-wrap: wrap;
   }
 }
+
+/* ==============================================================================
+   PDFCraft Canvas Frame & Loading Skeleton
+   ============================================================================== */
+
+.pdf-studio-canvas-main {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: calc(100vh - 64px);
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.pdfcraft-frame-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-main);
+}
+
+.pdfcraft-frame-container iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.pdfcraft-loading-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface);
+  z-index: 10;
+  transition: opacity 0.3s ease;
+}
+
+.pdfcraft-loading-skeleton.hidden {
+  display: none !important;
+}
+
+.pdfcraft-skeleton-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  text-align: center;
+}
+
+.pdfcraft-skeleton-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid var(--primary-glow);
+  border-top-color: var(--primary-light);
+  border-radius: 50%;
+  animation: pdfcraft-spin 1s linear infinite;
+}
+
+@keyframes pdfcraft-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pdfcraft-skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.pdfcraft-skeleton-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.pdfcraft-skeleton-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+

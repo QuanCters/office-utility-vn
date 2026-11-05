@@ -16,6 +16,7 @@ serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1.7"
 
 [dev-dependencies]
+tachys = { version = "0.2", features = ["ssr"] }
 office-engine = { path = "crates/office-engine" }
 office-shared = { path = "crates/office-shared" }
 serde = { version = "1", features = ["derive"] }

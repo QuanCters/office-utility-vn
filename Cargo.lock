@@ -3242,6 +3242,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "tachys",
  "tempfile",
  "wasm-bindgen",
  "wasm-bindgen-futures",
