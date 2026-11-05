@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod canvas_frame;
 pub mod file_list_panel;
 pub mod hub_view;
@@ -5,6 +6,7 @@ pub mod layout;
 pub mod state;
 pub mod toolbar;
 
+pub use bridge::{IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge};
 pub use canvas_frame::PdfCraftCanvasFrame;
 pub use file_list_panel::PdfStudioFileListPanel;
 pub use hub_view::{filter_pdf_studio_tools, matches_pdf_tool, PdfStudioHubView};

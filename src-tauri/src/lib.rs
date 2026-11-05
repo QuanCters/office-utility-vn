@@ -63,6 +63,9 @@ pub fn run() {
             commands::toggle_maximize_window,
             commands::close_window,
             commands::open_output_folder,
+            // Lệnh đọc/ghi tệp nhị phân cho PDFCraft Bridge
+            commands::read_file_binary,
+            commands::save_file_binary,
             // Lệnh cập nhật ứng dụng (Updater Lifecycle)
             commands::check_app_update,
             commands::install_app_update,

@@ -289,6 +289,32 @@ pub async fn inspect_file_metadata(file_path: String) -> Result<FileMetadataResp
     })
 }
 
+/// Đọc toàn bộ nội dung nhị phân (binary bytes) của một tệp từ đĩa cục bộ.
+#[tauri::command]
+pub async fn read_file_binary(file_path: String) -> Result<Vec<u8>, CommandError> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err(CommandError::FileNotFound {
+            path: file_path.clone(),
+        });
+    }
+    std::fs::read(path).map_err(|e| CommandError::IoError {
+        details: format!("Không thể đọc tệp {file_path}: {e}"),
+    })
+}
+
+/// Ghi dữ liệu nhị phân (binary bytes) ra tệp trên đĩa cục bộ.
+#[tauri::command]
+pub async fn save_file_binary(file_path: String, bytes: Vec<u8>) -> Result<(), CommandError> {
+    let path = Path::new(&file_path);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(path, bytes).map_err(|e| CommandError::IoError {
+        details: format!("Không thể ghi tệp {file_path}: {e}"),
+    })
+}
+
 /// 5. Kiểm tra trạng thái gói mở rộng ngoại tuyến (Addon Package)
 #[tauri::command]
 pub async fn get_addon_status(

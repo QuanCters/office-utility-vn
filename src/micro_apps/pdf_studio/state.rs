@@ -122,6 +122,10 @@ pub struct PdfStudioState {
     pub view_mode: RwSignal<PdfViewMode>,
     /// Trạng thái thu gọn của Sidebar danh sách tệp (true: Mini Sidebar 56px, false: Full 280px).
     pub sidebar_collapsed: RwSignal<bool>,
+    /// Cờ trạng thái sẵn sàng của PDFCraft Canvas WebAssembly / WebGL iframe.
+    pub is_canvas_ready: RwSignal<bool>,
+    /// Cờ đánh dấu tài liệu đang có thay đổi chưa lưu (dirty state từ PDFCraft).
+    pub has_unsaved_changes: RwSignal<bool>,
 }
 
 impl Default for PdfStudioState {
@@ -160,6 +164,8 @@ impl PdfStudioState {
             active_category: RwSignal::new(category),
             view_mode: RwSignal::new(view_mode),
             sidebar_collapsed: RwSignal::new(true),
+            is_canvas_ready: RwSignal::new(false),
+            has_unsaved_changes: RwSignal::new(false),
         }
     }
 
@@ -355,5 +361,46 @@ impl PdfStudioState {
     /// Tìm kiếm thông tin công cụ PDF theo slug.
     pub fn find_tool(&self, slug: &str) -> Option<&'static ToolItem> {
         self.tools().iter().find(|t| t.slug == slug)
+    }
+
+    /// Kiểm tra xem PDFCraft Canvas iframe đã sẵn sàng nhận lệnh hay chưa.
+    pub fn is_canvas_ready(&self) -> bool {
+        self.is_canvas_ready.get_untracked()
+    }
+
+    /// Kiểm tra xem có thay đổi nào chưa được lưu trong canvas hay không.
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.has_unsaved_changes.get_untracked()
+    }
+
+    /// Cập nhật cờ sẵn sàng của canvas.
+    pub fn set_canvas_ready(&self, ready: bool) {
+        self.is_canvas_ready.set(ready);
+    }
+
+    /// Cập nhật cờ thay đổi chưa lưu (dirty).
+    pub fn set_unsaved_changes(&self, dirty: bool) {
+        self.has_unsaved_changes.set(dirty);
+    }
+
+    /// Xử lý cập nhật trạng thái phản ứng khi nhận thông điệp từ PDFCraft Bridge.
+    pub fn handle_bridge_message(&self, message: &crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage) {
+        match message {
+            crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Ready { version } => {
+                self.is_canvas_ready.set(true);
+                self.status_message.set(format!("PDFCraft Canvas sẵn sàng (v{})", version));
+            }
+            crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Dirty { dirty } => {
+                self.has_unsaved_changes.set(*dirty);
+            }
+            crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Save { name, .. } => {
+                self.has_unsaved_changes.set(false);
+                self.status_message.set(format!("Đã lưu tệp {}", name));
+            }
+            crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Failed { error } => {
+                self.is_canvas_ready.set(false);
+                self.status_message.set(format!("Lỗi PDFCraft Canvas: {}", error));
+            }
+        }
     }
 }

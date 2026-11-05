@@ -1,4 +1,7 @@
 use leptos::prelude::*;
+use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
+    IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge,
+};
 use office_utility_vn_ui::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use office_utility_vn_ui::micro_apps::pdf_studio::state::{category_for_tool, PdfCategory, PdfStudioState};
 use office_utility_vn_ui::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
@@ -448,4 +451,114 @@ fn test_pdfcraft_canvas_frame_renders() {
     assert!(html.contains("w-full h-full border-none"));
     assert!(html.contains("pdfcraft-loading-skeleton"));
     assert!(html.contains("Đang tải PDFCraft Studio"));
+}
+
+#[test]
+fn test_bridge_protocol() {
+    // 1. Test deserialization of incoming messages from PDFCraft
+    // 1a. pdfcraft:ready
+    let ready_json = r#"{"type":"pdfcraft:ready","version":"0.2.0"}"#;
+    let msg: IncomingBridgeMessage = serde_json::from_str(ready_json).expect("deserialize ready message");
+    match &msg {
+        IncomingBridgeMessage::Ready { version } => assert_eq!(version, "0.2.0"),
+        _ => panic!("Expected Ready variant, got {:?}", msg),
+    }
+
+    // 1b. pdfcraft:dirty
+    let dirty_json = r#"{"type":"pdfcraft:dirty","dirty":true}"#;
+    let msg: IncomingBridgeMessage = serde_json::from_str(dirty_json).expect("deserialize dirty message");
+    match &msg {
+        IncomingBridgeMessage::Dirty { dirty } => assert!(*dirty),
+        _ => panic!("Expected Dirty variant, got {:?}", msg),
+    }
+
+    // 1c. pdfcraft:save
+    let save_json = r#"{"type":"pdfcraft:save","name":"bao_cao_tai_chinh.pdf","saveAs":false,"bytes":[37,80,68,70]}"#;
+    let msg: IncomingBridgeMessage = serde_json::from_str(save_json).expect("deserialize save message");
+    match &msg {
+        IncomingBridgeMessage::Save { name, save_as, bytes } => {
+            assert_eq!(name, "bao_cao_tai_chinh.pdf");
+            assert!(!*save_as);
+            assert_eq!(bytes, &[37, 80, 68, 70]);
+        }
+        _ => panic!("Expected Save variant, got {:?}", msg),
+    }
+
+    // 1d. pdfcraft:failed
+    let failed_json = r#"{"type":"pdfcraft:failed","error":"WebGL not supported"}"#;
+    let msg: IncomingBridgeMessage = serde_json::from_str(failed_json).expect("deserialize failed message");
+    match &msg {
+        IncomingBridgeMessage::Failed { error } => assert_eq!(error, "WebGL not supported"),
+        _ => panic!("Expected Failed variant, got {:?}", msg),
+    }
+
+    // 2. Test serialization of outgoing messages to PDFCraft
+    // 2a. pdfcraft:open
+    let open_msg = OutgoingBridgeMessage::Open {
+        name: "hop_dong_kinh_te.pdf".to_string(),
+        bytes: vec![37, 80, 68, 70, 45, 49, 46, 55],
+    };
+    let open_json = serde_json::to_string(&open_msg).expect("serialize open message");
+    assert!(open_json.contains(r#""type":"pdfcraft:open""#));
+    assert!(open_json.contains(r#""name":"hop_dong_kinh_te.pdf""#));
+    assert!(open_json.contains(r#""bytes":[37,80,68,70,45,49,46,55]"#));
+
+    // Deserialization roundtrip for open message
+    let parsed_open: OutgoingBridgeMessage = serde_json::from_str(&open_json).expect("roundtrip open message");
+    assert_eq!(parsed_open, open_msg);
+
+    // 3. Test state integration with bridge messages
+    let state = PdfStudioState::new();
+    assert!(!state.is_canvas_ready.get());
+    assert!(!state.has_unsaved_changes.get());
+
+    // When ready event arrives -> is_canvas_ready becomes true
+    state.handle_bridge_message(&IncomingBridgeMessage::Ready {
+        version: "0.2.0".to_string(),
+    });
+    assert!(state.is_canvas_ready.get());
+
+    // When dirty(true) event arrives -> has_unsaved_changes becomes true
+    state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: true });
+    assert!(state.has_unsaved_changes.get());
+
+    // When dirty(false) event arrives -> has_unsaved_changes becomes false
+    state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: false });
+    assert!(!state.has_unsaved_changes.get());
+
+    // When save event arrives -> has_unsaved_changes is cleared
+    state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: true });
+    assert!(state.has_unsaved_changes.get());
+    state.handle_bridge_message(&IncomingBridgeMessage::Save {
+        name: "test.pdf".to_string(),
+        save_as: false,
+        bytes: vec![],
+    });
+    assert!(!state.has_unsaved_changes.get());
+
+    // 4. Test PdfCraftBridge callback dispatching
+    let mut bridge = PdfCraftBridge::new("pdfcraft-frame");
+    let ready_dispatched = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let ready_clone = ready_dispatched.clone();
+    bridge.on_ready(move |_ver| {
+        ready_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+
+    let save_dispatched = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let save_clone = save_dispatched.clone();
+    bridge.on_save(move |_name, _save_as, _bytes| {
+        save_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+
+    bridge.dispatch_incoming(&IncomingBridgeMessage::Ready {
+        version: "0.2.0".to_string(),
+    });
+    assert!(ready_dispatched.load(std::sync::atomic::Ordering::Relaxed));
+
+    bridge.dispatch_incoming(&IncomingBridgeMessage::Save {
+        name: "test.pdf".to_string(),
+        save_as: false,
+        bytes: vec![1, 2, 3],
+    });
+    assert!(save_dispatched.load(std::sync::atomic::Ordering::Relaxed));
 }
