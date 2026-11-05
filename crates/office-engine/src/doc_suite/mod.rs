@@ -23,6 +23,7 @@ pub mod pdf_archive_linearize;
 pub mod pdf_pki_sign;
 pub mod pdf_page_organizer;
 pub mod pdf_signature_pad;
+pub mod pdf_to_images_pack;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -53,6 +54,7 @@ pub use pdf_page_organizer::{
 pub use pdf_signature_pad::{
     PdfSignaturePadOptions, PdfSignaturePadTool, SignaturePlacement,
 };
+pub use pdf_to_images_pack::{PdfToImagesPackOptions, PdfToImagesPackTool};
 
 
 

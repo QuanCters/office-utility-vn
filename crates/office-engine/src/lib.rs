@@ -13,6 +13,9 @@ pub use doc_suite::pdf_page_organizer::{
 pub use doc_suite::pdf_signature_pad::{
     PdfSignaturePadOptions, PdfSignaturePadTool, SignaturePlacement,
 };
+pub use doc_suite::pdf_to_images_pack::{
+    PdfToImagesPackOptions, PdfToImagesPackTool,
+};
 
 /// Trait chuẩn cho mọi công cụ thuộc các phân hệ trong `office-engine`
 pub trait OfficeTool: Send + Sync {
