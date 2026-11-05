@@ -74,6 +74,9 @@ members = [
     "crates/office-shared",
     "crates/office-engine",
 ]
+exclude = [
+    "vendor/pdfcraft",
+]
 
 # Size and speed optimizations for release binaries (Windows, macOS, Linux)
 [profile.release]

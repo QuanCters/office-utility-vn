@@ -1,5 +1,8 @@
 /dist/
 /target/
+vendor/pdfcraft/target/
+vendor/pdfcraft/dist/
+.trunk-lock
 .superpowers/
 .worktrees/
 .playwright-mcp/
