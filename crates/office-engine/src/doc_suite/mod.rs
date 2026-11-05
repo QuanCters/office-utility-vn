@@ -21,6 +21,7 @@ pub mod pdf_form_manager;
 pub mod pdf_redaction;
 pub mod pdf_archive_linearize;
 pub mod pdf_pki_sign;
+pub mod pdf_page_organizer;
 
 pub use pdf_merge_split::{MergeSplitMode, PdfMergeSplitOptions, PdfMergeSplitTool};
 pub use pdf_protect_sign::{PdfProtectOptions, PdfProtectSignTool, ProtectAction};
@@ -45,6 +46,9 @@ pub use pdf_form_manager::{FormAction, FormFieldInfo, PdfFormManagerOptions, Pdf
 pub use pdf_redaction::{PdfRedactionOptions, PdfRedactionTool, RedactRegion};
 pub use pdf_archive_linearize::{PdfArchiveLinearizeOptions, PdfArchiveLinearizeTool};
 pub use pdf_pki_sign::{PdfPkiSignOptions, PdfPkiSignTool, PkiAction, PkiVerificationReport};
+pub use pdf_page_organizer::{
+    get_pdf_page_info, PageAction, PageInfo, PdfPageOrganizerOptions, PdfPageOrganizerTool,
+};
 
 
 
