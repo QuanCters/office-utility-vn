@@ -27,6 +27,26 @@ fn main() {
                     if let Some(json) = cc.storage.and_then(|s| s.get_string("pdfcraft").or_else(|| s.get_string("printcraft"))) {
                         app.restore(&json);
                     }
+
+                    // Office Utility VN: White-label, Dark Mode & Vietnamese Sovereign Integration
+                    if let Some(t) = query_param("theme") {
+                        if t.eq_ignore_ascii_case("dark") {
+                            app.set_theme_preference(pdfcraft_ui_egui::theme::ThemePreference::Dark);
+                        } else if t.eq_ignore_ascii_case("light") {
+                            app.set_theme_preference(pdfcraft_ui_egui::theme::ThemePreference::Light);
+                        }
+                    } else if app.theme_preference == pdfcraft_ui_egui::theme::ThemePreference::System {
+                        app.set_theme_preference(pdfcraft_ui_egui::theme::ThemePreference::Dark);
+                    }
+
+                    if let Some(lang) = query_param("lang") {
+                        app.language = lang;
+                    } else if app.language.is_empty() || app.language == "auto" {
+                        app.language = "vi".to_string();
+                    }
+
+                    // White-label: Suppress 3rd-party community card in embedded Desktop environment
+                    app.community_card_closed = true;
                     // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).
                     if let Some(url) = query_param("file") {
                         let inbox = app.startup_inbox.clone();
@@ -56,6 +76,9 @@ fn main() {
                     warn_before_unload(app.unsaved_flag.clone());
                     // `?host=parent`: a same-origin page embedding PdfCraft in an iframe (such
                     // as the Nextcloud app) passes files in and takes saves back (`host` below).
+                    if query_param("host").as_deref() == Some("parent") || query_param("embedded").as_deref() == Some("true") {
+                        app.embedded = true;
+                    }
                     if query_param("host").as_deref() == Some("parent")
                         && let Some(bridge) = host::Bridge::new()
                     {

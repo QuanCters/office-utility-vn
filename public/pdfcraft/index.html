@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PdfCraft</title>
+    <title>PDF Studio Canvas</title>
     
 <script type="module">
-import init, * as bindings from './pdfcraft-web-fd43110f6d7b5cf5.js';
-const wasm = await init({ module_or_path: './pdfcraft-web-58e18781c605919f_bg.wasm' });
+import init, * as bindings from './pdfcraft-web-8a0108e9d87ca309.js';
+const wasm = await init({ module_or_path: './pdfcraft-web-f6ab9f480a6298c5_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -16,12 +16,45 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
+    <script>
+      // Office Utility VN: Đồng bộ Dark Theme & Ngôn ngữ tiếng Việt trước khi khởi động Canvas
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const theme = params.get('theme') || 'Dark';
+        const lang = params.get('lang') || 'vi';
+        let saved = {};
+        try {
+          saved = JSON.parse(localStorage.getItem('pdfcraft') || '{}');
+        } catch (e) {}
+        saved.theme = theme.toLowerCase() === 'light' ? 'Light' : 'Dark';
+        saved.language = lang;
+        saved.community_card_closed = true;
+        localStorage.setItem('pdfcraft', JSON.stringify(saved));
+      } catch (e) {}
+    </script>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #f1f1f3; }
+      :root {
+        --pc-bg: #0f172a;
+        --pc-surface: #1e293b;
+        --pc-card: #1e293b;
+        --pc-border: #334155;
+        --pc-text: #f8fafc;
+        --pc-text-dim: #94a3b8;
+        --pc-accent: #6366f1;
+        --pc-radius: 6px;
+      }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--pc-bg);
+        color: var(--pc-text);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      }
       canvas { width: 100%; height: 100%; display: block; outline: none; }
-      @media (prefers-color-scheme: dark) { html, body { background: #19191c; } }
+      @media (prefers-color-scheme: dark) { html, body { background: var(--pc-bg); } }
     </style>
-  <link rel="modulepreload" href="./pdfcraft-web-fd43110f6d7b5cf5.js" crossorigin="anonymous" integrity="sha384-maM2rRETATX5haX4a7EFcb8mIXbCzThdJfaj/QzVYikhgxaVtNWbZrNoaVqfuPDc"><link rel="modulepreload" href="./snippets/eframe-d31a8450ea12dfc1/inline0.js" crossorigin="anonymous" integrity="sha384-uPZQ72BwgZ4v7Km6+UIFbkDDlt7ShGEsAVEHVN/+wZSGFhItJZB83iKMFQXauTSs"><link rel="preload" href="./pdfcraft-web-58e18781c605919f_bg.wasm" crossorigin="anonymous" integrity="sha384-YAi/hUdvx4j7be2XFkuqdxIyCNTbaHaNzaSbbkMEQoaHQH/ZCDhjOp32RnUTkH/6" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="./pdfcraft-web-8a0108e9d87ca309.js" crossorigin="anonymous" integrity="sha384-L/ek8c0zllxvJvrtjW8Gj+7edOJCIMzpADPDRS25OvfYZ5Gmy4l1fJM+6XcBhvvF"><link rel="modulepreload" href="./snippets/eframe-d31a8450ea12dfc1/inline0.js" crossorigin="anonymous" integrity="sha384-uPZQ72BwgZ4v7Km6+UIFbkDDlt7ShGEsAVEHVN/+wZSGFhItJZB83iKMFQXauTSs"><link rel="preload" href="./pdfcraft-web-f6ab9f480a6298c5_bg.wasm" crossorigin="anonymous" integrity="sha384-u3rsuB57JtixE3He87zuqH1X3/xp1mUOvsWthwk1dzlveJJ1N7NNXJAQI0CmFQB4" as="fetch" type="application/wasm"></head>
   <body>
     <canvas id="pdfcraft"></canvas>
   </body>

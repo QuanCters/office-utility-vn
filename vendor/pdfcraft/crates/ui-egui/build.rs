@@ -44,7 +44,9 @@ fn craft_i18n() -> String {
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_DIR");
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_REQUIRED");
     let required = std::env::var("CRAFT_I18N_REQUIRED").is_ok_and(|v| v.trim() == "1");
-    let entries = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()) {
+    let default_locales = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../i18n-locales");
+    let fallback_dir = if default_locales.is_dir() { Some(default_locales.into_os_string()) } else { None };
+    let entries = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()).or(fallback_dir) {
         // Not canonicalized: on Windows that gives `\\?\C:\…`, which `include_str!` can't read.
         Some(dir) => match locales(&std::path::PathBuf::from(dir).join("locales")) {
             Ok(entries) => entries,

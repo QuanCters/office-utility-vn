@@ -83,7 +83,8 @@ fn all_tools(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
         ui.add_space(2.0);
         let shown = if app.all_tools_expanded { TOOL_GROUPS.len() } else { COLLAPSED_TOOLS.min(TOOL_GROUPS.len()) };
         for g in &TOOL_GROUPS[..shown] {
-            let (resp, pin_clicked) = tool_row(ui, t, g, app.is_tool_pinned(g.id));
+            let is_active = matches!(app.left, LeftPanel::Tool(id) if id == g.id);
+            let (resp, pin_clicked) = tool_row(ui, t, g, app.is_tool_pinned(g.id), is_active);
             if pin_clicked {
                 app.toggle_pin_tool(g.id);
             } else if resp.clicked() {
@@ -118,13 +119,26 @@ pub(super) fn row_label(ui: &mut egui::Ui, text: &str, font: egui::FontId, color
 }
 
 /// Draw one tool-group row with its icon, label, badge and availability hint.
-fn tool_row(ui: &mut egui::Ui, t: &Tokens, g: &ToolGroup, is_pinned: bool) -> (egui::Response, bool) {
+fn tool_row(ui: &mut egui::Ui, t: &Tokens, g: &ToolGroup, is_pinned: bool, is_active: bool) -> (egui::Response, bool) {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!(g.label)));
     let press = theme::Press::track(ui, &resp);
-    press.wash(ui, rect, 6, false);
+
+    if is_active {
+        // Nền accent nhạt + thanh accent viền trái 3px (Yêu cầu 3 của user)
+        ui.painter().rect_filled(rect, CornerRadius::same(6), t.accent_soft);
+        ui.painter().line_segment(
+            [rect.left_top() + vec2(1.5, 3.0), rect.left_bottom() + vec2(1.5, -3.0)],
+            Stroke::new(3.0, t.accent),
+        );
+    } else {
+        press.wash(ui, rect, 6, false);
+    }
+
     let body = rect.translate(press.offset());
-    icons::paint(ui, Rect::from_min_size(body.min + vec2(6.0, 7.0), vec2(20.0, 20.0)), g.icon, 19.0, hue(g));
+    // Icon đơn sắc, đổi sang accent khi hover hoặc active (Yêu cầu 3 của user)
+    let icon_color = if is_active || resp.hovered() { t.accent } else { t.icon };
+    icons::paint(ui, Rect::from_min_size(body.min + vec2(6.0, 7.0), vec2(20.0, 20.0)), g.icon, 19.0, icon_color);
 
     let pin_rect = Rect::from_center_size(body.right_center() - vec2(14.0, 0.0), vec2(22.0, 22.0));
     let pin_resp = ui.interact(pin_rect, ui.scope_id().with(("pin_toggle_row", g.id)), Sense::click());
@@ -141,8 +155,9 @@ fn tool_row(ui: &mut egui::Ui, t: &Tokens, g: &ToolGroup, is_pinned: bool) -> (e
         _ => 0.0,
     };
     let right_reserved = pin_space + badge_or_hint_reserved + 8.0;
+    let label_color = if is_active { t.text } else { t.text_muted };
     let clipped =
-        row_label(ui, tl!(g.label), theme::regular(13.5), t.text, body.left_center() + vec2(36.0, 0.0), rect.width() - 36.0 - right_reserved);
+        row_label(ui, tl!(g.label), if is_active { theme::semibold(13.5) } else { theme::regular(13.5) }, label_color, body.left_center() + vec2(36.0, 0.0), rect.width() - 36.0 - right_reserved);
     match (g.badge, g.availability) {
         (Some(b), _) => {
             let font = theme::semibold(9.5);

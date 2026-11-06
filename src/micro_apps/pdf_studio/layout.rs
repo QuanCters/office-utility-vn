@@ -4,7 +4,6 @@ use crate::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use crate::micro_apps::pdf_studio::file_list_panel::PdfStudioFileListPanel;
 use crate::micro_apps::pdf_studio::state::{category_for_tool, PdfStudioState, PdfViewMode};
 use crate::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
-use crate::micro_apps::pdf_studio::vn_ribbon::PdfVnExtensionRibbon;
 use crate::micro_apps::{micro_app_tools, MicroAppId};
 use crate::shared_ui::{BackButton, TaskExecutor, WorkflowRunner, cancel_task_ipc, execute_workflow_ipc};
 use crate::tools::{
@@ -47,33 +46,36 @@ pub fn PdfStudioLayout(
             {move || match state.view_mode.get() {
                 PdfViewMode::VisualWorkspace | PdfViewMode::Hub => view! {
                     // =========================================================
-                    // CHẾ ĐỘ 1: PDFCRAFT CANVAS WORKSPACE (Toàn màn hình)
+                    // CHẾ ĐỘ 1: PDF STUDIO VISUAL WORKSPACE (Toàn màn hình Canvas)
                     // =========================================================
-                    <header class="pdf-studio-header">
+                    <header class="pdf-studio-header pdf-studio-compact-header">
                         <div class="pdf-studio-header-left">
-                            <BackButton on_back=on_back label="← Về Launcher" />
+                            <BackButton on_back=on_back label="← Trang chủ" />
                             <div class="pdf-studio-header-title-group">
                                 <h1 class="pdf-studio-header-title">
-                                    "📄 PDF Studio — Xưởng Đồ Họa & Tài Liệu PDF"
+                                    <svg class="header-title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                    <span>"PDF Studio"</span>
                                 </h1>
-                                <span class="pdf-studio-header-tagline">
-                                    "Biên tập trực quan PDFCraft • Ghép tách • Nén • Bảo mật • OCR 100% On-Device"
-                                </span>
                             </div>
                         </div>
 
                         <div class="pdf-studio-header-right">
-                            <span class="pdf-studio-header-badge">
-                                "PDFCraft Studio"
-                            </span>
                             <span class="pdf-studio-privacy-badge">
-                                "🔒 100% On-Device"
+                                <svg class="privacy-badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                </svg>
+                                <span>"100% On-Device"</span>
                             </span>
                         </div>
                     </header>
 
                     <main class="pdf-studio-canvas-main">
-                        <PdfVnExtensionRibbon state=state />
                         <PdfCraftCanvasFrame state=state />
                     </main>
                 }.into_any(),

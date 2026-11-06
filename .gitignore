@@ -6,4 +6,5 @@ vendor/pdfcraft/dist/
 .superpowers/
 .worktrees/
 .playwright-mcp/
+.drafts/
 

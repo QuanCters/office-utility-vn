@@ -471,11 +471,11 @@ fn test_pdfcraft_canvas_frame_renders() {
     let html = view! { <PdfCraftCanvasFrame /> }.to_html();
     assert!(html.contains("<iframe"));
     assert!(html.contains("id=\"pdfcraft-frame\""));
-    assert!(html.contains("src=\"/pdfcraft/index.html?host=parent\""));
+    assert!(html.contains("src=\"/pdfcraft/index.html?host=parent"));
     assert!(html.contains("allow=\"clipboard-read; clipboard-write\""));
     assert!(html.contains("w-full h-full border-none"));
     assert!(html.contains("pdfcraft-loading-skeleton"));
-    assert!(html.contains("Đang tải PDFCraft Studio"));
+    assert!(html.contains("Đang tải PDF Studio"));
 }
 
 #[test]

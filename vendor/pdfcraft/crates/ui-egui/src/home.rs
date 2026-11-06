@@ -28,10 +28,11 @@ fn tool_card(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static c
     let press = theme::Press::track(ui, &resp);
     card_lift(ui, t, rect, press);
     let fill = press.fill(t.card, t.hover, t.pressed);
-    ui.painter().rect(rect, CornerRadius::same(10), fill, Stroke::new(1.0, t.divider), egui::StrokeKind::Inside);
+    let stroke = if resp.hovered() { Stroke::new(1.0, t.accent) } else { Stroke::new(1.0, t.divider) };
+    ui.painter().rect(rect, CornerRadius::same(10), fill, stroke, egui::StrokeKind::Inside);
     let body = rect.translate(press.offset());
-    let color = egui::Color32::from_rgb(g.hue[0], g.hue[1], g.hue[2]);
-    icons::paint(ui, Rect::from_min_size(body.min + vec2(14.0, 14.0), vec2(22.0, 22.0)), g.icon, 21.0, color);
+    let icon_color = if resp.hovered() { t.accent } else { t.icon };
+    icons::paint(ui, Rect::from_min_size(body.min + vec2(14.0, 14.0), vec2(22.0, 22.0)), g.icon, 21.0, icon_color);
 
     let mut unpin_clicked = false;
     if allow_unpin {
@@ -47,19 +48,21 @@ fn tool_card(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static c
         }
     }
 
-    let mut title_job = egui::text::LayoutJob::simple_singleline(tl!(g.label).to_owned(), theme::semibold(13.5), t.text);
+    let mut title_job = egui::text::LayoutJob::simple_singleline(tl!(g.label).to_owned(), theme::semibold(14.0), t.text);
     title_job.wrap = egui::text::TextWrapping { max_width: body.width() - 58.0, max_rows: 1, break_anywhere: true, ..Default::default() };
     let title = ui.fonts_mut(|f| f.layout_job(title_job));
     let title_elided = title.elided;
     ui.painter().galley(body.min + vec2(44.0, 25.0 - title.size().y * 0.5), title, t.text);
     let blurb = g.sections.first().map(|s| s.items.iter().take(3).map(|i| tl!(i.label)).collect::<Vec<_>>().join(" · ")).unwrap_or_default();
     // Fixed-height cards must leave room for their action in every language.
-    let mut job = egui::text::LayoutJob::simple(blurb.clone(), theme::regular(11.5), t.text_muted, body.width() - 28.0);
+    let mut job = egui::text::LayoutJob::simple(blurb.clone(), theme::regular(12.5), t.text_muted, body.width() - 28.0);
     job.wrap.max_rows = 2;
     let galley = ui.fonts_mut(|f| f.layout_job(job));
     let blurb_elided = galley.elided;
-    ui.painter().galley(body.min + vec2(14.0, 46.0), galley, t.text_muted);
-    ui.painter().text(body.left_bottom() + vec2(14.0, -14.0), Align2::LEFT_CENTER, tl!("Use now"), theme::medium(12.0), t.accent_text);
+    ui.painter().galley(body.min + vec2(14.0, 48.0), galley, t.text_muted);
+    if !app.embedded {
+        ui.painter().text(body.left_bottom() + vec2(14.0, -14.0), Align2::LEFT_CENTER, tl!("Use now"), theme::medium(12.0), t.accent_text);
+    }
     let resp = if title_elided || blurb_elided { resp.on_hover_text(format!("{}\n{blurb}", tl!(g.label))) } else { resp };
     if unpin_clicked {
         Some(g.id)
@@ -76,9 +79,9 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         egui::Frame::NONE.inner_margin(egui::Margin { left: 36, right: 36, top: 28, bottom: 28 }).show(ui, |ui| {
-            ui.label(egui::RichText::new(tl!("Welcome to PdfCraft")).font(theme::semibold(24.0)));
+            ui.label(egui::RichText::new(tl!("Welcome to PDF Studio")).font(theme::semibold(24.0)));
             ui.label(
-                egui::RichText::new(tl!("An open-source PDF workbench — local, private, and scriptable."))
+                egui::RichText::new(tl!("Xưởng xử lý & biên tập tài liệu PDF 100% On-Device — An toàn tuyệt đối, không đám mây."))
                     .color(t.text_muted)
                     .font(theme::regular(14.0)),
             );
@@ -134,16 +137,19 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Open file")));
                         let press = theme::Press::track(ui, &resp);
                         card_lift(ui, &t, rect, press);
+                        let fill = if resp.hovered() { t.hover } else { t.card };
+                        let stroke = if resp.hovered() { Stroke::new(1.5, t.accent) } else { Stroke::new(1.0, t.divider) };
                         ui.painter().rect(
                             rect,
                             CornerRadius::same(10),
-                            press.fill(t.pasteboard, t.hover, t.pressed),
-                            Stroke::new(1.0, t.divider),
+                            fill,
+                            stroke,
                             egui::StrokeKind::Inside,
                         );
                         let body = rect.translate(press.offset());
-                        icons::paint(ui, Rect::from_center_size(body.center() - vec2(0.0, 16.0), vec2(28.0, 28.0)), "folder-open", 26.0, t.icon);
-                        ui.painter().text(body.center() + vec2(0.0, 22.0), Align2::CENTER_CENTER, tl!("Open file"), theme::semibold(13.0), t.text);
+                        let icon_color = if resp.hovered() { t.accent } else { t.accent_text };
+                        icons::paint(ui, Rect::from_center_size(body.center() - vec2(0.0, 16.0), vec2(28.0, 28.0)), "folder-open", 26.0, icon_color);
+                        ui.painter().text(body.center() + vec2(0.0, 22.0), Align2::CENTER_CENTER, tl!("Open file"), theme::semibold(13.5), t.text);
                         if theme::hand(resp).clicked() {
                             app.open_dialog();
                         }
@@ -162,7 +168,16 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             });
             ui.add_space(4.0);
             if app.pinned_tools.is_empty() {
-                ui.label(egui::RichText::new(tl!("Pin your favorite tools here for quick access.")).color(t.text_muted));
+                let (empty_rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 48.0), Sense::hover());
+                ui.painter().rect(empty_rect, CornerRadius::same(6), t.card, Stroke::new(1.0, t.divider), egui::StrokeKind::Inside);
+                icons::paint(ui, Rect::from_center_size(empty_rect.left_center() + vec2(24.0, 0.0), vec2(16.0, 16.0)), "pin", 14.0, t.text_faint);
+                ui.painter().text(
+                    empty_rect.left_center() + vec2(42.0, 0.0),
+                    Align2::LEFT_CENTER,
+                    tl!("Pin your favorite tools here for quick access."),
+                    theme::regular(12.5),
+                    t.text_muted,
+                );
             } else {
                 ui.add_space(6.0);
                 let pinned = app.pinned_tools.clone();
@@ -202,7 +217,16 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 });
                 ui.add_space(8.0);
                 if app.recent.is_empty() {
-                    ui.label(egui::RichText::new(tl!("Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.")).color(t.text_muted));
+                    let (empty_rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 54.0), Sense::hover());
+                    ui.painter().rect(empty_rect, CornerRadius::same(6), t.card, Stroke::new(1.0, t.divider), egui::StrokeKind::Inside);
+                    icons::paint(ui, Rect::from_center_size(empty_rect.left_center() + vec2(24.0, 0.0), vec2(18.0, 18.0)), "file-text", 16.0, t.text_faint);
+                    ui.painter().text(
+                        empty_rect.left_center() + vec2(42.0, 0.0),
+                        Align2::LEFT_CENTER,
+                        tl!("Files you open in PDF Studio appear here. Drop a PDF anywhere to open it."),
+                        theme::regular(12.5),
+                        t.text_muted,
+                    );
                 }
             }
             let mut open = None;
@@ -269,7 +293,7 @@ pub fn show(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             ui.add_space(20.0);
             widgets::section_title(ui, tl!("Privacy"));
             ui.label(
-                egui::RichText::new(tl!("PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider."))
+                egui::RichText::new(tl!("PDF Studio works offline. No telemetry, no account, and no cloud processing unless you add a provider."))
                     .color(t.text_muted),
             );
         });

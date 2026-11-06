@@ -1,14 +1,47 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PdfCraft</title>
+    <title>PDF Studio Canvas</title>
     <link data-trunk rel="rust" data-wasm-opt="z" />
+    <script>
+      // Office Utility VN: Đồng bộ Dark Theme & Ngôn ngữ tiếng Việt trước khi khởi động Canvas
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const theme = params.get('theme') || 'Dark';
+        const lang = params.get('lang') || 'vi';
+        let saved = {};
+        try {
+          saved = JSON.parse(localStorage.getItem('pdfcraft') || '{}');
+        } catch (e) {}
+        saved.theme = theme.toLowerCase() === 'light' ? 'Light' : 'Dark';
+        saved.language = lang;
+        saved.community_card_closed = true;
+        localStorage.setItem('pdfcraft', JSON.stringify(saved));
+      } catch (e) {}
+    </script>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #f1f1f3; }
+      :root {
+        --pc-bg: #0f172a;
+        --pc-surface: #1e293b;
+        --pc-card: #1e293b;
+        --pc-border: #334155;
+        --pc-text: #f8fafc;
+        --pc-text-dim: #94a3b8;
+        --pc-accent: #6366f1;
+        --pc-radius: 6px;
+      }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--pc-bg);
+        color: var(--pc-text);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      }
       canvas { width: 100%; height: 100%; display: block; outline: none; }
-      @media (prefers-color-scheme: dark) { html, body { background: #19191c; } }
+      @media (prefers-color-scheme: dark) { html, body { background: var(--pc-bg); } }
     </style>
   </head>
   <body>

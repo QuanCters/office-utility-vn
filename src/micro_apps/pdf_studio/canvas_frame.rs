@@ -49,7 +49,7 @@ pub fn PdfCraftCanvasFrame(
     }
 
     view! {
-        <div class="pdfcraft-frame-container relative w-full h-full flex-1 overflow-hidden">
+        <div class="pdfcraft-frame-container relative w-full h-full flex-1 overflow-hidden" style="width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; flex: 1;">
             // Trạng thái loading skeleton hiển thị trong lúc WASM canvas đang khởi động
             <div
                 id="pdfcraft-skeleton"
@@ -61,22 +61,23 @@ pub fn PdfCraftCanvasFrame(
                     <div class="pdfcraft-skeleton-spinner" aria-hidden="true"></div>
                     <div class="pdfcraft-skeleton-text">
                         <span class="pdfcraft-skeleton-title">
-                            "Đang tải PDFCraft Studio..."
+                            "Đang tải PDF Studio..."
                         </span>
                         <span class="pdfcraft-skeleton-subtitle">
-                            "Khởi tạo WebAssembly & WebGL On-Device"
+                            "Khởi tạo WebAssembly Canvas 100% On-Device"
                         </span>
                     </div>
                 </div>
             </div>
 
-            // Khung nhúng iframe PDFCraft Canvas
+            // Khung nhúng iframe PDF Studio Canvas (Đồng bộ Theme Dark & Ngôn ngữ tiếng Việt)
             <iframe
                 id="pdfcraft-frame"
-                src="/pdfcraft/index.html?host=parent"
+                src="/pdfcraft/index.html?host=parent&theme=dark&lang=vi"
                 class="w-full h-full border-none"
+                style="width: 100%; height: 100%; border: none; display: block; flex: 1;"
                 allow="clipboard-read; clipboard-write"
-                title="PDFCraft Canvas Studio"
+                title="PDF Studio Canvas"
             ></iframe>
         </div>
     }

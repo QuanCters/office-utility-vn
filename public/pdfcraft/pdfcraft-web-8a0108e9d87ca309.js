@@ -3002,22 +3002,22 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_generic_0000000000000004: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 8833, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUDevice")], shim_idx: 8835, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_fcefa0f6cb5669cb___convert__closures_____invoke___wasm_bindgen_fcefa0f6cb5669cb___sys__JsNullable_wgpu_eba54336c646cea1___backend__webgpu__webgpu_sys__gen_GpuAdapter__GpuAdapter___core_608f92abc48d28da___result__Result_____wasm_bindgen_fcefa0f6cb5669cb___JsError___true_);
             return ret;
         },
         __wbindgen_generic_0000000000000005: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 5071, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 5073, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_fcefa0f6cb5669cb___convert__closures_____invoke___web_sys_a3e6a37182ca0812___features__gen_MessageEvent__MessageEvent______true_);
             return ret;
         },
         __wbindgen_generic_0000000000000006: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 8833, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("any")], shim_idx: 8835, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_fcefa0f6cb5669cb___convert__closures_____invoke___wasm_bindgen_fcefa0f6cb5669cb___sys__JsNullable_wgpu_eba54336c646cea1___backend__webgpu__webgpu_sys__gen_GpuAdapter__GpuAdapter___core_608f92abc48d28da___result__Result_____wasm_bindgen_fcefa0f6cb5669cb___JsError___true__6);
             return ret;
         },
         __wbindgen_generic_0000000000000007: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 8833, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("undefined")], shim_idx: 8835, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_fcefa0f6cb5669cb___convert__closures_____invoke___wasm_bindgen_fcefa0f6cb5669cb___sys__JsNullable_wgpu_eba54336c646cea1___backend__webgpu__webgpu_sys__gen_GpuAdapter__GpuAdapter___core_608f92abc48d28da___result__Result_____wasm_bindgen_fcefa0f6cb5669cb___JsError___true__7);
             return ret;
         },
@@ -3027,7 +3027,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_generic_0000000000000009: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 5558, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 5560, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_fcefa0f6cb5669cb___convert__closures_____invoke_______true_);
             return ret;
         },

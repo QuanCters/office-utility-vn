@@ -69,10 +69,9 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     app.active = None;
                     app.combine_tab.focused = false;
                 }
-                // Reserve the three icon buttons, Discord and their gaps outside the scrolling tabs.
-                let controls_width = ui.fonts_mut(|f| f.layout_no_wrap("Discord".into(), theme::medium(13.0), t.text).size().x)
-                    + 3.0 * button
-                    + 54.0
+                // Reserve the two icon buttons (shortcuts, theme) and their gaps outside the scrolling tabs.
+                let controls_width = 2.0 * button
+                    + 24.0
                     + window_controls::width(&controls.right);
                 // Open stays in sight after the tabs: its icon, text and padding, and the gaps around it.
                 let open_width = ui.fonts_mut(|f| f.layout_no_wrap(tl!("Open").into(), theme::medium(13.0), t.text).size().x) + 38.0 + 12.0;
@@ -309,10 +308,7 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     if icons::button(ui, "circle-help", button, false, tl!("Keyboard shortcuts")).clicked() {
                         app.dialog = Some(Dialog::Shortcuts);
                     }
-                    // One click to the community, from anywhere in the app.
-                    if widgets::ghost_button_sized(ui, "messages-square", "Discord", tab_h).on_hover_text(pdfcraft_engine::links::DISCORD).clicked() {
-                        app.execute("help.discord");
-                    }
+                    // Community Discord button removed for sovereign native desktop application.
                 });
             });
         });
@@ -525,6 +521,129 @@ pub fn mode_bar(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     ui.add_space(8.0);
                     if widgets::search_box(ui, tl!("Find tools and commands"), 260.0).clicked() {
                         app.palette_open = true;
+                    }
+                });
+            });
+        });
+}
+
+/// Draw a single, unified, space-efficient toolbar when embedded in a host app (like Office Utility VN).
+/// Replaces the separate tab_strip and mode_bar with a single 40pt row:
+/// - Open file action button
+/// - Open document tabs with clean accent underline when active
+/// - Mode tabs (Edit, Convert, Sign) without redundant "All tools" or menu duplicates
+/// - Document actions (Print, Save, Properties) on the right
+pub fn unified_toolbar(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+    let t = Tokens::get(ui.ctx());
+    egui::Panel::top("unified_toolbar")
+        .exact_size(40.0)
+        .frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.divider)))
+        .show(ui, |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+
+                // Nút "Mở tệp"
+                let open_tip = crate::commands::command_tip(ui.ctx(), tl!("Open a PDF ({key})"), "file.open");
+                if widgets::ghost_button_sized(ui, "folder-open", tl!("Open"), 28.0).on_hover_text(open_tip).clicked() {
+                    app.open_dialog();
+                }
+
+                ui.add_space(4.0);
+                ui.painter().vline(ui.cursor().left(), ui.max_rect().y_range().shrink(10.0), Stroke::new(1.0, t.divider));
+                ui.add_space(4.0);
+
+                // Nếu có tabs tài liệu, hiển thị tabs nhỏ gọn
+                if !app.views.is_empty() {
+                    let mut close_tab_idx = None;
+                    for i in 0..app.views.len() {
+                        let is_active = app.active == Some(i);
+                        let name = crate::canvas::tab_label(app, i).unwrap_or_else(|| "Tài liệu".to_string());
+                        let dirty = app.views.get(i).and_then(|v| app.session.get(v.id)).is_some_and(|d| d.dirty);
+                        let display_name = if dirty { format!("● {name}") } else { name };
+
+                        let (rect, resp) = ui.allocate_exact_size(vec2(130.0, 30.0), Sense::click());
+                        let hover = resp.hovered();
+                        if is_active {
+                            ui.painter().rect_filled(rect, CornerRadius::same(4), t.selected);
+                            // Gạch chân accent 2px ở đáy tab đang active
+                            ui.painter().line_segment(
+                                [rect.left_bottom() + vec2(4.0, -1.0), rect.right_bottom() + vec2(-4.0, -1.0)],
+                                Stroke::new(2.0, t.accent),
+                            );
+                        } else if hover {
+                            ui.painter().rect_filled(rect, CornerRadius::same(4), t.hover);
+                        }
+
+                        // Label
+                        let text_color = if is_active { t.text } else { t.text_muted };
+                        ui.painter().text(rect.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, &display_name, theme::medium(12.5), text_color);
+
+                        // Nút đóng tab X
+                        let close_rect = Rect::from_center_size(rect.right_center() - vec2(10.0, 0.0), vec2(16.0, 16.0));
+                        let close_resp = ui.interact(close_rect, ui.scope_id().with(("close_tab", i)), Sense::click());
+                        if close_resp.hovered() {
+                            ui.painter().rect_filled(close_rect, CornerRadius::same(3), t.pressed);
+                        }
+                        icons::paint(ui, close_rect.shrink(3.0), "x", 10.0, if close_resp.hovered() { t.text } else { t.text_faint });
+
+                        if close_resp.clicked() {
+                            close_tab_idx = Some(i);
+                        } else if resp.clicked() {
+                            app.active = Some(i);
+                        }
+                    }
+
+                    if let Some(i) = close_tab_idx {
+                        if let Some(view) = app.views.get(i) {
+                            app.tab_action(crate::tab_context::Action::Close(view.id));
+                        }
+                    }
+
+                    ui.add_space(4.0);
+                    ui.painter().vline(ui.cursor().left(), ui.max_rect().y_range().shrink(10.0), Stroke::new(1.0, t.divider));
+                    ui.add_space(4.0);
+                }
+
+                // Mode tabs: Chỉnh sửa, Chuyển đổi, Ký điện tử
+                for (mode, label) in [(Mode::Edit, "Edit"), (Mode::Convert, "Convert"), (Mode::Sign, "E-Sign")] {
+                    let is_active = app.mode == mode;
+                    let text = tl!(label);
+                    let (rect, resp) = ui.allocate_exact_size(vec2(80.0, 30.0), Sense::click());
+                    if resp.hovered() && !is_active {
+                        ui.painter().rect_filled(rect, CornerRadius::same(4), t.hover);
+                    }
+                    if is_active {
+                        // Gạch chân accent 2px cho active tab
+                        ui.painter().line_segment(
+                            [rect.left_bottom() + vec2(6.0, -1.0), rect.right_bottom() + vec2(-6.0, -1.0)],
+                            Stroke::new(2.0, t.accent),
+                        );
+                    }
+                    let text_color = if is_active { t.accent_text } else { t.text_muted };
+                    let font = if is_active { theme::semibold(13.0) } else { theme::medium(13.0) };
+                    ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, text, font, text_color);
+                    if resp.clicked() {
+                        app.switch_mode(mode, true);
+                    }
+                }
+
+                // Right side controls
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    let has_doc = app.active.is_some();
+                    if has_doc {
+                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Document properties ({key})"), "file.properties");
+                        if icons::button(ui, "info", 28.0, false, &tip).clicked() {
+                            app.dialog = Some(Dialog::Properties(PropsTab::Description));
+                        }
+                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Save ({key})"), "file.save");
+                        if icons::button(ui, "save", 28.0, false, &tip).clicked() {
+                            app.run_command("file.save");
+                        }
+                        let tip = crate::commands::command_tip(ui.ctx(), tl!("Print ({key})"), "print.dialog");
+                        if icons::button(ui, "printer", 28.0, false, &tip).clicked() {
+                            app.run_command("print.dialog");
+                        }
                     }
                 });
             });

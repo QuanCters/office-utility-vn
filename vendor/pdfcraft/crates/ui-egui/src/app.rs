@@ -170,6 +170,7 @@ impl PdfCraftApp {
             unsaved_flag: Default::default(),
             os_events: None,
             host_save: None,
+            embedded: false,
             host_dirty: None,
             close_request: None,
             save_prompt_button: Default::default(),
@@ -669,8 +670,12 @@ impl eframe::App for PdfCraftApp {
         if self.draws_window_frame() {
             window_controls::resize_edges(&ctx);
         }
-        chrome::tab_strip(self, ui);
-        chrome::mode_bar(self, ui);
+        if self.embedded {
+            chrome::unified_toolbar(self, ui);
+        } else {
+            chrome::tab_strip(self, ui);
+            chrome::mode_bar(self, ui);
+        }
         // Whichever way another tab came to the front, it shows instead of the expanded view.
         if self.all_tools_full && self.all_tools_tab != self.shown_tab() {
             self.all_tools_full = false;

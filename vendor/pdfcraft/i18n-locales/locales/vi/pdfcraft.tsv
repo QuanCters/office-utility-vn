@@ -1,0 +1,124 @@
+@id	language.name	Tiếng Việt
+	Welcome to PDF Studio	Chào mừng đến với PDF Studio
+	Files you open in PDF Studio appear here. Drop a PDF anywhere to open it.	Tài liệu bạn mở sẽ hiển thị ở đây. Kéo thả tệp PDF vào bất kỳ đâu để mở.
+	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Tài liệu bạn mở sẽ hiển thị ở đây. Kéo thả tệp PDF vào bất kỳ đâu để mở.
+	Recommended tools	Công cụ đề xuất
+	Organize pages	Sắp xếp trang
+	Add comments	Thêm ghi chú
+	Prepare a form	Tạo biểu mẫu
+	Edit a PDF	Chỉnh sửa PDF
+	Protect a PDF	Bảo vệ PDF
+	Open file	Mở tệp
+	Pinned Tools	Công cụ đã ghim
+	Recent	Gần đây
+	Use now	Sử dụng
+	Export a PDF	Xuất tệp PDF
+	Fill & Sign	Điền & Ký
+	Create a PDF	Tạo PDF mới
+	Combine files	Ghép nối tệp
+	Scan & OCR	Quét & OCR
+	Redact a PDF	Che thông tin nhạy cảm
+	Compress a PDF	Nén dung lượng PDF
+	Add a stamp	Đóng dấu văn bản
+	Use a certificate	Chứng thư số
+	View more	Xem thêm
+	Pin a tool…	Ghim công cụ…
+	Pin your favorite tools here for quick access.	Ghim các công cụ yêu thích của bạn để truy cập nhanh.
+	Page grid · Rotate · Delete	Lưới trang · Xoay · Xóa trang
+	Sticky note · Highlight text · Underline	Ghi chú · Tô sáng · Gạch chân
+	Field list · Detect form fields · Clear form	Danh sách trường · Nhận diện trường · Xóa biểu mẫu
+	Edit text & images · Rotate pages · Insert pages	Sửa chữ & ảnh · Xoay trang · Chèn thêm trang
+	Protect with password · Remove hidden information	Đặt mật khẩu · Xóa siêu dữ liệu ẩn
+	All tools	Tất cả công cụ
+	Convert	Chuyển đổi
+	E-Sign	Ký điện tử
+	Find tools and commands	Tìm công cụ và lệnh...
+	Search tools…	Tìm kiếm công cụ…
+	Clear Recent Files	Xóa lịch sử mở gần đây
+	Remove from Recent	Xóa khỏi gần đây
+	Remove {name} from Recent	Xóa {name} khỏi gần đây
+	Unpin from Home	Bỏ ghim khỏi Trang chủ
+	Unpin tool	Bỏ ghim công cụ
+	Pin to Home	Ghim vào Trang chủ
+	Pin tools to Home	Ghim công cụ vào Trang chủ
+	Current page	Trang hiện tại
+	Current page — type a page number or label (such as iv) and press Enter	Trang hiện tại — nhập số trang và nhấn Enter
+	Page {p} of {n}	Trang {p} / {n}
+	Close Tab	Đóng thẻ
+	Reopen Closed Tab	Mở lại thẻ vừa đóng
+	Open a PDF ({key})	Mở PDF ({key})
+	Document properties ({key})	Thuộc tính tài liệu ({key})
+	{name} — unsaved changes	{name} — thay đổi chưa lưu
+	Modify page	Chỉnh sửa trang
+	Add content	Thêm nội dung
+	Edit text & images	Sửa văn bản & hình ảnh
+	Rotate pages	Xoay trang
+	Insert pages	Chèn thêm trang
+	Delete pages	Xóa trang
+	Extract pages	Trích xuất trang
+	Text	Văn bản
+	Image	Hình ảnh
+	Header and footer	Đầu trang và chân trang
+	Watermark	Hình mờ (Watermark)
+	Link	Liên kết
+	Bates numbering	Đánh số Bates
+	Background	Màu nền
+	Attach file	Đính kèm tệp
+	Create from	Tạo từ
+	Single file	Một tệp
+	Multiple files	Nhiều tệp
+	Separate PDFs	Các PDF riêng biệt
+	Images	Hình ảnh
+	Clipboard	Khay nhớ tạm (Clipboard)
+	Blank page	Trang trắng
+	Add files to combine	Thêm tệp để ghép nối
+	Page options	Tùy chọn trang
+	Page grid	Lưới hiển thị trang
+	Rotate	Xoay
+	Extract	Trích xuất
+	Replace	Thay thế
+	Split	Chia nhỏ
+	Split document	Chia nhỏ tài liệu
+	Comment list	Danh sách ghi chú
+	Highlight text	Tô sáng chữ
+	Underline	Gạch chân
+	Strikethrough	Gạch ngang
+	Squiggly underline	Gạch lượn sóng
+	Draw freehand	Vẽ tự do
+	Drawing	Hình vẽ
+	Line	Đường thẳng
+	Arrow	Mũi tên
+	Rectangle	Hình chữ nhật
+	Oval	Hình bầu dục
+	Sticky note	Ghi chú dán
+	Add text	Thêm văn bản
+	Fields	Trường nhập liệu
+	Field list	Danh sách trường
+	Form	Biểu mẫu
+	Detect form fields	Nhận diện trường biểu mẫu
+	Clear form	Xóa dữ liệu biểu mẫu
+	Protect with password	Bảo vệ bằng mật khẩu
+	Remove hidden information	Xóa thông tin ẩn
+	Sanitize document	Làm sạch tài liệu
+	Recognize text	Nhận dạng văn bản (OCR)
+	Enhance scanned file	Nâng cao tài liệu quét
+	Reduce file size	Giảm dung lượng tệp
+	Advanced optimization	Tối ưu nâng cao
+	Stamp palette	Bộ sưu tập con dấu
+	Digitally sign	Ký số điện tử
+	Certificates	Chứng thư số
+	Digital signature	Chữ ký số
+	Certify (visible signature)	Chứng thực (chữ ký hiển thị)
+	Certify (invisible signature)	Chứng thực (chữ ký ẩn)
+	Validate all signatures	Xác thực tất cả chữ ký
+	Microsoft Word (.docx)	Microsoft Word (.docx)
+	Spreadsheet (.xlsx)	Bảng tính Excel (.xlsx)
+	Presentation (.pptx)	Thuyết trình PowerPoint (.pptx)
+	Image (PNG)	Hình ảnh (PNG)
+	Text (plain)	Văn bản thuần (.txt)
+	Save as PDF/A	Lưu dạng PDF/A lưu trữ
+	Save as PDF/X	Lưu dạng PDF/X in ấn
+	Sign	Ký tên
+	Privacy	Bảo mật & Quyền riêng tư
+	PDF Studio works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PDF Studio hoạt động 100% ngoại tuyến (offline). An toàn tuyệt đối, không thu thập dữ liệu, không cần tài khoản và hoàn toàn không xử lý đám mây.
+	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PDF Studio hoạt động 100% ngoại tuyến (offline). An toàn tuyệt đối, không thu thập dữ liệu, không cần tài khoản và hoàn toàn không xử lý đám mây.
