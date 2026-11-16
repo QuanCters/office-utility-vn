@@ -66,6 +66,15 @@ pub fn PdfStudioLayout(
                         </div>
 
                         <div class="pdf-studio-header-right">
+                            <button
+                                type="button"
+                                class="pdf-mode-switch-btn"
+                                style="background: rgba(59, 130, 246, 0.15); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"
+                                on:click=move |_| state.open_tool("pdf-merge-split")
+                                title="Chuyển sang giao diện 22 công cụ xử lý PDF native"
+                            >
+                                <span>"📑 Chế độ Công cụ"</span>
+                            </button>
                             <span class="pdf-studio-privacy-badge">
                                 <svg class="privacy-badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -166,6 +175,15 @@ pub fn PdfStudioLayout(
                             </div>
 
                             <div class="pdf-studio-header-right">
+                                <button
+                                    type="button"
+                                    class="pdf-mode-switch-btn"
+                                    style="background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"
+                                    on:click=move |_| state.open_visual_workspace()
+                                    title="Mở không gian làm việc đồ họa trực quan PDFCraft Canvas"
+                                >
+                                    <span>"🎨 Không gian Canvas"</span>
+                                </button>
                                 <span class="pdf-studio-cat-badge">{category_label}</span>
                                 <span class="pdf-studio-slug-badge">{active_slug.clone()}</span>
                                 <span class="pdf-studio-privacy-badge">"🔒 100% On-Device"</span>

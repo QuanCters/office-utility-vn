@@ -44,17 +44,33 @@ use leptos::prelude::*;
 /// 20. `pdf-to-long-image` (Ghép PDF thành Ảnh Dọc Dài)
 /// 21. `pdf-table-extractor` (Trích xuất Bảng từ PDF ra Excel)
 /// 22. `markdown-to-styled-pdf` (Biên dịch Markdown sang PDF)
+/// Khởi tạo trạng thái PDF Studio khi nạp App.
+/// Nếu người dùng điều hướng trực tiếp vào một công cụ cụ thể (deep link / launcher),
+/// giữ nguyên chế độ `ToolWorkspace`. Nếu không, mặc định mở không gian trực quan `VisualWorkspace`.
+pub fn init_pdf_studio_app_state(
+    state: Option<PdfStudioState>,
+    initial_tool: Option<String>,
+) -> PdfStudioState {
+    let app_state = state.unwrap_or_else(|| PdfStudioState::with_initial_tool(initial_tool.clone()));
+    if let Some(ref slug) = initial_tool {
+        if !slug.trim().is_empty() {
+            app_state.select_tool(slug);
+        } else {
+            app_state.open_visual_workspace();
+        }
+    } else {
+        app_state.open_visual_workspace();
+    }
+    app_state
+}
+
 #[component]
 pub fn PdfStudioApp(
     #[prop(into, optional)] state: Option<PdfStudioState>,
     #[prop(into, optional)] initial_tool: Option<String>,
     #[prop(into)] on_back: Callback<()>,
 ) -> impl IntoView {
-    let app_state = state.unwrap_or_else(|| PdfStudioState::with_initial_tool(initial_tool.clone()));
-    if let Some(ref slug) = initial_tool {
-        app_state.select_tool(slug);
-    }
-    app_state.open_visual_workspace();
+    let app_state = init_pdf_studio_app_state(state, initial_tool);
 
     view! {
         <layout::PdfStudioLayout state=app_state on_back=on_back />

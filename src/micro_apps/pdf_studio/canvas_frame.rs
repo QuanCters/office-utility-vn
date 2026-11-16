@@ -67,6 +67,23 @@ pub fn PdfCraftCanvasFrame(
                             "Khởi tạo WebAssembly Canvas 100% On-Device"
                         </span>
                     </div>
+                    <div class="pdfcraft-skeleton-fallback-box" style="margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; color: var(--text-muted, #94A3B8);">
+                            "Nếu Canvas tải chậm hoặc không tương thích trên thiết bị này:"
+                        </span>
+                        <button
+                            type="button"
+                            class="pdfcraft-fallback-btn"
+                            style="background: #3B82F6; color: #FFFFFF; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s ease;"
+                            on:click=move |_| {
+                                if let Some(s) = studio_state {
+                                    s.open_tool("pdf-merge-split");
+                                }
+                            }
+                        >
+                            "⚡ Chuyển sang Giao diện Công cụ (Classic Tools)"
+                        </button>
+                    </div>
                 </div>
             </div>
 

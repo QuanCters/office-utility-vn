@@ -304,8 +304,18 @@ pub fn setup_bridge_listener(
     let expected_origin = window.location().origin().unwrap_or_default();
 
     let on_message = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |event: web_sys::MessageEvent| {
-        // 1. Kiểm tra Origin (chỉ chấp nhận same-origin hoặc origin rỗng trong một số webview)
-        if !expected_origin.is_empty() && event.origin() != expected_origin {
+        // 1. Kiểm tra Origin (chấp nhận same-origin, origin rỗng "null", hoặc các custom protocol của Tauri/WebView2)
+        let ev_origin = event.origin();
+        let is_valid_origin = expected_origin.is_empty()
+            || ev_origin == expected_origin
+            || ev_origin == "null"
+            || ev_origin.is_empty()
+            || ev_origin.contains("tauri.localhost")
+            || ev_origin.starts_with("tauri://")
+            || ev_origin.starts_with("http://127.0.0.1")
+            || ev_origin.starts_with("http://localhost");
+
+        if !is_valid_origin {
             return;
         }
 

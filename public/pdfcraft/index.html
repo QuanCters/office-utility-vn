@@ -7,14 +7,30 @@
     
 <script type="module">
 import init, * as bindings from './pdfcraft-web-8a0108e9d87ca309.js';
-const wasm = await init({ module_or_path: './pdfcraft-web-f6ab9f480a6298c5_bg.wasm' });
 
+window.addEventListener("error", function(e) {
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "pdfcraft:failed", error: e.message || "Lỗi khởi động Canvas WebAssembly" }, "*");
+    }
+  } catch (err) {}
+});
 
-window.wasmBindings = bindings;
+try {
+  const wasm = await init({ module_or_path: './pdfcraft-web-f6ab9f480a6298c5_bg.wasm' });
+  window.wasmBindings = bindings;
+  dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
-
-dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
-
+  // Chủ động gửi thông báo ready tới Leptos Host để gỡ bỏ Loading Skeleton
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "pdfcraft:ready", version: "0.2.2" }, "*");
+  }
+} catch (err) {
+  console.error("Lỗi khởi tạo WASM PDFCraft:", err);
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "pdfcraft:failed", error: String(err) }, "*");
+  }
+}
 </script>
     <script>
       // Office Utility VN: Đồng bộ Dark Theme & Ngôn ngữ tiếng Việt trước khi khởi động Canvas
@@ -54,7 +70,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       canvas { width: 100%; height: 100%; display: block; outline: none; }
       @media (prefers-color-scheme: dark) { html, body { background: var(--pc-bg); } }
     </style>
-  <link rel="modulepreload" href="./pdfcraft-web-8a0108e9d87ca309.js" crossorigin="anonymous" integrity="sha384-L/ek8c0zllxvJvrtjW8Gj+7edOJCIMzpADPDRS25OvfYZ5Gmy4l1fJM+6XcBhvvF"><link rel="modulepreload" href="./snippets/eframe-d31a8450ea12dfc1/inline0.js" crossorigin="anonymous" integrity="sha384-uPZQ72BwgZ4v7Km6+UIFbkDDlt7ShGEsAVEHVN/+wZSGFhItJZB83iKMFQXauTSs"><link rel="preload" href="./pdfcraft-web-f6ab9f480a6298c5_bg.wasm" crossorigin="anonymous" integrity="sha384-u3rsuB57JtixE3He87zuqH1X3/xp1mUOvsWthwk1dzlveJJ1N7NNXJAQI0CmFQB4" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="./pdfcraft-web-8a0108e9d87ca309.js"><link rel="modulepreload" href="./snippets/eframe-d31a8450ea12dfc1/inline0.js"><link rel="preload" href="./pdfcraft-web-f6ab9f480a6298c5_bg.wasm" as="fetch" type="application/wasm"></head>
   <body>
     <canvas id="pdfcraft"></canvas>
   </body>

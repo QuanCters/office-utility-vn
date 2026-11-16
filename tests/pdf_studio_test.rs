@@ -479,6 +479,28 @@ fn test_pdfcraft_canvas_frame_renders() {
 }
 
 #[test]
+fn test_pdf_studio_app_initial_tool_preserves_tool_workspace() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::init_pdf_studio_app_state;
+    use office_utility_vn_ui::micro_apps::pdf_studio::PdfViewMode;
+
+    let state = PdfStudioState::new();
+    let state = init_pdf_studio_app_state(Some(state), Some("pdf-to-images-pack".to_string()));
+    assert_eq!(state.active_tool_slug(), "pdf-to-images-pack");
+    assert_eq!(state.view_mode.get(), PdfViewMode::ToolWorkspace);
+
+    // Khi không truyền initial_tool -> Mặc định mở VisualWorkspace
+    let default_state = init_pdf_studio_app_state(None, None);
+    assert_eq!(default_state.view_mode.get(), PdfViewMode::VisualWorkspace);
+}
+
+#[test]
+fn test_canvas_frame_renders_fallback_action() {
+    let html = view! { <PdfCraftCanvasFrame /> }.to_html();
+    assert!(html.contains("pdfcraft-fallback-btn"));
+    assert!(html.contains("Chuyển sang Giao diện Công cụ"));
+}
+
+#[test]
 fn test_bridge_protocol() {
     // 1. Test deserialization of incoming messages from PDFCraft
     // 1a. pdfcraft:ready
