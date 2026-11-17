@@ -1,15 +1,25 @@
+pub mod command_bar;
+pub mod drawer;
+pub mod explorer;
 pub mod file_list_panel;
+pub mod inspector;
 pub mod layout;
+pub mod reconcile_workbench;
 pub mod split_pane_view;
 pub mod spreadsheet_grid_view;
 pub mod state;
 pub mod toolbar;
 pub mod visual_canvas_workflow;
 
+pub use command_bar::{DataLabCommandBar, DataLabWorkspaceMode};
+pub use drawer::{DataLabDrawer, DrawerTab};
+pub use explorer::DataLabExplorer;
 pub use file_list_panel::DataLabFileListPanel;
+pub use inspector::{DataLabInspector, RecipeStepDisplay};
 pub use layout::DataLabLayout;
+pub use reconcile_workbench::{ReconcileDiscrepancyTab, VisualReconcileWorkbench};
 pub use split_pane_view::{ConverterMode, SplitPaneConverterView};
-pub use spreadsheet_grid_view::SpreadsheetGridFacetView;
+pub use spreadsheet_grid_view::{ColumnType, SpreadsheetGridFacetView};
 pub use state::{category_for_tool, DataLabCategory, DataLabState};
 pub use toolbar::{data_lab_tool_icon, DataLabToolbar};
 pub use visual_canvas_workflow::VisualCanvasWorkflowView;

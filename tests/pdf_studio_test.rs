@@ -338,10 +338,10 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
 
     let state = PdfStudioState::new();
 
-    // 1. Mặc định khi khởi tạo là chế độ Visual Workspace (thay thế Hub cũ)
-    assert!(state.is_visual_workspace());
-    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
+    // 1. Mặc định khi khởi tạo là chế độ Hub
     assert!(state.is_hub());
+    assert_eq!(state.view_mode.get(), PdfViewMode::Hub);
+    assert!(!state.is_visual_workspace());
     assert!(!state.is_tool_workspace());
 
     // 2. Mở một công cụ cụ thể -> Chuyển sang ToolWorkspace và thu gọn Sidebar (mini)
@@ -358,11 +358,10 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
     state.toggle_sidebar();
     assert!(state.sidebar_collapsed.get(), "Sau khi toggle lần 2, sidebar phải thu gọn lại");
 
-    // 4. Quay lại Visual Workspace (thay thế Hub cũ)
+    // 4. Quay lại Hub
     state.open_hub();
-    assert!(state.is_visual_workspace());
-    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
     assert!(state.is_hub());
+    assert_eq!(state.view_mode.get(), PdfViewMode::Hub);
     assert!(!state.is_tool_workspace());
 
     // 5. Mở Workflow
@@ -379,28 +378,29 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
     state.open_visual_workspace();
     assert!(state.is_visual_workspace());
     assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
-    assert!(state.is_hub());
+    assert!(!state.is_hub());
 }
 
 #[test]
 fn test_pdf_studio_visual_workspace_transition() {
     use office_utility_vn_ui::micro_apps::pdf_studio::state::PdfViewMode;
 
-    // 1. Mặc định khởi tạo ở Visual Workspace mode
+    // 1. Mặc định khởi tạo ở Hub mode
     let state = PdfStudioState::new();
-    assert!(state.is_visual_workspace());
-    assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
+    assert!(state.is_hub());
+    assert_eq!(state.view_mode.get(), PdfViewMode::Hub);
 
-    // 2. Khởi tạo kèm tool ban đầu cũng ở Visual Workspace mode
+    // 2. Khởi tạo kèm tool ban đầu cũng ở Hub mode
     let state_with_tool = PdfStudioState::with_initial_tool(Some("pdf-merge-split".to_string()));
-    assert!(state_with_tool.is_visual_workspace());
-    assert_eq!(state_with_tool.view_mode.get(), PdfViewMode::VisualWorkspace);
+    assert!(state_with_tool.is_hub());
+    assert_eq!(state_with_tool.view_mode.get(), PdfViewMode::Hub);
     assert_eq!(state_with_tool.active_tool_slug(), "pdf-merge-split");
 
     // 3. Mở visual workspace tường minh
     state.open_visual_workspace();
     assert!(state.is_visual_workspace());
     assert_eq!(state.view_mode.get(), PdfViewMode::VisualWorkspace);
+    assert!(!state.is_hub());
 }
 
 #[test]
@@ -488,9 +488,9 @@ fn test_pdf_studio_app_initial_tool_preserves_tool_workspace() {
     assert_eq!(state.active_tool_slug(), "pdf-to-images-pack");
     assert_eq!(state.view_mode.get(), PdfViewMode::ToolWorkspace);
 
-    // Khi không truyền initial_tool -> Mặc định mở VisualWorkspace
+    // Khi không truyền initial_tool -> Mặc định mở Hub
     let default_state = init_pdf_studio_app_state(None, None);
-    assert_eq!(default_state.view_mode.get(), PdfViewMode::VisualWorkspace);
+    assert_eq!(default_state.view_mode.get(), PdfViewMode::Hub);
 }
 
 #[test]

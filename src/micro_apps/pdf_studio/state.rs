@@ -128,6 +128,8 @@ pub struct PdfStudioState {
     pub is_canvas_ready: RwSignal<bool>,
     /// Cờ đánh dấu tài liệu đang có thay đổi chưa lưu (dirty state từ PDFCraft).
     pub has_unsaved_changes: RwSignal<bool>,
+    /// Danh mục lọc hiện tại trên trang chủ PDF Studio Hub (None = Tất cả).
+    pub hub_active_category: RwSignal<Option<PdfCategory>>,
 }
 
 impl Default for PdfStudioState {
@@ -158,10 +160,11 @@ impl PdfStudioState {
             is_running: RwSignal::new(false),
             status_message: RwSignal::new(String::new()),
             active_category: RwSignal::new(category),
-            view_mode: RwSignal::new(PdfViewMode::VisualWorkspace),
+            view_mode: RwSignal::new(PdfViewMode::Hub),
             sidebar_collapsed: RwSignal::new(true),
             is_canvas_ready: RwSignal::new(false),
             has_unsaved_changes: RwSignal::new(false),
+            hub_active_category: RwSignal::new(None),
         }
     }
 
@@ -297,9 +300,15 @@ impl PdfStudioState {
         self.is_workflow_active.set(false);
     }
 
-    /// Mở trang chủ Hub/Portal (được chuyển giao trực tiếp sang không gian làm việc trực quan PDFCraft).
+    /// Mở trang chủ Hub/Portal của PDF Studio.
     pub fn open_hub(&self) {
-        self.open_visual_workspace();
+        self.view_mode.set(PdfViewMode::Hub);
+        self.is_workflow_active.set(false);
+    }
+
+    /// Chọn danh mục hiển thị trên trang chủ Hub.
+    pub fn set_hub_category(&self, cat: Option<PdfCategory>) {
+        self.hub_active_category.set(cat);
     }
 
     /// Mở không gian làm việc tập trung của công cụ, tự động thu gọn sidebar về mini.
@@ -316,15 +325,12 @@ impl PdfStudioState {
 
     /// Kiểm tra xem có đang ở không gian làm việc đồ họa trực quan PDFCraft Canvas hay không.
     pub fn is_visual_workspace(&self) -> bool {
-        matches!(
-            self.view_mode.get_untracked(),
-            PdfViewMode::VisualWorkspace | PdfViewMode::Hub
-        )
+        self.view_mode.get_untracked() == PdfViewMode::VisualWorkspace
     }
 
-    /// Kiểm tra xem có đang ở trang Hub Portal / Visual Workspace không.
+    /// Kiểm tra xem có đang ở trang Hub Portal không.
     pub fn is_hub(&self) -> bool {
-        self.is_visual_workspace()
+        self.view_mode.get_untracked() == PdfViewMode::Hub
     }
 
     /// Kiểm tra xem có đang ở không gian công cụ tập trung không.

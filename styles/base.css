@@ -19,6 +19,17 @@
   --text-subtle: #94A3B8;
   --text-white: #FFFFFF;
 
+  /* Semantic & Design System Aliases */
+  --brand-primary: var(--primary);
+  --neutral-bg: var(--bg-main);
+  --neutral-surface: var(--bg-surface);
+  --neutral-card: var(--bg-card);
+  --neutral-card-hover: var(--bg-card-hover);
+  --neutral-border: var(--border-subtle);
+  --neutral-text: var(--text-main);
+  --neutral-text-muted: var(--text-muted);
+  --neutral-text-subtle: var(--text-subtle);
+
   /* Semantics */
   --emerald: #10B981;
   --emerald-bg: rgba(16, 185, 129, 0.12);

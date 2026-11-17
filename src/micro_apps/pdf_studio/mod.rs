@@ -10,7 +10,6 @@ pub mod vn_ribbon;
 pub use bridge::{IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge};
 pub use canvas_frame::PdfCraftCanvasFrame;
 pub use file_list_panel::PdfStudioFileListPanel;
-#[allow(deprecated)]
 pub use hub_view::{filter_pdf_studio_tools, matches_pdf_tool, PdfStudioHubView};
 pub use layout::PdfStudioLayout;
 pub use state::{category_for_tool, PdfCategory, PdfStudioState, PdfViewMode};
@@ -46,7 +45,7 @@ use leptos::prelude::*;
 /// 22. `markdown-to-styled-pdf` (Biên dịch Markdown sang PDF)
 /// Khởi tạo trạng thái PDF Studio khi nạp App.
 /// Nếu người dùng điều hướng trực tiếp vào một công cụ cụ thể (deep link / launcher),
-/// giữ nguyên chế độ `ToolWorkspace`. Nếu không, mặc định mở không gian trực quan `VisualWorkspace`.
+/// giữ nguyên chế độ `ToolWorkspace`. Nếu không, mặc định mở trang chủ Hub portal.
 pub fn init_pdf_studio_app_state(
     state: Option<PdfStudioState>,
     initial_tool: Option<String>,
@@ -56,10 +55,10 @@ pub fn init_pdf_studio_app_state(
         if !slug.trim().is_empty() {
             app_state.select_tool(slug);
         } else {
-            app_state.open_visual_workspace();
+            app_state.open_hub();
         }
     } else {
-        app_state.open_visual_workspace();
+        app_state.open_hub();
     }
     app_state
 }

@@ -15,6 +15,10 @@ pub mod recipe_history;
 pub mod sql_formatter_linter;
 pub mod text_pii_anonymizer;
 pub mod vietnamese_font_converter;
+pub mod schema_quality_gate;
+pub mod visual_reconciler;
+pub mod vn_einvoice_auditor;
+pub mod vn_font_encoding_doc;
 
 pub use base64_file_codec::{
     stream_decode_base64, stream_encode_to_base64, Base64CodecOptions, Base64FileCodecTool,
@@ -71,3 +75,20 @@ pub use text_pii_anonymizer::{
     anonymize_pii_text, PiiAnonymizerOptions, TextPiiAnonymizerTool,
 };
 pub use vietnamese_font_converter::{FontConvertOptions, VietnameseFontConverterTool};
+
+pub use schema_quality_gate::{
+    CccdInfo, IssueType, MstInfo, QualityIssue, SchemaQualityGateOptions,
+    SchemaQualityGateReport, SchemaQualityGateTool,
+};
+pub use visual_reconciler::{
+    ReconciledItem, ReconciliationStatus, VisualReconcilerOptions,
+    VisualReconcilerReport, VisualReconcilerTool,
+};
+pub use vn_einvoice_auditor::{
+    InvoiceItem, LedgerInvoiceRecord, PartyInfo, ReconciliationItem,
+    ReconciliationReport, VnEinvoiceAuditorOptions, VnEinvoiceAuditorTool,
+    VnEinvoiceData,
+};
+pub use vn_font_encoding_doc::{
+    recover_cell_text, score_vietnamese_text, VnFontEncodingDocOptions, VnFontEncodingDocTool,
+};

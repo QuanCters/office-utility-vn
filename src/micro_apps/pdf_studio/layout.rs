@@ -44,13 +44,31 @@ pub fn PdfStudioLayout(
     view! {
         <div class="pdf-studio-app-container">
             {move || match state.view_mode.get() {
-                PdfViewMode::VisualWorkspace | PdfViewMode::Hub => view! {
+                PdfViewMode::Hub => view! {
+                    // =========================================================
+                    // CHẾ ĐỘ 0: TRANG CHỦ PDF STUDIO HUB & PORTAL CHÍNH
+                    // =========================================================
+                    <crate::micro_apps::pdf_studio::hub_view::PdfStudioHubView
+                        state=state
+                        on_back=on_back
+                    />
+                }.into_any(),
+
+                PdfViewMode::VisualWorkspace => view! {
                     // =========================================================
                     // CHẾ ĐỘ 1: PDF STUDIO VISUAL WORKSPACE (Toàn màn hình Canvas)
                     // =========================================================
                     <header class="pdf-studio-header pdf-studio-compact-header">
                         <div class="pdf-studio-header-left">
-                            <BackButton on_back=on_back label="← Trang chủ" />
+                            <button
+                                type="button"
+                                class="pdf-breadcrumb-btn"
+                                title="Quay lại Trang chủ Hub công cụ PDF"
+                                on:click=move |_| state.open_hub()
+                            >
+                                <span class="breadcrumb-arrow" aria-hidden="true">"←"</span>
+                                <span>"Tất cả công cụ (PDF Hub)"</span>
+                            </button>
                             <div class="pdf-studio-header-title-group">
                                 <h1 class="pdf-studio-header-title">
                                     <svg class="header-title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -60,7 +78,7 @@ pub fn PdfStudioLayout(
                                         <line x1="16" y1="17" x2="8" y2="17"></line>
                                         <polyline points="10 9 9 9 8 9"></polyline>
                                     </svg>
-                                    <span>"PDF Studio"</span>
+                                    <span>"PDF Studio Canvas"</span>
                                 </h1>
                             </div>
                         </div>
@@ -71,7 +89,7 @@ pub fn PdfStudioLayout(
                                 class="pdf-mode-switch-btn"
                                 style="background: rgba(59, 130, 246, 0.15); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"
                                 on:click=move |_| state.open_tool("pdf-merge-split")
-                                title="Chuyển sang giao diện 22 công cụ xử lý PDF native"
+                                title="Chuyển sang giao diện 25 công cụ xử lý PDF native"
                             >
                                 <span>"📑 Chế độ Công cụ"</span>
                             </button>
@@ -81,6 +99,7 @@ pub fn PdfStudioLayout(
                                 </svg>
                                 <span>"100% On-Device"</span>
                             </span>
+                            <BackButton on_back=on_back label="Về Launcher" />
                         </div>
                     </header>
 

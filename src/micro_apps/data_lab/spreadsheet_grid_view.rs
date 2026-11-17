@@ -47,6 +47,8 @@ pub enum ColumnType {
     Text,
     Number,
     Date,
+    CccdMst,
+    Address,
     Other,
 }
 
@@ -56,6 +58,8 @@ impl ColumnType {
             ColumnType::Text => "ABC",
             ColumnType::Number => "123",
             ColumnType::Date => "📅",
+            ColumnType::CccdMst => "🪪",
+            ColumnType::Address => "📍",
             ColumnType::Other => "⚡",
         }
     }
@@ -359,6 +363,100 @@ pub fn calculate_column_profile(col_idx: usize, rows: &[Vec<String>]) -> ColumnP
     }
 }
 
+/// Thống kê chi tiết chất lượng dữ liệu 4 trạng thái cho Trifacta 3-Tier Header
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColumnQualityStats {
+    pub total: usize,
+    pub valid_count: usize,
+    pub warning_count: usize,
+    pub invalid_count: usize,
+    pub null_count: usize,
+    pub valid_pct: f32,
+    pub warning_pct: f32,
+    pub invalid_pct: f32,
+    pub null_pct: f32,
+}
+
+pub fn calculate_column_quality_stats(
+    col_idx: usize,
+    col_type: ColumnType,
+    rows: &[Vec<String>],
+) -> ColumnQualityStats {
+    let total = rows.len();
+    if total == 0 {
+        return ColumnQualityStats {
+            total: 0,
+            valid_count: 0,
+            warning_count: 0,
+            invalid_count: 0,
+            null_count: 0,
+            valid_pct: 100.0,
+            warning_pct: 0.0,
+            invalid_pct: 0.0,
+            null_pct: 0.0,
+        };
+    }
+
+    let mut null_count = 0;
+    let mut invalid_count = 0;
+    let mut warning_count = 0;
+    let mut valid_count = 0;
+
+    for row in rows {
+        let raw = row.get(col_idx).map(|s| s.as_str()).unwrap_or("");
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            null_count += 1;
+        } else {
+            match col_type {
+                ColumnType::Number => {
+                    let cleaned = trimmed.replace(',', "").replace('.', "");
+                    if cleaned.parse::<f64>().is_ok() {
+                        valid_count += 1;
+                    } else {
+                        invalid_count += 1;
+                    }
+                }
+                ColumnType::Date => {
+                    if trimmed.contains('/') || trimmed.contains('-') {
+                        valid_count += 1;
+                    } else {
+                        invalid_count += 1;
+                    }
+                }
+                ColumnType::CccdMst => {
+                    let digits: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
+                    if digits.len() == 10 || digits.len() == 12 || digits.len() == 13 {
+                        valid_count += 1;
+                    } else {
+                        invalid_count += 1;
+                    }
+                }
+                _ => {
+                    if raw.contains("  ") {
+                        warning_count += 1;
+                    } else {
+                        valid_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let tot_f = total as f32;
+    ColumnQualityStats {
+        total,
+        valid_count,
+        warning_count,
+        invalid_count,
+        null_count,
+        valid_pct: (valid_count as f32 / tot_f) * 100.0,
+        warning_pct: (warning_count as f32 / tot_f) * 100.0,
+        invalid_pct: (invalid_count as f32 / tot_f) * 100.0,
+        null_pct: (null_count as f32 / tot_f) * 100.0,
+    }
+}
+
 /// Xuất dữ liệu bảng sang định dạng CSV có UTF-8 BOM
 pub fn table_to_csv(columns: &[TableColumn], rows: &[Vec<String>]) -> String {
     let mut out = String::from("\u{FEFF}");
@@ -425,6 +523,57 @@ pub fn create_demo_table() -> (Vec<TableColumn>, Vec<Vec<String>>) {
     (columns, rows)
 }
 
+/// Định dạng số tiền/số lượng theo chuẩn kế toán Việt Nam (dấu chấm phân cách hàng nghìn)
+pub fn format_vnd_number(val: &str) -> String {
+    let trimmed = val.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    // Nếu có chữ cái (mã định danh, chuỗi text), giữ nguyên không định dạng
+    if trimmed.chars().any(|c| c.is_alphabetic()) {
+        return trimmed.to_string();
+    }
+    // Xử lý dấu âm nếu có
+    let (is_neg, num_str) = if let Some(stripped) = trimmed.strip_prefix('-') {
+        (true, stripped)
+    } else {
+        (false, trimmed)
+    };
+    // Phân tách phần nguyên và phần thập phân (nếu có dấu . hoặc ,)
+    let (int_part, frac_part) = if let Some(pos) = num_str.find('.') {
+        (&num_str[..pos], Some(&num_str[pos + 1..]))
+    } else if let Some(pos) = num_str.find(',') {
+        (&num_str[..pos], Some(&num_str[pos + 1..]))
+    } else {
+        (num_str, None)
+    };
+
+    let clean_int: String = int_part.chars().filter(|c| c.is_ascii_digit()).collect();
+    if clean_int.is_empty() {
+        return trimmed.to_string();
+    }
+
+    let mut formatted = String::with_capacity(clean_int.len() + clean_int.len() / 3 + 4);
+    if is_neg {
+        formatted.push('-');
+    }
+    let rem = clean_int.len() % 3;
+    for (i, ch) in clean_int.chars().enumerate() {
+        if i > 0 && (i % 3 == rem || (rem == 0 && i % 3 == 0)) {
+            formatted.push('.');
+        }
+        formatted.push(ch);
+    }
+    if let Some(frac) = frac_part {
+        let clean_frac: String = frac.chars().filter(|c| c.is_ascii_digit()).collect();
+        if !clean_frac.is_empty() {
+            formatted.push(',');
+            formatted.push_str(&clean_frac);
+        }
+    }
+    formatted
+}
+
 // ==============================================================================
 // COMPONENT NHẬP LIỆU AN TOÀN IME TIẾNG VIỆT (NFR-COM-02)
 // ==============================================================================
@@ -462,7 +611,13 @@ fn ImeSafeSearchInput(
 
 /// Component giao diện Bảng tính kết hợp Facet & Profiling Sidebar (mô hình OpenRefine).
 #[component]
-pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
+pub fn SpreadsheetGridFacetView(
+    state: DataLabState,
+    #[prop(into, optional)] shared_selected_col: Option<RwSignal<usize>>,
+    #[prop(into, optional)] shared_col_name: Option<RwSignal<String>>,
+    #[prop(into, optional)] shared_col_type: Option<RwSignal<ColumnType>>,
+    #[prop(into, optional)] external_action: Option<RwSignal<Option<String>>>,
+) -> impl IntoView {
     let (initial_cols, initial_rows) = create_demo_table();
 
     // Trạng thái dữ liệu bảng hiện tại
@@ -484,10 +639,28 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
     let history_index = RwSignal::new(0usize);
 
     // Lựa chọn cột và lọc Facet
-    let selected_col_idx = RwSignal::new(1usize); // Mặc định chọn cột Họ và tên
+    let initial_col_idx = shared_selected_col.map(|s| s.get_untracked()).unwrap_or(1usize);
+    let selected_col_idx = RwSignal::new(initial_col_idx);
     let facet_search = RwSignal::new(String::new());
     let active_filter = RwSignal::new(Option::<(usize, String)>::None);
-    let facet_collapsed = RwSignal::new(false);
+    let facet_collapsed = RwSignal::new(true);
+
+    // Đồng bộ chỉ số cột và metadata với Inspector bên ngoài
+    let sync_shared_col = move |idx: usize| {
+        selected_col_idx.set(idx);
+        if let Some(s) = shared_selected_col {
+            s.set(idx);
+        }
+        if let Some(c) = columns.with_untracked(|cols| cols.get(idx).cloned()) {
+            if let Some(n) = shared_col_name {
+                n.set(c.name);
+            }
+            if let Some(t) = shared_col_type {
+                t.set(c.col_type);
+            }
+        }
+    };
+    sync_shared_col(initial_col_idx);
 
     // Phân trang
     let current_page = RwSignal::new(1usize);
@@ -716,6 +889,46 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
         is_fuzzy_modal_open.set(false);
         show_toast("✓ Đã gộp các cụm sai chính tả về giá trị chuẩn!".to_string());
     };
+
+    // Thao tác 5: Chuẩn hóa viết hoa/thường (Title Case)
+    let on_normalize_casing = move || {
+        let col_idx = selected_col_idx.get();
+        let cur_cols = columns.get();
+        let mut cur_rows = rows.get();
+        for row in cur_rows.iter_mut() {
+            if let Some(cell) = row.get_mut(col_idx) {
+                let words: Vec<String> = cell.split_whitespace().map(|w| {
+                    let mut chars = w.chars();
+                    match chars.next() {
+                        None => String::new(),
+                        Some(f) => f.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                    }
+                }).collect();
+                *cell = words.join(" ");
+            }
+        }
+        let col_name = cur_cols.get(col_idx).map(|c| c.name.clone()).unwrap_or_else(|| "Cột".to_string());
+        push_history_step(cur_cols, cur_rows, "normalize_casing", &format!("Chuẩn hóa chữ hoa đầu từ cho cột {}", col_name), Some(col_name));
+        show_toast("✓ Đã chuẩn hóa viết hoa đầu từ cho cột.".to_string());
+    };
+
+    // Lắng nghe hành động kích hoạt từ thanh tra Inspector bên phải
+    Effect::new(move |_| {
+        if let Some(act_sig) = external_action {
+            if let Some(act) = act_sig.get() {
+                match act.as_str() {
+                    "split_vietnamese_name" => on_split_names(),
+                    "normalize_casing" => on_normalize_casing(),
+                    "fix_tcvn3_font" => on_clean_whitespace(),
+                    "normalize_dates" => on_normalize_dates(),
+                    "clean_whitespace" => on_clean_whitespace(),
+                    "fuzzy_cluster_merge" | "fuzzy_clustering" => on_apply_fuzzy_merge(),
+                    _ => {}
+                }
+                act_sig.set(None);
+            }
+        }
+    });
 
     // Xuất CSV
     let on_export_csv = move || {
@@ -1139,10 +1352,46 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                     // Chip trạng thái đang lọc dữ liệu (Active Filter Chip Bar)
                     {move || {
                         if let Some((f_col, ref f_val)) = active_filter.get() {
-                            let col_name = columns.with(|c| c.get(f_col).map(|col| col.name.clone()).unwrap_or_default());
+                            let cur_cols = columns.get();
+                            let col_name = cur_cols.get(f_col).map(|col| col.name.clone()).unwrap_or_default();
                             let all_rows = rows.get();
-                            let match_count = all_rows.iter().filter(|r| r.get(f_col).map(|c| c.trim() == f_val.as_str()).unwrap_or(false)).count();
-                            let val_display = f_val.clone();
+                            let f_val_str = f_val.clone();
+                            let match_count = all_rows.iter().filter(|r| {
+                                if let Some(cell) = r.get(f_col) {
+                                    let trimmed = cell.trim();
+                                    match f_val_str.as_str() {
+                                        "EMPTY" => trimmed.is_empty(),
+                                        "INVALID" => {
+                                            if let Some(c) = cur_cols.get(f_col) {
+                                                match c.col_type {
+                                                    ColumnType::Number => trimmed.replace(',', "").replace('.', "").parse::<f64>().is_err(),
+                                                    ColumnType::Date => !trimmed.contains('/') && !trimmed.contains('-'),
+                                                    ColumnType::CccdMst => {
+                                                        let d: String = trimmed.chars().filter(|ch| ch.is_ascii_digit()).collect();
+                                                        d.len() != 10 && d.len() != 12 && d.len() != 13
+                                                    }
+                                                    _ => false,
+                                                }
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                        "WARNING" => cell.contains("  "),
+                                        "VALID" => !trimmed.is_empty() && !cell.contains("  "),
+                                        _ => trimmed == f_val_str.as_str(),
+                                    }
+                                } else {
+                                    false
+                                }
+                            }).count();
+
+                            let val_display = match f_val.as_str() {
+                                "EMPTY" => "Ô rỗng (Null)",
+                                "INVALID" => "Lỗi định dạng",
+                                "WARNING" => "Cảnh báo / Khoảng trắng thừa",
+                                "VALID" => "Hợp lệ",
+                                other => other,
+                            };
 
                             view! {
                                 <div class="grid-active-filter-bar">
@@ -1174,38 +1423,169 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
 
                     <div class="data-grid-table-wrap">
                         <table
-                            class="data-grid-table"
+                            class="data-grid-table trifacta-table"
                             role="grid"
-                            aria-label="Lưới dữ liệu bảng tính tương tác OpenRefine"
+                            aria-label="Lưới dữ liệu bảng tính tương tác OpenRefine Trifacta"
                         >
                             <thead>
                                 <tr>
-                                    <th class="grid-th-index">"#"</th>
+                                    <th class="grid-th-index trifacta-th-index">"#"</th>
                                     {move || {
                                         let cur_rows = rows.get();
                                         columns.get().into_iter().enumerate().map(|(col_idx, col)| {
                                             let profile = calculate_column_profile(col_idx, &cur_rows);
-                                            let valid_w = format!("{:.1}%", profile.valid_percentage);
-                                            let tooltip = format!(
-                                                "Cột \"{}\": Hợp lệ {:.1}% ({}/{}) | Trống/Null: {:.1}% ({}/{})",
+                                            let q_stats = calculate_column_quality_stats(col_idx, col.col_type, &cur_rows);
+                                            let is_col_selected = move || selected_col_idx.get() == col_idx;
+                                            let col_name_for_click = col.name.clone();
+                                            let col_name_for_menu = col.name.clone();
+                                            let tooltip_quality = format!(
+                                                "Cột \"{}\": Hợp lệ {:.1}% ({}) | Cảnh báo {:.1}% ({}) | Lỗi {:.1}% ({}) | Rỗng {:.1}% ({})",
                                                 col.name,
-                                                profile.valid_percentage, profile.valid_count, profile.total,
-                                                profile.null_percentage, profile.null_count, profile.total
+                                                q_stats.valid_pct, q_stats.valid_count,
+                                                q_stats.warning_pct, q_stats.warning_count,
+                                                q_stats.invalid_pct, q_stats.invalid_count,
+                                                q_stats.null_pct, q_stats.null_count
                                             );
 
                                             view! {
-                                                <th>
-                                                    <div class="col-header-wrap">
-                                                        <div class="col-header-top">
-                                                            <div class="col-header-meta">
-                                                                <span class="col-type-badge">{col.col_type.icon()}</span>
-                                                                <span class="col-name-label">{col.name}</span>
-                                                            </div>
-                                                        </div>
-                                                        // Mini-profiling Bar dưới mỗi tiêu đề cột
-                                                        <div class="col-profiling-bar" title=tooltip>
-                                                            <div class="profile-valid-fill" style=format!("width: {};", valid_w)></div>
-                                                        </div>
+                                                <th
+                                                    class="trifacta-th trifacta-col-header"
+                                                    class:is-selected=is_col_selected
+                                                    on:click=move |_| sync_shared_col(col_idx)
+                                                >
+                                                    <div class="trifacta-th-inner">
+                                                        // Tier 1: Metadata (Type Badge, Column Name, Context Menu)
+                                                        <div class="th-tier-meta">
+                                                        <span class="th-col-type">{col.col_type.icon()}</span>
+                                                        <span class="th-col-name" title={col.name.clone()}>{col.name.clone()}</span>
+                                                        <button
+                                                            type="button"
+                                                            class="th-col-menu-btn"
+                                                            title="Tùy chọn cột (Sắp xếp, Lọc, Tách cột)"
+                                                            on:click={
+                                                                let name = col_name_for_menu.clone();
+                                                                move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    sync_shared_col(col_idx);
+                                                                    show_toast(format!("Đã chọn cột \"{}\" cho thanh tra Inspector.", name));
+                                                                }
+                                                            }
+                                                        >
+                                                            "⋮"
+                                                        </button>
+                                                    </div>
+
+                                                    // Tier 2: 3-Color Data Quality Bar (4px-6px interactive progress bar)
+                                                    <div class="th-tier-quality" title=tooltip_quality>
+                                                        <div
+                                                            class="quality-seg-valid"
+                                                            style=format!("width: {:.1}%;", q_stats.valid_pct)
+                                                            title=format!("Hợp lệ: {} dòng ({:.1}%) - Bấm để lọc", q_stats.valid_count, q_stats.valid_pct)
+                                                            on:click={
+                                                                let name = col_name_for_click.clone();
+                                                                move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    if let Some((f_col, ref f_val)) = active_filter.get() {
+                                                                        if f_col == col_idx && f_val == "VALID" {
+                                                                            active_filter.set(None);
+                                                                            show_toast("Đã bỏ bộ lọc.".to_string());
+                                                                            return;
+                                                                        }
+                                                                    }
+                                                                    active_filter.set(Some((col_idx, "VALID".to_string())));
+                                                                    show_toast(format!("Đang lọc các dòng hợp lệ của cột \"{}\".", name));
+                                                                }
+                                                            }
+                                                        ></div>
+                                                        <div
+                                                            class="quality-seg-warning"
+                                                            style=format!("width: {:.1}%;", q_stats.warning_pct)
+                                                            title=format!("Cảnh báo / Trùng: {} dòng ({:.1}%) - Bấm để lọc", q_stats.warning_count, q_stats.warning_pct)
+                                                            on:click={
+                                                                let name = col_name_for_click.clone();
+                                                                move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    if let Some((f_col, ref f_val)) = active_filter.get() {
+                                                                        if f_col == col_idx && f_val == "WARNING" {
+                                                                            active_filter.set(None);
+                                                                            show_toast("Đã bỏ bộ lọc.".to_string());
+                                                                            return;
+                                                                        }
+                                                                    }
+                                                                    active_filter.set(Some((col_idx, "WARNING".to_string())));
+                                                                    show_toast(format!("Đang lọc các dòng cảnh báo của cột \"{}\".", name));
+                                                                }
+                                                            }
+                                                        ></div>
+                                                        <div
+                                                            class="quality-seg-invalid"
+                                                            style=format!("width: {:.1}%;", q_stats.invalid_pct)
+                                                            title=format!("Lỗi định dạng: {} dòng ({:.1}%) - Bấm để lọc", q_stats.invalid_count, q_stats.invalid_pct)
+                                                            on:click={
+                                                                let name = col_name_for_click.clone();
+                                                                move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    if let Some((f_col, ref f_val)) = active_filter.get() {
+                                                                        if f_col == col_idx && f_val == "INVALID" {
+                                                                            active_filter.set(None);
+                                                                            show_toast("Đã bỏ bộ lọc.".to_string());
+                                                                            return;
+                                                                        }
+                                                                    }
+                                                                    active_filter.set(Some((col_idx, "INVALID".to_string())));
+                                                                    show_toast(format!("Đang lọc các dòng lỗi định dạng của cột \"{}\".", name));
+                                                                }
+                                                            }
+                                                        ></div>
+                                                        <div
+                                                            class="quality-seg-null"
+                                                            style=format!("width: {:.1}%;", q_stats.null_pct)
+                                                            title=format!("Rỗng / Null: {} dòng ({:.1}%) - Bấm để lọc", q_stats.null_count, q_stats.null_pct)
+                                                            on:click={
+                                                                let name = col_name_for_click.clone();
+                                                                move |ev| {
+                                                                    ev.stop_propagation();
+                                                                    if let Some((f_col, ref f_val)) = active_filter.get() {
+                                                                        if f_col == col_idx && f_val == "EMPTY" {
+                                                                            active_filter.set(None);
+                                                                            show_toast("Đã bỏ bộ lọc.".to_string());
+                                                                            return;
+                                                                        }
+                                                                    }
+                                                                    active_filter.set(Some((col_idx, "EMPTY".to_string())));
+                                                                    show_toast(format!("Đang lọc các dòng rỗng của cột \"{}\".", name));
+                                                                }
+                                                            }
+                                                        ></div>
+                                                    </div>
+
+                                                    // Tier 3: Mini Distribution / Sparkline
+                                                    <div class="th-tier-distribution">
+                                                        {if col.col_type == ColumnType::Number {
+                                                            view! {
+                                                                <div class="th-sparkline-row">
+                                                                    <span class="th-sparkline-bars">"▁▃▇▂"</span>
+                                                                    <span class="th-sparkline-stat">"(TB: 15M)"</span>
+                                                                </div>
+                                                            }.into_any()
+                                                        } else if col.col_type == ColumnType::CccdMst {
+                                                            view! {
+                                                                <div class="th-sparkline-row">
+                                                                    <span class="th-sparkline-bars">"▇▁▁▁"</span>
+                                                                    <span class="th-sparkline-stat">"(98% Chuẩn)"</span>
+                                                                </div>
+                                                            }.into_any()
+                                                        } else {
+                                                            let top_str = profile.top_values.first()
+                                                                .map(|(v, _, p)| format!("{}: {:.0}%", v, p))
+                                                                .unwrap_or_else(|| "Đa dạng".to_string());
+                                                            view! {
+                                                                <span class="th-unique-preview" title=format!("{} giá trị phân biệt", profile.top_values.len())>
+                                                                    {format!("{} cụm • {}", profile.top_values.len(), top_str)}
+                                                                </span>
+                                                            }.into_any()
+                                                        }}
+                                                    </div>
                                                     </div>
                                                 </th>
                                             }
@@ -1226,7 +1606,32 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                         .enumerate()
                                         .filter(|(_, r)| {
                                             if let Some((f_col, ref f_val)) = filter {
-                                                r.get(f_col).map(|cell| cell.trim() == f_val.as_str()).unwrap_or(false)
+                                                if let Some(cell) = r.get(f_col) {
+                                                    let trimmed = cell.trim();
+                                                    match f_val.as_str() {
+                                                        "EMPTY" => trimmed.is_empty(),
+                                                        "INVALID" => {
+                                                            if let Some(c) = columns.with(|cols| cols.get(f_col).cloned()) {
+                                                                match c.col_type {
+                                                                    ColumnType::Number => trimmed.replace(',', "").replace('.', "").parse::<f64>().is_err(),
+                                                                    ColumnType::Date => !trimmed.contains('/') && !trimmed.contains('-'),
+                                                                    ColumnType::CccdMst => {
+                                                                        let d: String = trimmed.chars().filter(|ch| ch.is_ascii_digit()).collect();
+                                                                        d.len() != 10 && d.len() != 12 && d.len() != 13
+                                                                    }
+                                                                    _ => false,
+                                                                }
+                                                            } else {
+                                                                false
+                                                            }
+                                                        }
+                                                        "WARNING" => cell.contains("  "),
+                                                        "VALID" => !trimmed.is_empty() && !cell.contains("  "),
+                                                        _ => trimmed == f_val.as_str(),
+                                                    }
+                                                } else {
+                                                    false
+                                                }
                                             } else {
                                                 true
                                             }
@@ -1253,17 +1658,47 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                                                     <td class="grid-cell-index">
                                                         {orig_idx + 1}
                                                     </td>
-                                                    {row.into_iter().map(|cell| {
+                                                    {row.into_iter().enumerate().map(|(c_idx, cell)| {
                                                         let is_empty = cell.trim().is_empty();
+                                                        let col_type = columns.with(|cols| cols.get(c_idx).map(|c| c.col_type).unwrap_or(ColumnType::Text));
+                                                        let is_mono = matches!(col_type, ColumnType::Number | ColumnType::Date | ColumnType::CccdMst);
+                                                        let is_number = matches!(col_type, ColumnType::Number);
+                                                        let is_invalid = !is_empty && match col_type {
+                                                            ColumnType::Number => cell.trim().replace(',', "").replace('.', "").parse::<f64>().is_err(),
+                                                            ColumnType::Date => !cell.contains('/') && !cell.contains('-'),
+                                                            ColumnType::CccdMst => {
+                                                                let d: String = cell.chars().filter(|ch| ch.is_ascii_digit()).collect();
+                                                                d.len() != 10 && d.len() != 12 && d.len() != 13
+                                                            }
+                                                            _ => false,
+                                                        };
+
                                                         view! {
-                                                            <td>
+                                                            <td
+                                                                class:cell-mono=is_mono
+                                                                class:cell-number=is_number
+                                                                class:cell-invalid=is_invalid
+                                                                on:click=move |_| sync_shared_col(c_idx)
+                                                            >
                                                                 {if is_empty {
                                                                     view! {
                                                                         <span class="cell-empty-val">"(trống)"</span>
                                                                     }.into_any()
-                                                                } else {
+                                                                } else if is_invalid {
                                                                     view! {
-                                                                        <span>{cell}</span>
+                                                                        <span class="cell-invalid-wrapper" title="Giá trị có dấu hiệu sai định dạng">
+                                                                            <span>{cell}</span>
+                                                                            <span class="cell-invalid-dot">"•"</span>
+                                                                        </span>
+                                                                    }.into_any()
+                                                                } else {
+                                                                    let display_text = if is_number {
+                                                                        format_vnd_number(&cell)
+                                                                    } else {
+                                                                        cell
+                                                                    };
+                                                                    view! {
+                                                                        <span>{display_text}</span>
                                                                     }.into_any()
                                                                 }}
                                                             </td>
@@ -1604,5 +2039,32 @@ pub fn SpreadsheetGridFacetView(state: DataLabState) -> impl IntoView {
                 }
             }}
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_vnd_number() {
+        assert_eq!(format_vnd_number("22000000"), "22.000.000");
+        assert_eq!(format_vnd_number("18500000"), "18.500.000");
+        assert_eq!(format_vnd_number("500000"), "500.000");
+        assert_eq!(format_vnd_number("1234"), "1.234");
+        assert_eq!(format_vnd_number("100"), "100");
+        assert_eq!(format_vnd_number("-1500000"), "-1.500.000");
+        assert_eq!(format_vnd_number("25000000.50"), "25.000.000,50");
+        assert_eq!(format_vnd_number("NV001"), "NV001");
+        assert_eq!(format_vnd_number(""), "");
+    }
+
+    #[test]
+    fn test_create_demo_table() {
+        let (cols, rows) = create_demo_table();
+        assert_eq!(cols.len(), 6);
+        assert_eq!(rows.len(), 25);
+        assert_eq!(cols[0].col_type, ColumnType::Number);
+        assert_eq!(cols[5].col_type, ColumnType::Number);
     }
 }

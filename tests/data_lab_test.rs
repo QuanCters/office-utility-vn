@@ -647,3 +647,69 @@ fn test_spreadsheet_grid_recipe_step_json_roundtrip() {
 
     assert_eq!(steps, deserialized);
 }
+
+// ==============================================================================
+// DATA LAB v2.0 NEW COMPONENTS & DATA MODELS TESTS
+// ==============================================================================
+
+#[test]
+fn test_data_lab_v2_workspace_modes() {
+    use office_utility_vn_ui::micro_apps::data_lab::command_bar::DataLabWorkspaceMode;
+
+    let default_mode = DataLabWorkspaceMode::default();
+    assert_eq!(default_mode, DataLabWorkspaceMode::TableClean);
+    assert_eq!(default_mode.label(), "⊞ Bảng & Làm sạch");
+
+    assert_eq!(DataLabWorkspaceMode::VisualReconcile.label(), "☍ Đối soát & So sánh");
+    assert_eq!(DataLabWorkspaceMode::TextCodecs.label(), "⇄ Văn bản & Chuyển mã");
+}
+
+#[test]
+fn test_data_lab_v2_drawer_tabs() {
+    use office_utility_vn_ui::micro_apps::data_lab::drawer::DrawerTab;
+
+    let default_tab = DrawerTab::default();
+    assert_eq!(default_tab, DrawerTab::WorkflowDag);
+    assert_ne!(default_tab, DrawerTab::SqlScratchpad);
+}
+
+#[test]
+fn test_data_lab_v2_recipe_step_display() {
+    use office_utility_vn_ui::micro_apps::data_lab::inspector::RecipeStepDisplay;
+
+    let step = RecipeStepDisplay::new(1, "Nạp dữ liệu", "50k dòng");
+    assert_eq!(step.id, 1);
+    assert_eq!(step.title, "Nạp dữ liệu");
+    assert_eq!(step.diff_badge, "50k dòng");
+    assert!(step.is_enabled);
+
+    let demo_steps = RecipeStepDisplay::demo_steps();
+    assert_eq!(demo_steps.len(), 4);
+    assert_eq!(demo_steps[0].title, "1. Nạp SaoKe_T10.xlsx");
+    assert_eq!(demo_steps[1].diff_badge, "✨ 142 ô");
+    assert_eq!(demo_steps[2].diff_badge, "-38 trùng");
+    assert_eq!(demo_steps[3].diff_badge, "+2 cột");
+}
+
+#[test]
+fn test_data_lab_v2_reconcile_discrepancy_tabs() {
+    use office_utility_vn_ui::micro_apps::data_lab::reconcile_workbench::ReconcileDiscrepancyTab;
+
+    let default_tab = ReconcileDiscrepancyTab::default();
+    assert_eq!(default_tab, ReconcileDiscrepancyTab::MoneyDiff);
+    assert_ne!(default_tab, ReconcileDiscrepancyTab::Matched);
+    assert_ne!(default_tab, ReconcileDiscrepancyTab::OnlySourceA);
+    assert_ne!(default_tab, ReconcileDiscrepancyTab::OnlySourceB);
+}
+
+#[test]
+fn test_data_lab_v2_column_type_variants() {
+    use office_utility_vn_ui::micro_apps::data_lab::spreadsheet_grid_view::ColumnType;
+
+    assert_eq!(ColumnType::Text.icon(), "ABC");
+    assert_eq!(ColumnType::Number.icon(), "123");
+    assert_eq!(ColumnType::Date.icon(), "📅");
+    assert_eq!(ColumnType::CccdMst.icon(), "🪪");
+    assert_eq!(ColumnType::Address.icon(), "📍");
+    assert_eq!(ColumnType::Other.icon(), "⚡");
+}
