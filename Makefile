@@ -15,8 +15,9 @@ COLOR_BLUE    := \033[34m
 COLOR_MAGENTA := \033[35m
 
 .PHONY: help dev run dev-web build build-web build-debug check check-fast \
-        test test-fast test-engine test-e2e verify-spine verify-ui verify-pod \
-        clippy fmt fmt-check bench setup setup-hooks clean kill-dev
+        test test-fast test-engine test-e2e test-integration verify-spine verify-ui verify-pod \
+        clippy fmt fmt-check bench setup setup-hooks clean clean-cache kill-dev \
+        cache-report clean-cache-dry-run
 
 ##@ 🚀 Chạy ứng dụng (Development)
 
@@ -78,6 +79,10 @@ test-e2e: ## Chạy toàn bộ bộ kiểm thử đầu cuối E2E (Tiers 1-4, 5
 	@echo -e "$(COLOR_MAGENTA)🚀 Khởi chạy trọn bộ E2E 4 Tiers...$(COLOR_RESET)"
 	./scripts/run_e2e_tests.sh
 
+test-integration: ## Chạy bộ kiểm thử tích hợp hợp nhất (162 tests)
+	@echo -e "$(COLOR_MAGENTA)🧪 Chạy bộ test tích hợp hợp nhất...$(COLOR_RESET)"
+	cargo test -p office-utility-vn-ui --test integration_tests
+
 bench: ## Chạy benchmark hiệu năng (performance_benchmarks)
 	@echo -e "$(COLOR_YELLOW)⏱️ Chạy benchmark hiệu năng...$(COLOR_RESET)"
 	cargo bench --bench performance_benchmarks
@@ -132,6 +137,15 @@ setup: ## Kiểm tra và cài đặt công cụ phát triển cần thiết (was
 setup-hooks: ## Cài đặt Git Pre-Commit Hook tự động (make verify-ui + verify_spine_lock.sh)
 	@echo -e "$(COLOR_CYAN)🪝 Đang cấu hình Git Pre-Commit Hook...$(COLOR_RESET)"
 	./scripts/install_git_hooks.sh
+
+cache-report: ## Báo cáo chi tiết dung lượng cache và phân bổ target
+	@./scripts/inspect_build_cache.sh
+
+clean-cache-dry-run: ## Chạy thử nghiệm giả lập (dry-run) dọn dẹp cache không xóa file
+	@./scripts/inspect_build_cache.sh --dry-run
+
+clean-cache: ## Dọn dẹp an toàn target nội bộ và vendor cache, giữ nguyên thư viện ngoài (~27 GiB)
+	@./scripts/inspect_build_cache.sh --clean-safe
 
 clean: ## Dọn dẹp các thư mục build (dist, target, /tmp/cargo-target) & tiến trình dev
 	@echo -e "$(COLOR_YELLOW)🧹 Dọn dẹp thư mục build & tiến trình dev...$(COLOR_RESET)"
