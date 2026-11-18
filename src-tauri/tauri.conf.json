@@ -32,9 +32,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "resources": [
-      "../public/pdfcraft"
+    "targets": [
+      "nsis",
+      "msi",
+      "dmg",
+      "deb",
+      "appimage"
     ],
     "icon": [
       "icons/32x32.png",
