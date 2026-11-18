@@ -9,11 +9,21 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 DRY_RUN=false
 CLEAN_SAFE=false
-if [[ "${1:-}" == "--dry-run" ]] || [[ "${1:-}" == "-n" ]]; then
-  DRY_RUN=true
-elif [[ "${1:-}" == "--clean-safe" ]] || [[ "${1:-}" == "-c" ]]; then
-  CLEAN_SAFE=true
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run|-n)
+      DRY_RUN=true
+      shift
+      ;;
+    --clean-safe|-c)
+      CLEAN_SAFE=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 # ANSI Colors
 C_RESET="\033[0m"
@@ -109,7 +119,7 @@ DRY_RUN_SHR=$(cargo clean -p office-shared --dry-run 2>&1 | grep -E "Summary" | 
 DRY_RUN_TAU=$(cargo clean -p office-utility-vn --dry-run 2>&1 | grep -E "Summary" | sed 's/^[ \t]*//' || echo "N/A")
 
 echo "  - Toàn bộ workspace main      : ${DRY_RUN_MAIN}"
-echo "  - Gói UI (kèm 12 test targets): ${DRY_RUN_UI}"
+echo "  - Gói UI (kèm integration_tests & e2e): ${DRY_RUN_UI}"
 echo "  - Gói office-engine            : ${DRY_RUN_ENG}"
 echo "  - Gói office-shared            : ${DRY_RUN_SHR}"
 echo "  - Gói src-tauri                : ${DRY_RUN_TAU}"
@@ -144,36 +154,51 @@ echo -e "${C_BOLD}${C_CYAN}=====================================================
 
 if [[ "$CLEAN_SAFE" == true ]]; then
   echo ""
-  echo -e "${C_BOLD}${C_GREEN}🚀 Đang thực hiện dọn dẹp cache an toàn (--clean-safe)...${C_RESET}"
-  
-  if [[ -d "${ROOT_DIR}/vendor/pdfcraft/target" ]]; then
-    echo -e "  • Xóa vendor/pdfcraft/target..."
-    rm -rf "${ROOT_DIR}/vendor/pdfcraft/target"
+  if [[ "$DRY_RUN" == true ]]; then
+    echo -e "${C_BOLD}${C_YELLOW}🧪 [DRY-RUN GIẢ LẬP] Dọn dẹp cache an toàn (--clean-safe --dry-run):${C_RESET}"
+    if [[ -d "${ROOT_DIR}/vendor/pdfcraft/target" ]]; then
+      echo -e "  • Sẽ xóa vendor/pdfcraft/target (${C_CYAN}$(format_bytes "$B_PDF")${C_RESET})"
+    fi
+    if [[ -d "${ROOT_DIR}/vendor/gridcraft/target" ]]; then
+      echo -e "  • Sẽ xóa vendor/gridcraft/target (${C_CYAN}$(format_bytes "$B_GRID")${C_RESET})"
+    fi
+    echo -e "  • Sẽ dọn dẹp artifacts của 4 workspace crates: office-utility-vn-ui, office-engine, office-shared, office-utility-vn"
+    echo -e "  • Sẽ thu hồi target/debug/incremental (${C_CYAN}$(format_bytes "$B_INC")${C_RESET})"
+    ESTIMATED_RECLAIM=$(( B_PDF + B_GRID + B_INC ))
+    echo ""
+    echo -e "${C_BOLD}${C_YELLOW}💡 Dự kiến giải phóng an toàn ít nhất: ~$(format_bytes "$ESTIMATED_RECLAIM") (cộng thêm các build binaries nội bộ).${C_RESET}"
+  else
+    echo -e "${C_BOLD}${C_GREEN}🚀 Đang thực hiện dọn dẹp cache an toàn (--clean-safe)...${C_RESET}"
+    
+    if [[ -d "${ROOT_DIR}/vendor/pdfcraft/target" ]]; then
+      echo -e "  • Xóa vendor/pdfcraft/target..."
+      rm -rf "${ROOT_DIR}/vendor/pdfcraft/target"
+    fi
+    if [[ -d "${ROOT_DIR}/vendor/gridcraft/target" ]]; then
+      echo -e "  • Xóa vendor/gridcraft/target..."
+      rm -rf "${ROOT_DIR}/vendor/gridcraft/target"
+    fi
+
+    echo -e "  • Thu hồi build cache cục bộ cho workspace packages qua Cargo..."
+    cargo clean -p office-utility-vn-ui -p office-engine -p office-shared -p office-utility-vn 2>/dev/null || true
+
+    if [[ -d "${TARGET_MAIN}/debug/incremental" ]]; then
+      echo -e "  • Thu hồi bộ nhớ đệm incremental cũ..."
+      rm -rf "${TARGET_MAIN}/debug/incremental"/* 2>/dev/null || true
+    fi
+
+    B_MAIN_AFTER=$(get_size_bytes "$TARGET_MAIN")
+    B_PDF_AFTER=$(get_size_bytes "$TARGET_PDF")
+    B_GRID_AFTER=$(get_size_bytes "$TARGET_GRID")
+    B_TOTAL_AFTER=$(( B_MAIN_AFTER + B_PDF_AFTER + B_GRID_AFTER ))
+    RECLAIMED=$(( B_TOTAL - B_TOTAL_AFTER ))
+    if (( RECLAIMED < 0 )); then RECLAIMED=0; fi
+
+    echo ""
+    echo -e "${C_BOLD}${C_GREEN}========================================================================${C_RESET}"
+    echo -e "${C_BOLD}${C_GREEN}🎉 THU HỒI DUNG LƯỢNG AN TOÀN THÀNH CÔNG!${C_RESET}"
+    echo -e "   - Dung lượng giải phóng : ${C_BOLD}$(format_bytes "$RECLAIMED")${C_RESET}"
+    echo -e "   - Dung lượng còn lại    : ${C_BOLD}$(format_bytes "$B_TOTAL_AFTER")${C_RESET} (giữ nguyên thư viện ngoài)"
+    echo -e "${C_BOLD}${C_GREEN}========================================================================${C_RESET}"
   fi
-  if [[ -d "${ROOT_DIR}/vendor/gridcraft/target" ]]; then
-    echo -e "  • Xóa vendor/gridcraft/target..."
-    rm -rf "${ROOT_DIR}/vendor/gridcraft/target"
-  fi
-
-  echo -e "  • Thu hồi build cache cục bộ cho workspace packages qua Cargo..."
-  cargo clean -p office-utility-vn-ui -p office-engine -p office-shared -p office-utility-vn 2>/dev/null || true
-
-  if [[ -d "${TARGET_MAIN}/debug/incremental" ]]; then
-    echo -e "  • Thu hồi bộ nhớ đệm incremental cũ..."
-    rm -rf "${TARGET_MAIN}/debug/incremental"/* 2>/dev/null || true
-  fi
-
-  B_MAIN_AFTER=$(get_size_bytes "$TARGET_MAIN")
-  B_PDF_AFTER=$(get_size_bytes "$TARGET_PDF")
-  B_GRID_AFTER=$(get_size_bytes "$TARGET_GRID")
-  B_TOTAL_AFTER=$(( B_MAIN_AFTER + B_PDF_AFTER + B_GRID_AFTER ))
-  RECLAIMED=$(( B_TOTAL - B_TOTAL_AFTER ))
-  if (( RECLAIMED < 0 )); then RECLAIMED=0; fi
-
-  echo ""
-  echo -e "${C_BOLD}${C_GREEN}========================================================================${C_RESET}"
-  echo -e "${C_BOLD}${C_GREEN}🎉 THU HỒI DUNG LƯỢNG AN TOÀN THÀNH CÔNG!${C_RESET}"
-  echo -e "   - Dung lượng giải phóng : ${C_BOLD}$(format_bytes "$RECLAIMED")${C_RESET}"
-  echo -e "   - Dung lượng còn lại    : ${C_BOLD}$(format_bytes "$B_TOTAL_AFTER")${C_RESET} (giữ nguyên thư viện ngoài)"
-  echo -e "${C_BOLD}${C_GREEN}========================================================================${C_RESET}"
 fi

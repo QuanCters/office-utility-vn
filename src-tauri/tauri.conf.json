@@ -36,6 +36,7 @@
       "nsis",
       "msi",
       "dmg",
+      "app",
       "deb",
       "appimage"
     ],
