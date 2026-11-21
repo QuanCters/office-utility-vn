@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use crate::launcher::CommandPalette;
+use crate::micro_apps::data_lab::canvas_frame::GridCraftCanvasFrame;
 use crate::micro_apps::data_lab::command_bar::{DataLabCommandBar, DataLabWorkspaceMode};
 use crate::micro_apps::data_lab::drawer::{DataLabDrawer, DrawerTab};
 use crate::micro_apps::data_lab::explorer::DataLabExplorer;
@@ -332,38 +333,44 @@ pub fn DataLabLayout(
                             } else {
                                 match current_mode.get() {
                                     DataLabWorkspaceMode::TableClean => {
-                                        // Kiểm tra nếu người dùng chọn công cụ riêng biệt từ Palette
-                                        let active_slug = state.active_tool.get();
-                                        match active_slug.as_str() {
-                                            "excel-cleaner-normalizer" | "data-profiler" | "fuzzy-clustering" | "recipe-replay" => {
-                                                view! {
-                                                    <SpreadsheetGridFacetView
-                                                        state=state
-                                                        shared_selected_col=selected_col_idx
-                                                        shared_col_name=selected_col_name
-                                                        shared_col_type=selected_col_type
-                                                        external_action=external_action
-                                                    />
-                                                }.into_any()
-                                            }
-                                            "excel-split-by-column" => view! { <ExcelSplitByColumnView /> }.into_any(),
-                                            "excel-multi-merger" => view! { <ExcelMultiMergerView /> }.into_any(),
-                                            "excel-visual-joiner" => view! { <ExcelVisualJoinerView /> }.into_any(),
-                                            "excel-sheet-unlocker" => view! { <ExcelSheetUnlockerView /> }.into_any(),
-                                            "docx-template-mailmerge" => view! { <DocxTemplateMailmergeView /> }.into_any(),
-                                            "universal-file-converter-hub" | "universal-converter" => view! { <UniversalFileConverterHubView /> }.into_any(),
-                                            "list-set-operations" => view! { <ListSetOperationsView /> }.into_any(),
-                                            "text-pii-anonymizer" => view! { <TextPiiAnonymizerView /> }.into_any(),
-                                            _ => {
-                                                view! {
-                                                    <SpreadsheetGridFacetView
-                                                        state=state
-                                                        shared_selected_col=selected_col_idx
-                                                        shared_col_name=selected_col_name
-                                                        shared_col_type=selected_col_type
-                                                        external_action=external_action
-                                                    />
-                                                }.into_any()
+                                        if state.is_gridcraft_preview.get() {
+                                            view! {
+                                                <GridCraftCanvasFrame state=state />
+                                            }.into_any()
+                                        } else {
+                                            // Kiểm tra nếu người dùng chọn công cụ riêng biệt từ Palette
+                                            let active_slug = state.active_tool.get();
+                                            match active_slug.as_str() {
+                                                "excel-cleaner-normalizer" | "data-profiler" | "fuzzy-clustering" | "recipe-replay" => {
+                                                    view! {
+                                                        <SpreadsheetGridFacetView
+                                                            state=state
+                                                            shared_selected_col=selected_col_idx
+                                                            shared_col_name=selected_col_name
+                                                            shared_col_type=selected_col_type
+                                                            external_action=external_action
+                                                        />
+                                                    }.into_any()
+                                                }
+                                                "excel-split-by-column" => view! { <ExcelSplitByColumnView /> }.into_any(),
+                                                "excel-multi-merger" => view! { <ExcelMultiMergerView /> }.into_any(),
+                                                "excel-visual-joiner" => view! { <ExcelVisualJoinerView /> }.into_any(),
+                                                "excel-sheet-unlocker" => view! { <ExcelSheetUnlockerView /> }.into_any(),
+                                                "docx-template-mailmerge" => view! { <DocxTemplateMailmergeView /> }.into_any(),
+                                                "universal-file-converter-hub" | "universal-converter" => view! { <UniversalFileConverterHubView /> }.into_any(),
+                                                "list-set-operations" => view! { <ListSetOperationsView /> }.into_any(),
+                                                "text-pii-anonymizer" => view! { <TextPiiAnonymizerView /> }.into_any(),
+                                                _ => {
+                                                    view! {
+                                                        <SpreadsheetGridFacetView
+                                                            state=state
+                                                            shared_selected_col=selected_col_idx
+                                                            shared_col_name=selected_col_name
+                                                            shared_col_type=selected_col_type
+                                                            external_action=external_action
+                                                        />
+                                                    }.into_any()
+                                                }
                                             }
                                         }
                                     }

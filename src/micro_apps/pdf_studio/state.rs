@@ -128,6 +128,10 @@ pub struct PdfStudioState {
     pub is_canvas_ready: RwSignal<bool>,
     /// Cờ đánh dấu tài liệu đang có thay đổi chưa lưu (dirty state từ PDFCraft).
     pub has_unsaved_changes: RwSignal<bool>,
+    /// ID phiên tài liệu được ủy quyền an toàn (Native Document Session ID).
+    pub active_document_id: RwSignal<Option<String>>,
+    /// Số thứ tự revision hiện hành của tài liệu đã được cam kết ghi đĩa.
+    pub active_revision: RwSignal<u64>,
     /// Danh mục lọc hiện tại trên trang chủ PDF Studio Hub (None = Tất cả).
     pub hub_active_category: RwSignal<Option<PdfCategory>>,
 }
@@ -164,6 +168,8 @@ impl PdfStudioState {
             sidebar_collapsed: RwSignal::new(true),
             is_canvas_ready: RwSignal::new(false),
             has_unsaved_changes: RwSignal::new(false),
+            active_document_id: RwSignal::new(None),
+            active_revision: RwSignal::new(0),
             hub_active_category: RwSignal::new(None),
         }
     }
@@ -398,6 +404,22 @@ impl PdfStudioState {
         self.has_unsaved_changes.set(dirty);
     }
 
+    /// Lấy document ID được ủy quyền hiện tại.
+    pub fn active_document_id(&self) -> Option<String> {
+        self.active_document_id.get()
+    }
+
+    /// Lấy revision hiện tại của tài liệu.
+    pub fn active_revision(&self) -> u64 {
+        self.active_revision.get()
+    }
+
+    /// Cập nhật thông tin phiên tài liệu sau khi nạp hoặc lưu.
+    pub fn set_active_document_session(&self, doc_id: Option<String>, rev: u64) {
+        self.active_document_id.set(doc_id);
+        self.active_revision.set(rev);
+    }
+
     /// Xử lý cập nhật trạng thái phản ứng khi nhận thông điệp từ PDFCraft Bridge.
     pub fn handle_bridge_message(&self, message: &crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage) {
         match message {
@@ -409,8 +431,9 @@ impl PdfStudioState {
                 self.has_unsaved_changes.set(*dirty);
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Save { name, .. } => {
-                self.has_unsaved_changes.set(false);
-                self.status_message.set(format!("Đã lưu tệp {}", name));
+                // TUYỆT ĐỐI KHÔNG xóa has_unsaved_changes ở đây! (Gate 1 - Stage 4B-2B)
+                // has_unsaved_changes chỉ được chuyển sang false khi tác vụ lưu nhị phân thực sự thành công
+                self.status_message.set(format!("Đang xử lý yêu cầu lưu tệp {}...", name));
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Failed { error } => {
                 self.is_canvas_ready.set(false);

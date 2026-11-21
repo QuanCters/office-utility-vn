@@ -1,3 +1,4 @@
+pub mod canvas_frame;
 pub mod command_bar;
 pub mod drawer;
 pub mod explorer;
@@ -11,6 +12,7 @@ pub mod state;
 pub mod toolbar;
 pub mod visual_canvas_workflow;
 
+pub use canvas_frame::GridCraftCanvasFrame;
 pub use command_bar::{DataLabCommandBar, DataLabWorkspaceMode};
 pub use drawer::{DataLabDrawer, DrawerTab};
 pub use explorer::DataLabExplorer;

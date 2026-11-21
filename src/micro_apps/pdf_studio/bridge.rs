@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_arch = "wasm32")]
+use leptos::prelude::Set;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
@@ -41,6 +43,22 @@ pub enum IncomingBridgeMessage {
     Failed {
         error: String,
     },
+}
+
+/// Kết quả phản hồi minh thị cho hành động lưu tài liệu trong PDF Studio (Gate 1 - Stage 4B-2B).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SaveOutcome {
+    /// Đã lưu thành công bền vững xuống đĩa với đường dẫn và revision xác định
+    Saved {
+        dest_path: String,
+        committed_revision: u64,
+    },
+    /// Người dùng bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> Giữ nguyên dirty và session
+    Canceled,
+    /// Thao tác lưu thất bại có thông báo lỗi chi tiết -> Giữ nguyên dirty
+    Failed(String),
+    /// Kích hoạt tải về qua trình duyệt Web thuần túy (chỉ áp dụng khi không chạy trong Tauri)
+    BrowserDownloadInitiated,
 }
 
 impl IncomingBridgeMessage {
@@ -342,13 +360,52 @@ pub fn setup_bridge_listener(
                 b.dispatch_incoming(&msg);
             }
 
-            // Xử lý lưu tệp tự động nếu nhận được Save message
+            // Xử lý lưu tệp tự động nếu nhận được Save message (Gate 1 - Stage 4B-2B)
             if let IncomingBridgeMessage::Save { ref name, save_as, ref bytes } = msg {
                 let name_clone = name.clone();
                 let bytes_clone = bytes.clone();
                 let active_path = if !save_as { state.active_file_path() } else { None };
+                let doc_id = state.active_document_id();
+                let cur_rev = state.active_revision();
+                let s = state;
                 wasm_bindgen_futures::spawn_local(async move {
-                    let _ = save_file_to_disk_or_download(&name_clone, active_path.as_deref(), &bytes_clone).await;
+                    match save_file_to_disk_or_download(
+                        &name_clone,
+                        active_path.as_deref(),
+                        doc_id.as_deref(),
+                        cur_rev + 1,
+                        save_as,
+                        &bytes_clone,
+                    )
+                    .await
+                    {
+                        Ok(SaveOutcome::Saved { dest_path, committed_revision }) => {
+                            s.has_unsaved_changes.set(false);
+                            s.set_active_document_session(doc_id, committed_revision);
+                            if save_as || active_path.is_none() {
+                                s.add_file(&dest_path);
+                            }
+                            s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
+                        }
+                        Ok(SaveOutcome::Canceled) => {
+                            // Người dùng bấm Hủy -> Giữ nguyên dirty = true, không chuyển clean
+                            s.has_unsaved_changes.set(true);
+                            s.status_message.set("Đã hủy thao tác lưu tệp.".to_string());
+                        }
+                        Ok(SaveOutcome::Failed(err)) => {
+                            // Lưu thất bại -> Giữ nguyên dirty = true
+                            s.has_unsaved_changes.set(true);
+                            s.status_message.set(format!("❌ Lưu tệp thất bại: {err}"));
+                        }
+                        Ok(SaveOutcome::BrowserDownloadInitiated) => {
+                            s.has_unsaved_changes.set(false);
+                            s.status_message.set("Đã bắt đầu tải về qua trình duyệt.".to_string());
+                        }
+                        Err(err) => {
+                            s.has_unsaved_changes.set(true);
+                            s.status_message.set(format!("❌ Lỗi hệ thống: {err}"));
+                        }
+                    }
                 });
             }
         }
@@ -371,7 +428,56 @@ pub fn setup_bridge_listener(
     Ok(())
 }
 
-/// Đọc toàn bộ nội dung nhị phân của tệp (ưu tiên Tauri IPC, fallback web fetch).
+/// Nạp tệp PDF thông qua Native OS File Dialog có kiểm soát an ninh (Stage 4C-0D UAT Support).
+#[cfg(target_arch = "wasm32")]
+pub async fn open_file_into_pdf_studio(
+    iframe_id: &str,
+    state: crate::micro_apps::pdf_studio::state::PdfStudioState,
+) -> Result<(), String> {
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+        "appInstanceId": "pdf-studio-instance",
+        "sessionGeneration": 1,
+        "filterName": "Tài liệu PDF (*.pdf)",
+        "extensions": ["pdf"],
+    }))
+    .map_err(|e| format!("{e:?}"))?;
+
+    if let Ok(js_res) = invoke("native_dialog_open_file", args).await {
+        if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res) {
+            let doc_id = handle.get("document_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let file_path = handle.get("file_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let file_name = handle.get("file_name").and_then(|v| v.as_str()).unwrap_or("document.pdf").to_string();
+            let rev = handle.get("initial_revision").and_then(|v| v.as_u64()).unwrap_or(0);
+
+            let bytes_val = handle.get("bytes").cloned().unwrap_or(serde_json::Value::Null);
+            let bytes: Vec<u8> = serde_json::from_value(bytes_val).unwrap_or_default();
+
+            if !file_path.is_empty() {
+                state.add_file(&file_path);
+                state.set_active_document_session(doc_id, rev);
+                if !bytes.is_empty() {
+                    let _ = send_open_file(iframe_id, &file_name, &bytes);
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // Fallback nếu chạy trong môi trường web không có Tauri IPC
+    let _ = js_sys::eval("document.getElementById('pdf-studio-native-picker')?.click()");
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn open_file_into_pdf_studio(
+    _iframe_id: &str,
+    _state: crate::micro_apps::pdf_studio::state::PdfStudioState,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// Đọc nội dung nhị phân của tệp nội bộ (web fetch đối với /assets/... hoặc blob: URL).
+/// [BẢO MẬT STAGE 4C-0D CLOSURE]: Loại bỏ hoàn toàn lệnh gọi IPC 'read_file_binary' raw-path.
 #[cfg(target_arch = "wasm32")]
 pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
     // 0. Tuân thủ nghiêm ngặt NFR-SEC-01 (Zero-Cloud): Nghiêm cấm tải file từ URL http:// hoặc https://
@@ -379,21 +485,7 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
         return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
     }
 
-    // 1. Thử gọi qua Tauri IPC `read_file_binary`
-    let args = serde_wasm_bindgen::to_value(&serde_json::json!({
-        "filePath": file_path
-    }))
-    .map_err(|e| format!("{e:?}"))?;
-
-    if let Ok(js_val) = invoke("read_file_binary", args).await {
-        if let Ok(bytes) = serde_wasm_bindgen::from_value::<Vec<u8>>(js_val) {
-            if !bytes.is_empty() {
-                return Ok(bytes);
-            }
-        }
-    }
-
-    // 2. Thử fetch qua web nếu file_path là local path nội bộ (ví dụ: /assets/... hoặc blob:)
+    // 1. Fetch qua web nếu file_path là local web path nội bộ (ví dụ: /assets/... hoặc blob:)
     if file_path.starts_with('/') || file_path.starts_with("blob:") {
         if let Some(win) = web_sys::window() {
             if let Ok(resp_val) = wasm_bindgen_futures::JsFuture::from(win.fetch_with_str(file_path)).await {
@@ -420,32 +512,158 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
     std::fs::read(file_path).map_err(|e| format!("Không thể đọc tệp: {e}"))
 }
 
-/// Lưu nội dung nhị phân xuống đĩa (qua Tauri IPC) hoặc kích hoạt tải về qua trình duyệt.
+/// Kiểm tra môi trường thực thi có phải là Tauri Desktop hay không.
 #[cfg(target_arch = "wasm32")]
-pub async fn save_file_to_disk_or_download(name: &str, file_path: Option<&str>, bytes: &[u8]) -> Result<(), String> {
-    // 1. Nếu có file_path cụ thể, thử lưu qua Tauri command
-    if let Some(path) = file_path {
-        let args = serde_wasm_bindgen::to_value(&serde_json::json!({
-            "filePath": path,
-            "bytes": bytes,
-        }))
-        .map_err(|e| format!("{e:?}"))?;
-
-        if invoke("save_file_binary", args).await.is_ok() {
-            return Ok(());
+pub fn is_tauri_runtime() -> bool {
+    if let Some(win) = web_sys::window() {
+        if let Ok(tauri_val) = js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__")) {
+            return !tauri_val.is_undefined() && !tauri_val.is_null();
         }
     }
+    false
+}
 
-    // 2. Fallback: Kích hoạt tải về qua trình duyệt (Blob download)
-    trigger_browser_download(name, bytes)
+/// Lưu nội dung nhị phân xuống đĩa (qua Tauri IPC có thẩm quyền Native Dialog) hoặc kích hoạt tải về qua trình duyệt.
+#[cfg(target_arch = "wasm32")]
+pub async fn save_file_to_disk_or_download(
+    name: &str,
+    file_path: Option<&str>,
+    document_id: Option<&str>,
+    expected_rev: u64,
+    save_as: bool,
+    bytes: &[u8],
+) -> Result<SaveOutcome, String> {
+    if is_tauri_runtime() {
+        // Desktop Mode: TUYỆT ĐỐI KHÔNG FALLBACK VỀ TRÌNH DUYỆT
+
+        // 1. Nếu là Regular Save và đã có phiên tài liệu được ủy quyền
+        if !save_as && let (Some(_path), Some(doc_id)) = (file_path, document_id) {
+            let req_id = format!("pdf-save-{}", js_sys::Date::now() as u64);
+            let grant_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                "documentId": doc_id,
+                "appInstanceId": "pdf-studio-instance",
+                "sessionGeneration": 1,
+                "requestId": req_id,
+                "expectedRevision": expected_rev,
+            }))
+            .map_err(|e| format!("{e:?}"))?;
+
+            if let Ok(grant_val) = invoke("request_save_grant", grant_args).await {
+                if let Ok(grant) = serde_wasm_bindgen::from_value::<serde_json::Value>(grant_val) {
+                    if let (Some(grant_id), Some(req)) = (
+                        grant.get("grant_id").and_then(|v| v.as_str()),
+                        grant.get("request_id").and_then(|v| v.as_str()),
+                    ) {
+                        let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                            "grantId": grant_id,
+                            "requestId": req,
+                            "bytes": bytes,
+                        }))
+                        .map_err(|e| format!("{e:?}"))?;
+
+                        match invoke("secure_save_document", save_args).await {
+                            Ok(save_res) => {
+                                let (dest, rev) = if let Ok(resp) = serde_wasm_bindgen::from_value::<serde_json::Value>(save_res) {
+                                    (
+                                        resp.get("dest_path").and_then(|v| v.as_str()).unwrap_or(_path).to_string(),
+                                        resp.get("committed_revision").and_then(|v| v.as_u64()).unwrap_or(expected_rev),
+                                    )
+                                } else {
+                                    (_path.to_string(), expected_rev)
+                                };
+                                return Ok(SaveOutcome::Saved {
+                                    dest_path: dest,
+                                    committed_revision: rev,
+                                });
+                            }
+                            Err(e) => {
+                                return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
+                            }
+                        }
+                    }
+                }
+            }
+            // Nếu grant request thất bại (session chưa đăng ký), tự động chuyển xuống hộp thoại Save As
+        }
+
+        // 2. Luồng Save As (hoặc Lưu lần đầu chưa có phiên ủy quyền)
+        let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+            "documentId": document_id,
+            "appInstanceId": "pdf-studio-instance",
+            "sessionGeneration": 1,
+            "defaultName": name,
+            "filterName": "Tài liệu PDF (*.pdf)",
+            "extensions": ["pdf"],
+        }))
+        .unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+
+        match invoke("native_dialog_save_as", args).await {
+            Ok(js_res) => {
+                if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res) {
+                    if let Some(grant) = handle.get("grant") {
+                        if let (Some(grant_id), Some(req_id)) = (
+                            grant.get("grant_id").and_then(|v| v.as_str()),
+                            grant.get("request_id").and_then(|v| v.as_str()),
+                        ) {
+                            let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                                "grantId": grant_id,
+                                "requestId": req_id,
+                                "bytes": bytes,
+                            }))
+                            .map_err(|e| format!("{e:?}"))?;
+
+                            match invoke("secure_save_document", save_args).await {
+                                Ok(save_res) => {
+                                    let rev = if let Ok(resp) = serde_wasm_bindgen::from_value::<serde_json::Value>(save_res) {
+                                        resp.get("committed_revision").and_then(|v| v.as_u64()).unwrap_or(1)
+                                    } else {
+                                        1
+                                    };
+                                    let dest_path = handle.get("file_path").and_then(|v| v.as_str()).unwrap_or(name).to_string();
+                                    return Ok(SaveOutcome::Saved {
+                                        dest_path,
+                                        committed_revision: rev,
+                                    });
+                                }
+                                Err(e) => {
+                                    return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
+                                }
+                            }
+                        }
+                    }
+                    Ok(SaveOutcome::Failed("Cấu trúc phản hồi từ native dialog không hợp lệ".to_string()))
+                } else {
+                    // Người dùng chủ động bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> KHÔNG LƯU, GIỮ NGUYÊN DIRTY
+                    Ok(SaveOutcome::Canceled)
+                }
+            }
+            Err(e) => Ok(SaveOutcome::Failed(format!("Lỗi khi mở hộp thoại lưu tệp: {e:?}"))),
+        }
+    } else {
+        // Fallback: Chỉ kích hoạt tải về trình duyệt khi chạy trên Web thuần túy
+        trigger_browser_download(name, bytes)?;
+        Ok(SaveOutcome::BrowserDownloadInitiated)
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn save_file_to_disk_or_download(_name: &str, file_path: Option<&str>, bytes: &[u8]) -> Result<(), String> {
+pub async fn save_file_to_disk_or_download(
+    _name: &str,
+    file_path: Option<&str>,
+    _document_id: Option<&str>,
+    _expected_rev: u64,
+    _save_as: bool,
+    bytes: &[u8],
+) -> Result<SaveOutcome, String> {
     if let Some(path) = file_path {
         std::fs::write(path, bytes).map_err(|e| format!("Không thể ghi tệp: {e}"))?;
+        Ok(SaveOutcome::Saved {
+            dest_path: path.to_string(),
+            committed_revision: 1,
+        })
+    } else {
+        Ok(SaveOutcome::Canceled)
     }
-    Ok(())
 }
 
 /// Kích hoạt tải tệp về thông qua Blob URL trong trình duyệt.

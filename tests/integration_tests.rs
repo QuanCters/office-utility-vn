@@ -40,5 +40,11 @@ mod shared_ui_test;
 #[path = "task_executor_contract_test.rs"]
 mod task_executor_contract_test;
 
+#[path = "open_failure_test.rs"]
+mod open_failure_test;
+
+#[path = "window_lifecycle_test.rs"]
+mod window_lifecycle_test;
+
 #[path = "vn_office_test.rs"]
 mod vn_office_test;

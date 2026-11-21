@@ -8,10 +8,11 @@ use wasm_bindgen::prelude::*;
 
 use crate::launcher::LauncherView;
 use crate::micro_apps::{
-    tool_slug_to_micro_app, vn_office::VnLegalRegulations, DataLabApp, DataLabState,
-    MediaStudioApp, MediaStudioState, MicroAppId, PdfStudioApp, PdfStudioState, VnOfficeApp,
-    VnOfficeState,
+    gridcraft::GridCraftState, tool_slug_to_micro_app, vn_office::VnLegalRegulations, DataLabApp,
+    DataLabState, MediaStudioApp, MediaStudioState, MicroAppId, PdfStudioApp, PdfStudioState,
+    VnOfficeApp, VnOfficeState,
 };
+use crate::platform::window_close::{WindowCloseDecision, WindowCloseManager};
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
@@ -483,9 +484,11 @@ struct AlwaysOnTopArgs {
 pub enum AppView {
     Launcher,
     MicroApp(MicroAppId),
+    #[cfg(debug_assertions)]
+    GridCraftDev,
 }
 
-/// Trạng thái toàn cục kết nối 4 Micro-Apps độc lập với Launcher trung tâm.
+/// Trạng thái toàn cục kết nối các Micro-Apps độc lập với Launcher trung tâm.
 #[derive(Clone, Copy, Debug)]
 pub struct AppState {
     pub current_view: RwSignal<AppView>,
@@ -494,6 +497,7 @@ pub struct AppState {
     pub pdf_studio_state: PdfStudioState,
     pub media_studio_state: MediaStudioState,
     pub data_lab_state: DataLabState,
+    pub gridcraft_state: GridCraftState,
 }
 
 impl Default for AppState {
@@ -505,6 +509,7 @@ impl Default for AppState {
             pdf_studio_state: PdfStudioState::default(),
             media_studio_state: MediaStudioState::default(),
             data_lab_state: DataLabState::default(),
+            gridcraft_state: GridCraftState::new(),
         }
     }
 }
@@ -512,6 +517,70 @@ impl Default for AppState {
 impl AppState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Kiểm tra xem ứng dụng có bất kỳ tài liệu nào chưa lưu hoặc tác vụ đang chạy dở dang hay không.
+    pub fn has_unsaved_work_or_running_task(&self) -> bool {
+        // 1. GridCraft dirty state
+        if self.gridcraft_state.is_dirty.get_untracked() {
+            return true;
+        }
+        // 2. PDF Studio unsaved changes hoặc đang chạy
+        if self.pdf_studio_state.has_unsaved_changes.get_untracked()
+            || self.pdf_studio_state.is_running.get_untracked()
+        {
+            return true;
+        }
+        // 3. Data Lab có tệp mở hoặc đang chạy
+        if self.data_lab_state.has_files() || self.data_lab_state.is_running.get_untracked() {
+            return true;
+        }
+        // 4. VnOffice hoặc MediaStudio đang chạy tác vụ
+        if self.vn_office_state.is_running.get_untracked()
+            || self.media_studio_state.is_running.get_untracked()
+            || self.media_studio_state.batch_items_count() > 0
+        {
+            return true;
+        }
+        false
+    }
+
+    /// Tóm tắt các tác vụ / dữ liệu chưa lưu thành chuỗi văn bản thân thiện với người dùng
+    pub fn unsaved_work_summary(&self) -> String {
+        let mut parts = Vec::new();
+        if self.gridcraft_state.is_dirty.get_untracked() {
+            let name = self
+                .gridcraft_state
+                .active_file_name
+                .get_untracked()
+                .unwrap_or_else(|| "Bảng tính GridCraft".to_string());
+            parts.push(format!("Bảng tính ({name})"));
+        }
+        if self.pdf_studio_state.has_unsaved_changes.get_untracked() {
+            parts.push("Tài liệu PDF Studio".to_string());
+        }
+        if self.pdf_studio_state.is_running.get_untracked() {
+            parts.push("Tác vụ xử lý PDF".to_string());
+        }
+        if self.data_lab_state.has_files() {
+            parts.push("Tệp dữ liệu Data Lab".to_string());
+        }
+        if self.data_lab_state.is_running.get_untracked() {
+            parts.push("Tác vụ phân tích Data Lab".to_string());
+        }
+        if self.vn_office_state.is_running.get_untracked() {
+            parts.push("Tác vụ tính toán Văn phòng VN".to_string());
+        }
+        if self.media_studio_state.is_running.get_untracked()
+            || self.media_studio_state.batch_items_count() > 0
+        {
+            parts.push("Tác vụ xử lý Media Studio".to_string());
+        }
+        if parts.is_empty() {
+            "Dữ liệu chưa lưu".to_string()
+        } else {
+            parts.join(", ")
+        }
     }
 
     /// Trả về AppView hiện tại (untracked).
@@ -531,6 +600,14 @@ impl AppState {
             self.pdf_studio_state.open_visual_workspace();
         }
         self.current_view.set(AppView::MicroApp(app_id));
+    }
+
+    /// Kích hoạt không gian làm việc thử nghiệm GridCraft (Stage 4A Development-Only Gate).
+    /// Hoàn toàn bị loại bỏ trong bản dựng Release.
+    #[cfg(debug_assertions)]
+    pub fn open_gridcraft_dev(&self) {
+        self.deep_link_tool.set(None);
+        self.navigate_to(MicroAppId::DataLab);
     }
 
     /// Kích hoạt deep-link trực tiếp đến một công cụ bên trong một Micro-App.
@@ -584,7 +661,9 @@ impl AppState {
                     || self.media_studio_state.has_files()
             }
             MicroAppId::DataLab => {
-                self.data_lab_state.is_running() || self.data_lab_state.has_files()
+                self.gridcraft_state.is_dirty.get_untracked()
+                    || self.data_lab_state.is_running()
+                    || self.data_lab_state.has_files()
             }
         }
     }
@@ -645,6 +724,19 @@ impl AppState {
 pub fn App() -> impl IntoView {
     let app_state = AppState::new();
     provide_context(app_state);
+
+    let close_manager = WindowCloseManager::new();
+    provide_context(close_manager);
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let unlisten_opt = crate::platform::window_close::register_window_close_listener(close_manager, app_state);
+        if let Some(unlisten) = unlisten_opt {
+            on_cleanup(move || {
+                unlisten.run();
+            });
+        }
+    }
 
     // Trạng thái cập nhật ứng dụng (Updater Lifecycle)
     let (update_modal_open, set_update_modal_open) = signal(false);
@@ -757,6 +849,12 @@ pub fn App() -> impl IntoView {
             let empty_args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap();
             let _ = invoke("close_window", empty_args).await;
         });
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let has_dirty = app_state.has_unsaved_work_or_running_task();
+            let summary = app_state.unsaved_work_summary();
+            close_manager.handle_native_close_requested("shell-close-req".into(), has_dirty, &summary);
+        }
     };
     let open_output_dir = move || {
         #[cfg(target_arch = "wasm32")]
@@ -814,6 +912,8 @@ pub fn App() -> impl IntoView {
                 <div class="titlebar-center" data-tauri-drag-region="true"></div>
 
                 <div class="titlebar-right">
+                    // [Stage 4C-1 Product Cutover]: Ẩn hoàn toàn nút dev điều hướng trùng lặp,
+                    // GridCraft nay đã là ứng dụng bảng tính mặc định trên Launcher.
                     <button
                         class=move || if is_always_on_top.get() { "pin-btn pinned" } else { "pin-btn" }
                         title=move || if is_always_on_top.get() { "Bỏ ghim cửa sổ (Ctrl+P)" } else { "Ghim cửa sổ trên cùng (Ctrl+P)" }
@@ -893,23 +993,58 @@ pub fn App() -> impl IntoView {
                         }
                     },
                     AppView::MicroApp(MicroAppId::DataLab) => {
-                        let deep = app_state.deep_link_tool.get_untracked();
-                        if let Some(slug) = deep {
-                            view! {
-                                <DataLabApp
-                                    state=app_state.data_lab_state
-                                    initial_tool=slug
-                                    on_back=move || app_state.back_to_launcher()
-                                />
-                            }.into_any()
+                        // [Stage 4C-1 Product Cutover]: GridCraft trở thành ứng dụng bảng tính mặc định.
+                        // Cơ chế Rollback có kiểm soát: nếu biến môi trường hoặc localStorage bật, cho phép trở về Legacy Data Lab.
+                        let rollback_to_legacy = {
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                web_sys::window()
+                                    .and_then(|w| w.local_storage().ok().flatten())
+                                    .and_then(|s| s.get_item("OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB").ok().flatten())
+                                    .map(|v| v == "true" || v == "1")
+                                    .unwrap_or(false)
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                std::env::var("OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB").is_ok()
+                            }
+                        };
+
+                        if rollback_to_legacy {
+                            let deep = app_state.deep_link_tool.get_untracked();
+                            if let Some(slug) = deep {
+                                view! {
+                                    <DataLabApp
+                                        state=app_state.data_lab_state
+                                        initial_tool=slug
+                                        on_back=move || app_state.back_to_launcher()
+                                    />
+                                }.into_any()
+                            } else {
+                                view! {
+                                    <DataLabApp
+                                        state=app_state.data_lab_state
+                                        on_back=move || app_state.back_to_launcher()
+                                    />
+                                }.into_any()
+                            }
                         } else {
                             view! {
-                                <DataLabApp
-                                    state=app_state.data_lab_state
+                                <crate::micro_apps::gridcraft::GridCraftApp
+                                    state=app_state.gridcraft_state
                                     on_back=move || app_state.back_to_launcher()
                                 />
                             }.into_any()
                         }
+                    },
+                    #[cfg(debug_assertions)]
+                    AppView::GridCraftDev => {
+                        view! {
+                            <crate::micro_apps::gridcraft::GridCraftApp
+                                state=app_state.gridcraft_state
+                                on_back=move || app_state.back_to_launcher()
+                            />
+                        }.into_any()
                     },
                 }}
             </main>
@@ -989,6 +1124,74 @@ pub fn App() -> impl IntoView {
                     }.into_any()
                 } else {
                     view! { <div></div> }.into_any()
+                }
+            }}
+
+            // Window Close Confirmation Dialog Modal (Stage 4C-0C)
+            {move || {
+                if close_manager.is_dialog_open.get() {
+                    let summary = close_manager.dirty_summary.get();
+                    let is_saving = close_manager.is_saving.get();
+                    let err_opt = close_manager.error_message.get();
+
+                    view! {
+                        <div
+                            class="modal-backdrop"
+                            style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; z-index: 100; -webkit-app-region: no-drag;"
+                        >
+                            <div
+                                class="modal-dialog"
+                                style="background: #18181B; border: 1px solid #3F3F46; border-radius: 8px; padding: 24px; max-width: 480px; width: 100%; color: #FAFAFA; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); font-family: sans-serif; -webkit-app-region: no-drag;"
+                            >
+                                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                                    <span>"⚠️"</span>
+                                    <span>"Thay đổi chưa được lưu"</span>
+                                </div>
+                                <p style="font-size: 13px; color: #A1A1AA; line-height: 1.5; margin-bottom: 12px;">
+                                    "Bạn có thay đổi chưa được lưu: "
+                                    <strong style="color: #FCD34D;">{summary}</strong>
+                                    ". Nếu đóng cửa sổ bây giờ, các thay đổi chưa lưu sẽ bị mất vĩnh viễn."
+                                </p>
+                                {if let Some(err) = err_opt {
+                                    view! {
+                                        <div style="font-size: 12px; color: #FCA5A5; background: rgba(239, 68, 68, 0.2); border: 1px solid #DC2626; border-radius: 4px; padding: 6px 10px; margin-bottom: 16px;">
+                                            {err}
+                                        </div>
+                                    }.into_any()
+                                } else {
+                                    ().into_any()
+                                }}
+                                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                                    <button
+                                        type="button"
+                                        style="background: #27272A; color: #FAFAFA; border: 1px solid #3F3F46; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; white-space: nowrap; -webkit-app-region: no-drag;"
+                                        on:click=move |_| close_manager.on_user_decision(WindowCloseDecision::Cancel, app_state)
+                                        disabled=is_saving
+                                    >
+                                        "Hủy (Cancel)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        style="background: #DC2626; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; -webkit-app-region: no-drag;"
+                                        on:click=move |_| close_manager.on_user_decision(WindowCloseDecision::Discard, app_state)
+                                        disabled=is_saving
+                                    >
+                                        "Không lưu (Don't Save)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        style="background: #059669; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; -webkit-app-region: no-drag;"
+                                        on:click=move |_| close_manager.on_user_decision(WindowCloseDecision::Save, app_state)
+                                        disabled=is_saving
+                                    >
+                                        {if is_saving { "Đang lưu..." } else { "Lưu & Thoát (Save)" }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }.into_any()
+                } else {
+                    ().into_any()
                 }
             }}
         </div>

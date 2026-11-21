@@ -123,6 +123,48 @@ pub fn DataLabCommandBar(
                         <span class="mode-text">"Văn bản & Chuyển mã"</span>
                     </button>
                 </div>
+
+                // Bộ chọn Chế độ Xem Bảng tính: Cổ điển (Mặc định) vs GridCraft Canvas Preview
+                {move || {
+                    if current_mode.get() == DataLabWorkspaceMode::TableClean {
+                        if let Some(s) = use_context::<crate::micro_apps::data_lab::state::DataLabState>() {
+                            view! {
+                                <div class="table-view-switcher" style="margin-left: 8px; display: flex; align-items: center; gap: 4px; background: rgba(15, 23, 42, 0.6); padding: 2px 4px; border-radius: 6px; border: 1px solid #334155;">
+                                    <button
+                                        type="button"
+                                        class="view-switch-btn"
+                                        style=move || if !s.is_gridcraft_preview.get() {
+                                            "background: #3B82F6; color: #FFFFFF; border: none; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;"
+                                        } else {
+                                            "background: transparent; color: #94A3B8; border: none; border-radius: 4px; padding: 2px 8px; font-size: 12px; cursor: pointer; white-space: nowrap;"
+                                        }
+                                        on:click=move |_| s.is_gridcraft_preview.set(false)
+                                        title="Bảng tính Cổ điển (Mặc định)"
+                                    >
+                                        "⊞ Cổ điển"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="view-switch-btn"
+                                        style=move || if s.is_gridcraft_preview.get() {
+                                            "background: #F59E0B; color: #0F172A; border: none; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                                        } else {
+                                            "background: transparent; color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; padding: 2px 8px; font-size: 12px; cursor: pointer; white-space: nowrap;"
+                                        }
+                                        on:click=move |_| s.is_gridcraft_preview.set(true)
+                                        title="Xem trước Thử nghiệm GridCraft Canvas WebAssembly (Security Gate Active)"
+                                    >
+                                        "🧪 GridCraft Preview"
+                                    </button>
+                                </div>
+                            }.into_any()
+                        } else {
+                            ().into_any()
+                        }
+                    } else {
+                        ().into_any()
+                    }
+                }}
             </div>
 
             // Nhóm 4: Nút Toggle Panel & Badge On-Device

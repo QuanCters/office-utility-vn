@@ -1,0 +1,152 @@
+name: Verification Harness - PR Gate (L0-L4)
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  init-evidence-ledger:
+    name: Init Evidence Ledger & L0 Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Initialize Evidence Ledger (HEAD, Checkout, Tree SHA)
+        run: |
+          python3 harness/runner/evidence.py --init-ledger
+
+      - name: L0.1 - Verify Protected Paths & Spine Lock
+        run: |
+          chmod +x scripts/verify_spine_lock.sh
+          ./scripts/verify_spine_lock.sh
+          python3 harness/runner/run.py --tier L0
+
+      - name: Upload Initial Ledger
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-ledger-init
+          path: harness/reports/evidence-manifest.json
+
+  l1-rust-static-checks:
+    name: L1 - Rust Static Checks (fmt, clippy, check)
+    runs-on: ubuntu-latest
+    needs: init-evidence-ledger
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Run L1 Script
+        run: |
+          chmod +x harness/ci/verify-core.sh
+          ./harness/ci/verify-core.sh --static-only
+
+  l2-unit-and-property-tests:
+    name: L2 - Unit & Property Tests
+    runs-on: ubuntu-latest
+    needs: l1-rust-static-checks
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Run Core Workspace Tests
+        run: |
+          chmod +x harness/ci/verify-core.sh
+          ./harness/ci/verify-core.sh --unit-only
+
+  l3-integration-and-fault-injection:
+    name: L3 - Integration & Fault Injection
+    runs-on: ubuntu-latest
+    needs: l2-unit-and-property-tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Run L3 Tauri Backend & Integration Tests
+        run: |
+          chmod +x harness/ci/verify-tauri.sh
+          ./harness/ci/verify-tauri.sh
+
+  l4-frontend-wasm-compile:
+    name: L4 - Frontend Leptos WASM Build
+    runs-on: ubuntu-latest
+    needs: l2-unit-and-property-tests
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust with WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Run L4 WASM Verification
+        run: |
+          chmod +x harness/ci/verify-wasm.sh
+          ./harness/ci/verify-wasm.sh
+
+  merge-gate-evaluation:
+    name: Deterministic Merge Gate Evaluator
+    runs-on: ubuntu-latest
+    needs: [init-evidence-ledger, l1-rust-static-checks, l2-unit-and-property-tests, l3-integration-and-fault-injection, l4-frontend-wasm-compile]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Evaluate Merge Gate Policy
+        run: |
+          python3 harness/runner/policy.py --evaluate-gate
+
+      - name: Upload Final Evidence Manifest Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-evidence-${{ github.sha }}
+          path: harness/reports/

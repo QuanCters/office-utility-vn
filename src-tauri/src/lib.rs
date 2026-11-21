@@ -2,10 +2,12 @@
 
 pub mod commands;
 pub mod db;
+pub mod safe_persistence;
 pub mod state;
+pub mod window_guard;
 
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -29,6 +31,29 @@ pub fn run() {
             };
 
             app.manage(AppState::new(conn));
+            app.manage(window_guard::WindowCloseGuard::new());
+
+            if std::env::var("OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB").is_ok() {
+                if let Some(main_win) = app.get_webview_window("main") {
+                    let _ = main_win.eval("localStorage.setItem('OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB', '1');");
+                }
+            } else if let Some(main_win) = app.get_webview_window("main") {
+                let _ = main_win.eval("localStorage.removeItem('OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB');");
+            }
+
+            #[cfg(debug_assertions)]
+            {
+                let fixture_path = std::path::Path::new("/tmp/office-utility-uat/tc04_sample.xlsx");
+                if fixture_path.exists() {
+                    let _ = safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.register_document_session(
+                        "doc-uat-04",
+                        "gridcraft-dev-instance",
+                        1,
+                        fixture_path,
+                        0,
+                    );
+                }
+            }
 
             // Cấu hình System Tray nếu được hỗ trợ
             #[cfg(desktop)]
@@ -40,6 +65,24 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let guard = window.app_handle().state::<window_guard::WindowCloseGuard>();
+                let allow = guard.should_allow_close();
+                if !allow {
+                    api.prevent_close();
+                    let (req_id, is_new) = guard.begin_close_request();
+                    if is_new {
+                        let _ = window.emit("native:close_requested", window_guard::CloseRequestedPayload {
+                            request_id: req_id.clone(),
+                        });
+                        let _ = window.app_handle().emit("native:close_requested", window_guard::CloseRequestedPayload {
+                            request_id: req_id,
+                        });
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             // 10 Lệnh tiêu chuẩn theo 04-database-api.md
@@ -63,9 +106,19 @@ pub fn run() {
             commands::toggle_maximize_window,
             commands::close_window,
             commands::open_output_folder,
-            // Lệnh đọc/ghi tệp nhị phân cho PDFCraft Bridge
+            // Lệnh đọc/ghi tệp nhị phân có kiểm soát an ninh (Stage 4B-2A / Stage 4C-0D Closure)
+            #[cfg(debug_assertions)]
             commands::read_file_binary,
+            #[cfg(debug_assertions)]
+            commands::load_dev_fixture,
             commands::save_file_binary,
+            commands::secure_save_document,
+            commands::native_dialog_open_file,
+            commands::native_dialog_save_as,
+            commands::request_save_grant,
+            // Lệnh bảo vệ đóng cửa sổ an toàn (Stage 4C-0B Task 5)
+            window_guard::authorize_window_close,
+            window_guard::cancel_window_close,
             // Lệnh cập nhật ứng dụng (Updater Lifecycle)
             commands::check_app_update,
             commands::install_app_update,

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskContract",
+  "description": "Hợp đồng định nghĩa nhiệm vụ (Task Contract) phân định phạm vi, yêu cầu kiểm thử và mức độ rủi ro",
+  "type": "object",
+  "required": [
+    "task_id",
+    "title",
+    "domain",
+    "author",
+    "risk_level",
+    "allowed_paths",
+    "required_verifications",
+    "invariants"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]+-[0-9]{3,}$",
+      "description": "Mã định danh nhiệm vụ (ví dụ: PDF-042, DATA-015)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 120
+    },
+    "domain": {
+      "type": "string",
+      "enum": [
+        "doc-suite",
+        "media-studio",
+        "data-lab",
+        "vn-office",
+        "sys-hub",
+        "platform-core",
+        "harness"
+      ]
+    },
+    "author": {
+      "type": "string",
+      "description": "Tên người tạo hoặc agent role thực hiện"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    },
+    "allowed_paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Danh sách các đường dẫn glob mà task này được phép chỉnh sửa"
+    },
+    "forbidden_paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Các đường dẫn bị cấm tuyệt đối chỉnh sửa trong task này"
+    },
+    "required_verifications": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["L0", "L1", "L2", "L3", "L4", "L5"]
+      },
+      "description": "Các tầng kiểm chứng bắt buộc phải vượt qua"
+    },
+    "invariants": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Danh sách các bất biến hệ thống liên quan trực tiếp cần bảo vệ"
+    },
+    "test_targets": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Danh sách các lệnh test hoặc file test cụ thể cần chạy"
+    }
+  },
+  "additionalProperties": false
+}

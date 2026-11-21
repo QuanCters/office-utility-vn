@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerificationFinding",
+  "description": "Schema định dạng chuẩn cho một phát hiện khi review hoặc audit của Verification Harness",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "severity",
+    "category",
+    "file",
+    "line_range",
+    "evidence",
+    "recommendation"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Z]{3,4}-[0-9]{3,}$",
+      "description": "Mã định danh phát hiện (ví dụ: SEC-001, CORR-012, PERF-003)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 150
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "CORRECTNESS",
+        "SECURITY",
+        "INTEGRATION",
+        "PERFORMANCE",
+        "CODE_STYLE"
+      ]
+    },
+    "file": {
+      "type": "string",
+      "description": "Đường dẫn tương đối tới file tính từ repo root"
+    },
+    "line_range": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[start_line, end_line]"
+    },
+    "evidence": {
+      "type": "string",
+      "description": "Đoạn code trích dẫn, log lỗi hoặc chứng minh vi phạm"
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "Hành động khắc phục cụ thể"
+    },
+    "invariant_impacted": {
+      "type": "string",
+      "description": "Tên bất biến hệ thống bị đe dọa (nếu có)"
+    }
+  },
+  "additionalProperties": false
+}

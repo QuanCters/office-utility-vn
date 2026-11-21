@@ -1,0 +1,65 @@
+# Protected Paths Policy
+# Danh sách đường dẫn được bảo vệ nghiêm ngặt chống agent tự sửa đổi vượt gate
+
+version: "1.0"
+
+protected_roots:
+  - path: "crates/office-shared/"
+    classification: "SPINE_LOCK"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Khung xương sống DTO và enum CommandError đã bị khóa bởi .spine-lock."
+
+  - path: "src-tauri/src/db/"
+    classification: "SPINE_LOCK"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Cấu trúc 4 bảng SQLite 3 WAL mode chuẩn đã khóa, cấm sửa đổi DDL."
+
+  - path: "src-tauri/src/commands/"
+    classification: "SPINE_LOCK"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "10 lệnh IPC cốt lõi đã niêm phong bảo vệ."
+
+  - path: "scripts/verify_spine_lock.sh"
+    classification: "VERIFICATION_GUARD"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Script kiểm định khóa Spine Lock cấm bị sửa đổi để che giấu vi phạm."
+
+  - path: "harness/policies/"
+    classification: "HARNESS_POLICY"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Agent đang làm feature không được tự ý sửa policy để feature của chính nó vượt gate."
+
+  - path: "harness/ci/"
+    classification: "HARNESS_CI"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Các kịch bản kiểm chứng CI của harness được bảo vệ độc lập."
+
+  - path: "harness/runner/"
+    classification: "HARNESS_RUNNER"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Trình chạy verification harness được bảo vệ độc lập."
+
+  - path: ".github/workflows/"
+    classification: "CI_WORKFLOW"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Quy trình CI GitHub Actions cấm agent tự sửa đổi."
+
+  - path: ".github/CODEOWNERS"
+    classification: "PERMISSIONS"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Quy định phân quyền CODEOWNERS."
+
+  - path: "vendor/"
+    classification: "PINNED_VENDOR"
+    owner: "@office-utility-vn/maintainers"
+    allowed_for_feature_agents: false
+    reason: "Mã nguồn bên thứ ba ghim chặt chẽ, thay đổi cần PR riêng duyệt bởi maintainer."

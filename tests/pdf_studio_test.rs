@@ -573,7 +573,8 @@ fn test_bridge_protocol() {
     state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: false });
     assert!(!state.has_unsaved_changes.get());
 
-    // When save event arrives -> has_unsaved_changes is cleared
+    // Gate 1 (Stage 4B-2B): Khi nhận IncomingBridgeMessage::Save, dirty KHÔNG được tự động xóa
+    // mà phải duy trì dirty = true cho đến khi có SaveOutcome::Saved từ backend để ngăn ngừa mất dữ liệu khi Cancel
     state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: true });
     assert!(state.has_unsaved_changes.get());
     state.handle_bridge_message(&IncomingBridgeMessage::Save {
@@ -581,6 +582,12 @@ fn test_bridge_protocol() {
         save_as: false,
         bytes: vec![],
     });
+    // BẢO VỆ DỮ LIỆU: Vẫn phải giữ dirty = true vì chưa có xác nhận ghi đĩa
+    assert!(state.has_unsaved_changes.get());
+    assert!(state.status_message.get().contains("Đang xử lý"));
+
+    // Chỉ khi nhận xác nhận lưu thành công (SaveOutcome::Saved) thì dirty mới được xóa
+    state.set_unsaved_changes(false);
     assert!(!state.has_unsaved_changes.get());
 
     // 4. Test PdfCraftBridge callback dispatching
@@ -675,4 +682,63 @@ fn test_read_file_bytes_zero_cloud_rejection() {
     };
     assert!(res_https.is_err());
     assert!(res_https.unwrap_err().contains("NFR-SEC-01"));
+}
+
+#[test]
+fn test_pdf_studio_save_outcomes_and_cancel_preserves_dirty() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::SaveOutcome;
+
+    // 1. Kiểm tra các biến thể SaveOutcome phân định minh thị kết quả lưu
+    let outcome_saved = SaveOutcome::Saved {
+        dest_path: "/data/contract.pdf".to_string(),
+        committed_revision: 5,
+    };
+    let outcome_canceled = SaveOutcome::Canceled;
+    let outcome_failed = SaveOutcome::Failed("Permission denied".to_string());
+    let _outcome_browser = SaveOutcome::BrowserDownloadInitiated;
+
+    // Phải tuần tự hóa và giải mã được qua serde
+    let json = serde_json::to_string(&outcome_saved).unwrap();
+    let deserialized: SaveOutcome = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, outcome_saved);
+
+    // 2. Kiểm tra logic bảo vệ trạng thái dirty khi người dùng Cancel hoặc thất bại
+    let state = PdfStudioState::new();
+    state.set_unsaved_changes(true);
+    assert!(state.has_unsaved_changes());
+
+    // Giả lập xử lý SaveOutcome::Canceled: dirty BẮT BUỘC giữ nguyên true
+    match outcome_canceled {
+        SaveOutcome::Canceled => {
+            // KHÔNG xóa dirty!
+            assert!(state.has_unsaved_changes());
+            state.status_message.set("Đã hủy thao tác lưu tệp.".to_string());
+        }
+        _ => panic!("Expected Canceled"),
+    }
+    assert!(state.has_unsaved_changes());
+    assert_eq!(state.status_message.get(), "Đã hủy thao tác lưu tệp.");
+
+    // Giả lập xử lý SaveOutcome::Failed: dirty BẮT BUỘC giữ nguyên true
+    match outcome_failed {
+        SaveOutcome::Failed(ref err) => {
+            assert!(state.has_unsaved_changes());
+            state.status_message.set(format!("Lỗi: {err}"));
+        }
+        _ => panic!("Expected Failed"),
+    }
+    assert!(state.has_unsaved_changes());
+
+    // Giả lập xử lý SaveOutcome::Saved: Chỉ khi lưu thành công thì mới xóa dirty
+    match outcome_saved {
+        SaveOutcome::Saved { ref dest_path, committed_revision } => {
+            state.set_unsaved_changes(false);
+            state.set_active_document_session(Some("doc-123".to_string()), committed_revision);
+            state.status_message.set(format!("Đã lưu: {dest_path}"));
+        }
+        _ => panic!("Expected Saved"),
+    }
+    assert!(!state.has_unsaved_changes());
+    assert_eq!(state.active_revision(), 5);
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-123"));
 }

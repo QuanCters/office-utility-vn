@@ -1,0 +1,37 @@
+# Task Contract: PDF-042
+# Mẫu Task Contract chuẩn mực cho tính năng PDF Object Re-indexing & Linear Flatten
+
+task_id: "PDF-042"
+title: "PDF Flatten & Object Re-indexing AST Engine"
+domain: "doc-suite"
+author: "pod-implementer"
+risk_level: "HIGH"
+
+allowed_paths:
+  - "crates/office-engine/src/doc_suite/**"
+  - "crates/office-engine/tests/doc_suite/**"
+  - "src/micro_apps/pdf_studio/**"
+
+forbidden_paths:
+  - "crates/office-shared/**"
+  - "src-tauri/src/db/**"
+  - "src-tauri/src/commands/**"
+  - "harness/policies/**"
+  - "vendor/**"
+
+required_verifications:
+  - "L0"
+  - "L1"
+  - "L2"
+  - "L3"
+
+invariants:
+  - "PDF/WebAssembly: Không làm hỏng byte đầu ra hoặc tài liệu nguồn (Byte Offset & XREF Precision)"
+  - "NativeSafePersistence: Ghi lỗi không làm hỏng tài liệu gốc"
+  - "HostDocumentCoordinator: Không ghi dữ liệu cũ đè lên state mới"
+  - "NFR-SEC-01: Zero Network Egress"
+  - "NFR-SEC-04: Xác thực Magic Bytes %PDF- trước khi xử lý"
+
+test_targets:
+  - "cargo test -p office-engine doc_suite"
+  - "cargo test -p office-utility-vn-ui --test pdf_studio_test"

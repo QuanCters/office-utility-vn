@@ -2,9 +2,19 @@
 /target/
 vendor/pdfcraft/target/
 vendor/pdfcraft/dist/
+vendor/gridcraft/target/
+vendor/gridcraft/dist/
+vendor/*/target/
+vendor/*/dist/
 .trunk-lock
 .superpowers/
 .worktrees/
 .playwright-mcp/
 .drafts/
+
+harness/reports/
+__pycache__/
+*.py[cod]
+*$py.class
+scratch/
 

@@ -1,0 +1,36 @@
+     Running BeforeDevCommand (`trunk serve`)
+2026-11-19T11:07:26.032822Z  INFO 🚀 Starting trunk 0.22.1
+2026-11-19T11:07:26.035193Z  INFO ⏫ Found an update of trunk: 0.22.1 -> 0.22.2
+2026-11-19T11:07:26.039012Z  INFO 📦 starting build
+2026-11-19T11:07:26.040191Z  INFO node packages []
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+        Warn Waiting for your frontend dev server to start on http://localhost:1420/...
+2026-11-19T11:07:33.709908Z  INFO applying new distribution
+2026-11-19T11:07:33.786066Z  INFO ✅ success
+2026-11-19T11:07:33.786166Z  INFO 📡 serving static assets at -> /
+2026-11-19T11:07:33.787296Z  INFO 📡 server listening at:
+2026-11-19T11:07:33.787329Z  INFO     🏠 http://127.0.0.1:1420/
+2026-11-19T11:07:33.787335Z  INFO     🏠 http://[::1]:1420/
+2026-11-19T11:07:33.787590Z  INFO     🏠 http://postgres.:1420/
+2026-11-19T11:07:33.787604Z  INFO     🏠 http://elasticsearch.:1420/
+2026-11-19T11:07:33.787609Z  INFO     🏠 http://clamav.:1420/
+2026-11-19T11:07:33.787612Z  INFO     🏠 http://tika.:1420/
+2026-11-19T11:07:33.787616Z  INFO     🏠 http://nginx.:1420/
+2026-11-19T11:07:33.787621Z  INFO     🏠 http://localhost.:1420/
+2026-11-19T11:07:33.787625Z  INFO     🏠 http://redis.:1420/
+2026-11-19T11:07:33.787628Z  INFO     🏠 http://mysql.:1420/
+2026-11-19T11:07:33.787632Z  INFO     🏠 http://minio.:1420/
+2026-11-19T11:07:33.787636Z  INFO     🏠 http://api.:1420/
+2026-11-19T11:07:33.787640Z  INFO     🏠 http://pgbouncer.:1420/
+2026-11-19T11:07:33.787644Z  INFO     🏠 http://seaweedfs.:1420/
+2026-11-19T11:07:33.787649Z  INFO     🏠 http://gotenberg.:1420/
+2026-11-19T11:07:33.787663Z  INFO     🏠 http://ip6-loopback.:1420/
+2026-11-19T11:07:33.787667Z  INFO     🏠 http://ip6-localhost.:1420/
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching /home/quan/workspace/tauri-v2/office-utility-vn/src-tauri for changes...
+        Info Watching /home/quan/workspace/tauri-v2/office-utility-vn/crates/office-engine for changes...
+        Info Watching /home/quan/workspace/tauri-v2/office-utility-vn/crates/office-shared for changes...
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+[1m[92m     Running[0m `/home/quan/workspace/tauri-v2/office-utility-vn/target/debug/office-utility-vn`
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
