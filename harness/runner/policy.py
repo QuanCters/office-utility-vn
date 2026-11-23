@@ -159,6 +159,21 @@ AUTHORIZED_SPINE_AMENDMENT_FILES = {
     "scripts/verify_spine_lock.sh",
 }
 
+# Danh mục tệp duy nhất thuộc Harness & CI được phép tu chính theo phê duyệt của maintainer
+AUTHORIZED_HARNESS_AMENDMENT_FILES = {
+    "harness/policies/quality-gates.yaml",
+    "harness/runner/evidence.py",
+    "harness/runner/policy.py",
+    "harness/runner/run.py",
+    "harness/ci/verify-core.sh",
+    "harness/ci/verify-tauri.sh",
+    "harness/ci/verify-wasm.sh",
+    "harness/ci/verify-native-e2e.sh",
+    ".github/workflows/verify-pr.yml",
+    ".github/workflows/native-e2e.yml",
+    ".github/workflows/release-gate.yml",
+}
+
 def check_protected_paths(repo_root: str) -> tuple[bool, list[str]]:
     """
     Kiểm tra các đường dẫn bất biến được bảo vệ (Protected Paths Guard).
@@ -217,11 +232,15 @@ def check_protected_paths(repo_root: str) -> tuple[bool, list[str]]:
         if is_vendor_gov:
             violations.append(f"Protected invariant path modification detected: '{f}' (guard: vendor/governance)")
 
-        # 3. Kiểm tra Harness & CI
+        # 3. Kiểm tra Harness & CI (Có phạm vi danh mục cụ thể được maintainer phê duyệt)
         is_harness_ci = any(f.startswith(p) or f == p for p in harness_and_ci)
         if is_harness_ci:
-            if not is_agent_feature_run and (allow_harness_amendment or allow_spine_amendment):
-                pass
+            if not is_agent_feature_run and allow_harness_amendment:
+                if f in AUTHORIZED_HARNESS_AMENDMENT_FILES:
+                    # Thuộc danh sách cho phép có phạm vi cụ thể của Harness
+                    pass
+                else:
+                    violations.append(f"Protected harness/CI path modification not authorized under amendment: '{f}'")
             else:
                 violations.append(f"Protected path modification detected: '{f}' (guard: harness/ci)")
 

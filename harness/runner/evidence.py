@@ -198,29 +198,80 @@ def aggregate_tier_results(repo_root: str) -> dict:
 
     tier_files.sort()
     failed_tiers = []
+    integrity_errors = []
+    seen_tiers = set()
+    valid_statuses = ["PASSED", "FAILED", "PENDING", "NOT_RUN", "SKIPPED"]
+
+    ledger_source = ledger.get("source", {})
+    ledger_head = ledger_source.get("head_sha", "")
+    ledger_base = ledger_source.get("base_sha", "")
+    ledger_tree = ledger_source.get("tree_sha", "")
 
     for tf in tier_files:
         try:
             with open(tf, "r", encoding="utf-8") as f:
                 tdata = json.load(f)
-            t_status = tdata.get("status", "NOT_RUN")
-            for chk_name, chk_status in tdata.get("checks", {}).items():
-                ledger["checks"][chk_name] = chk_status
-            if t_status == "FAILED":
-                failed_tiers.append(tdata.get("tier", os.path.basename(tf)))
-
-            meta = tdata.get("metadata", {})
-            if "risk_level" in meta:
-                ledger["risk_assessment"] = meta["risk_level"]
-            if "evidence_items" in meta:
-                for item in meta["evidence_items"]:
-                    append_evidence_item(ledger, item.get("name", "artifact"), item.get("type", "TEST_LOG"), item.get("path", ""))
-
-            append_evidence_item(ledger, os.path.basename(tf), "TIER_REPORT", tf)
         except Exception as e:
-            print(f"Warning: could not process tier file {tf}: {e}")
+            integrity_errors.append(f"Corrupt tier artifact {os.path.basename(tf)}: {e}")
+            continue
 
-    if failed_tiers:
+        tier_name = tdata.get("tier", os.path.basename(tf))
+        if tier_name in seen_tiers:
+            integrity_errors.append(f"Duplicate tier artifact detected: {tier_name}")
+            continue
+        seen_tiers.add(tier_name)
+
+        # Enforce source identity matching across all tier artifacts
+        t_source = tdata.get("source", {})
+        t_head = t_source.get("head_sha", "")
+        t_base = t_source.get("base_sha", "")
+        t_tree = t_source.get("tree_sha", "")
+
+        if not t_head or not t_base or not t_tree:
+            integrity_errors.append(f"Tier {tier_name} missing required source identity fields")
+            continue
+
+        if ledger_head and t_head != ledger_head:
+            integrity_errors.append(
+                f"Tier {tier_name} source mismatch (head_sha): expected {ledger_head[:8]}, got {t_head[:8]}"
+            )
+            continue
+
+        if ledger_base and t_base != ledger_base:
+            integrity_errors.append(
+                f"Tier {tier_name} source mismatch (base_sha): expected {ledger_base[:8]}, got {t_base[:8]}"
+            )
+            continue
+
+        if ledger_tree and t_tree != ledger_tree:
+            integrity_errors.append(
+                f"Tier {tier_name} source mismatch (tree_sha): expected {ledger_tree[:8]}, got {t_tree[:8]}"
+            )
+            continue
+
+        t_status = tdata.get("status", "NOT_RUN")
+        if t_status not in valid_statuses:
+            integrity_errors.append(f"Tier {tier_name} has invalid status '{t_status}'")
+            continue
+
+        for chk_name, chk_status in tdata.get("checks", {}).items():
+            ledger["checks"][chk_name] = chk_status
+        if t_status == "FAILED":
+            failed_tiers.append(tier_name)
+
+        meta = tdata.get("metadata", {})
+        if "risk_level" in meta:
+            ledger["risk_assessment"] = meta["risk_level"]
+        if "evidence_items" in meta:
+            for item in meta["evidence_items"]:
+                append_evidence_item(ledger, item.get("name", "artifact"), item.get("type", "TEST_LOG"), item.get("path", ""))
+
+        append_evidence_item(ledger, os.path.basename(tf), "TIER_REPORT", tf)
+
+    if integrity_errors:
+        ledger["decision"] = "FAIL"
+        ledger["decision_reason"] = f"Evidence ledger integrity check failed: {'; '.join(integrity_errors)}"
+    elif failed_tiers:
         ledger["decision"] = "FAIL"
         ledger["decision_reason"] = f"Verification checks failed in tiers: {', '.join(failed_tiers)}"
     else:
@@ -350,6 +401,31 @@ def validate_evidence_ledger(repo_root: str, ledger_path: str = None) -> tuple[b
     for chk_name, chk_val in ledger.get("checks", {}).items():
         if chk_val not in valid_check_states:
             errors.append(f"Invalid check state for '{chk_name}': '{chk_val}' (must be one of {valid_check_states})")
+
+    # 6. Validate TIER_REPORT evidence items (source identity & checksums)
+    seen_report_tiers = set()
+    for ev in ledger.get("evidence", []):
+        if ev.get("type") == "TIER_REPORT":
+            ev_name = ev.get("name", "")
+            if ev_name in seen_report_tiers:
+                errors.append(f"Duplicate tier report in evidence ledger: '{ev_name}'")
+            seen_report_tiers.add(ev_name)
+
+            ev_path = ev.get("path", "")
+            if os.path.isfile(ev_path):
+                actual_sha = get_file_sha256(ev_path)
+                if ev.get("sha256") and actual_sha != ev.get("sha256"):
+                    errors.append(f"Checksum mismatch for '{ev_name}': recorded {ev.get('sha256')[:8]}, computed {actual_sha[:8]}")
+
+                try:
+                    with open(ev_path, "r", encoding="utf-8") as tf_obj:
+                        tdata = json.load(tf_obj)
+                    t_src = tdata.get("source", {})
+                    for sk in ["head_sha", "base_sha", "tree_sha"]:
+                        if t_src.get(sk) and source.get(sk) and t_src.get(sk) != source.get(sk):
+                            errors.append(f"Source identity mismatch in '{ev_name}' for '{sk}': tier={t_src.get(sk)[:8]} vs ledger={source.get(sk)[:8]}")
+                except Exception as e:
+                    errors.append(f"Corrupt or unreadable tier report '{ev_name}': {e}")
 
     return (len(errors) == 0, errors)
 

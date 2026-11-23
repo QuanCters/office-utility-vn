@@ -200,5 +200,122 @@ class EvidenceLedgerIntegrityTests(unittest.TestCase):
         (dist_dir / "office_ui.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00fake_wasm_bytes")
         self.assertTrue(evidence.verify_artifacts(str(self.root)))
 
+    def test_tier_aggregation_fails_on_source_identity_head_mismatch(self):
+        """Tier artifact có head_sha khác với ledger gốc phải bị từ chối và fail-closed (Source Identity Enforcement)"""
+        ledger = evidence.create_evidence_ledger(str(self.root))
+        evidence.save_ledger(str(self.root), ledger)
+
+        # Ghi nhận tier L1 nhưng giả mạo head_sha khác
+        tier_path = evidence.record_tier_file(str(self.root), "L1", "PASSED")
+        with open(tier_path, "r", encoding="utf-8") as f:
+            tdata = json.load(f)
+        tdata["source"]["head_sha"] = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        with open(tier_path, "w", encoding="utf-8") as f:
+            json.dump(tdata, f)
+
+        manifest = evidence.aggregate_tier_results(str(self.root))
+        self.assertEqual(manifest["decision"], "FAIL")
+        self.assertIn("source mismatch (head_sha)", manifest["decision_reason"])
+
+    def test_tier_aggregation_fails_on_source_identity_tree_or_base_mismatch(self):
+        """Tier artifact có tree_sha hoặc base_sha sai lệch phải bị từ chối"""
+        ledger = evidence.create_evidence_ledger(str(self.root))
+        evidence.save_ledger(str(self.root), ledger)
+
+        # Ghi nhận tier L2 nhưng giả mạo tree_sha
+        tier_path = evidence.record_tier_file(str(self.root), "L2", "PASSED")
+        with open(tier_path, "r", encoding="utf-8") as f:
+            tdata = json.load(f)
+        tdata["source"]["tree_sha"] = "baadf00dbaadf00dbaadf00dbaadf00dbaadf00d"
+        with open(tier_path, "w", encoding="utf-8") as f:
+            json.dump(tdata, f)
+
+        manifest = evidence.aggregate_tier_results(str(self.root))
+        self.assertEqual(manifest["decision"], "FAIL")
+        self.assertIn("source mismatch (tree_sha)", manifest["decision_reason"])
+
+    def test_tier_aggregation_fails_on_corrupt_tier_json(self):
+        """File tier artifact bị hỏng format JSON phải kích hoạt FAIL trong aggregation"""
+        ledger = evidence.create_evidence_ledger(str(self.root))
+        evidence.save_ledger(str(self.root), ledger)
+
+        corrupt_path = self.root / "harness" / "reports" / "tier-l1.json"
+        corrupt_path.write_text("{ unparseable json corrupt content ...")
+
+        manifest = evidence.aggregate_tier_results(str(self.root))
+        self.assertEqual(manifest["decision"], "FAIL")
+        self.assertIn("Corrupt tier artifact", manifest["decision_reason"])
+
+    def test_tier_aggregation_fails_on_duplicate_tier_artifacts(self):
+        """Phát hiện 2 file artifact cùng báo cáo cho một tier (duplicate collision)"""
+        ledger = evidence.create_evidence_ledger(str(self.root))
+        evidence.save_ledger(str(self.root), ledger)
+
+        # Tạo file tier L1 chuẩn
+        evidence.record_tier_file(str(self.root), "L1", "PASSED")
+
+        # Tạo thêm file thứ hai cũng khai báo tier: L1
+        dup_path = self.root / "harness" / "reports" / "tier-l1-dup.json"
+        dup_data = {
+            "schema_version": 1,
+            "tier": "L1",
+            "status": "PASSED",
+            "checks": {"rust_static": "PASSED"},
+            "source": ledger["source"],
+            "timestamp_utc": "2026-11-23T00:00:00Z"
+        }
+        with open(dup_path, "w", encoding="utf-8") as f:
+            json.dump(dup_data, f)
+
+        manifest = evidence.aggregate_tier_results(str(self.root))
+        self.assertEqual(manifest["decision"], "FAIL")
+        self.assertIn("Duplicate tier artifact detected", manifest["decision_reason"])
+
+    def test_tier_aggregation_fails_on_invalid_status_enum(self):
+        """Trạng thái status không thuộc enum chuẩn phải bị từ chối"""
+        ledger = evidence.create_evidence_ledger(str(self.root))
+        evidence.save_ledger(str(self.root), ledger)
+
+        tier_path = self.root / "harness" / "reports" / "tier-l1.json"
+        bad_data = {
+            "schema_version": 1,
+            "tier": "L1",
+            "status": "ARBITRARY_NON_ENUM",
+            "checks": {"rust_static": "PASSED"},
+            "source": ledger["source"],
+            "timestamp_utc": "2026-11-23T00:00:00Z"
+        }
+        with open(tier_path, "w", encoding="utf-8") as f:
+            json.dump(bad_data, f)
+
+        manifest = evidence.aggregate_tier_results(str(self.root))
+        self.assertEqual(manifest["decision"], "FAIL")
+        self.assertIn("invalid status", manifest["decision_reason"])
+
+    def test_validate_evidence_ledger_detects_tier_report_tampering_and_mismatch(self):
+        """validate_evidence_ledger phát hiện checksum mismatch và source identity mismatch của tier artifact"""
+        ledger = evidence.create_evidence_ledger(str(self.root))
+        evidence.save_ledger(str(self.root), ledger)
+
+        # Ghi nhận tier hợp lệ
+        tier_path = evidence.record_tier_file(str(self.root), "L1", "PASSED")
+        manifest = evidence.aggregate_tier_results(str(self.root))
+
+        manifest_path = str(self.root / "harness" / "reports" / "evidence-manifest.json")
+        ok, errors = evidence.validate_evidence_ledger(str(self.root), manifest_path)
+        self.assertTrue(ok, f"Ban đầu phải hợp lệ: {errors}")
+
+        # Giả mạo nội dung file tier trên đĩa (thay đổi checksum và head_sha)
+        with open(tier_path, "r", encoding="utf-8") as f:
+            tdata = json.load(f)
+        tdata["source"]["head_sha"] = "1111111111111111111111111111111111111111"
+        with open(tier_path, "w", encoding="utf-8") as f:
+            json.dump(tdata, f)
+
+        # Validate lại phải phát hiện sai lệch checksum và head_sha
+        ok2, errors2 = evidence.validate_evidence_ledger(str(self.root), manifest_path)
+        self.assertFalse(ok2)
+        self.assertTrue(any("Checksum mismatch" in e or "Source identity mismatch" in e for e in errors2))
+
 if __name__ == "__main__":
     unittest.main()

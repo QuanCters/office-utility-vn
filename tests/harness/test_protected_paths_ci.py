@@ -140,5 +140,65 @@ class ProtectedPathsCiTests(unittest.TestCase):
                 self.assertFalse(ok)
                 self.assertTrue(any("Fail-closed" in v for v in violations))
 
+    def test_protected_paths_guard_allows_authorized_harness_amendment(self):
+        """Khi có cờ ALLOW_HARNESS_AMENDMENT=1, chỉ các tệp nằm trong danh mục AUTHORIZED_HARNESS_AMENDMENT_FILES mới được thông qua"""
+        approved_harness_files = [
+            "harness/runner/evidence.py",
+            "harness/ci/verify-core.sh",
+            ".github/workflows/verify-pr.yml",
+        ]
+        os.environ["ALLOW_HARNESS_AMENDMENT"] = "1"
+        try:
+            for h_file in approved_harness_files:
+                with patch.object(policy, "get_git_diff_files", return_value=[h_file]):
+                    ok, violations = policy.check_protected_paths(str(REPO_ROOT))
+                    self.assertTrue(ok, f"Tệp {h_file} trong danh mục cho phép phải được chấp thuận: {violations}")
+        finally:
+            os.environ.pop("ALLOW_HARNESS_AMENDMENT", None)
+
+    def test_protected_paths_guard_blocks_unauthorized_harness_amendment(self):
+        """Khi có cờ ALLOW_HARNESS_AMENDMENT=1, các tệp harness/CI ngoài danh mục phê duyệt BẮT BUỘC bị chặn"""
+        unauthorized_harness_files = [
+            "harness/runner/rogue_exploit.py",
+            ".github/workflows/malicious.yml",
+            "harness/ci/unapproved_script.sh",
+        ]
+        os.environ["ALLOW_HARNESS_AMENDMENT"] = "1"
+        try:
+            for u_file in unauthorized_harness_files:
+                with patch.object(policy, "get_git_diff_files", return_value=[u_file]):
+                    ok, violations = policy.check_protected_paths(str(REPO_ROOT))
+                    self.assertFalse(ok, f"Tệp {u_file} ngoài danh mục phê duyệt phải bị chặn")
+                    self.assertTrue(
+                        any(u_file in v for v in violations),
+                        f"Thông báo vi phạm phải chứa {u_file}: {violations}"
+                    )
+        finally:
+            os.environ.pop("ALLOW_HARNESS_AMENDMENT", None)
+
+    def test_spine_amendment_alone_does_not_permit_harness_modifications(self):
+        """Cờ ALLOW_SPINE_AMENDMENT=1 không bao giờ được phép dùng làm thẻ bài thông hành cho harness/CI"""
+        os.environ["ALLOW_SPINE_AMENDMENT"] = "1"
+        os.environ.pop("ALLOW_HARNESS_AMENDMENT", None)
+        try:
+            with patch.object(policy, "get_git_diff_files", return_value=["harness/runner/evidence.py"]):
+                ok, violations = policy.check_protected_paths(str(REPO_ROOT))
+                self.assertFalse(ok, "ALLOW_SPINE_AMENDMENT=1 không được phép thông qua sửa đổi harness")
+                self.assertTrue(any("harness/runner/evidence.py" in v for v in violations))
+        finally:
+            os.environ.pop("ALLOW_SPINE_AMENDMENT", None)
+
+    def test_harness_amendment_alone_does_not_permit_spine_modifications(self):
+        """Cờ ALLOW_HARNESS_AMENDMENT=1 không bao giờ được phép thông qua sửa đổi Spine Layer"""
+        os.environ["ALLOW_HARNESS_AMENDMENT"] = "1"
+        os.environ.pop("ALLOW_SPINE_AMENDMENT", None)
+        try:
+            with patch.object(policy, "get_git_diff_files", return_value=["src-tauri/src/commands/mod.rs"]):
+                ok, violations = policy.check_protected_paths(str(REPO_ROOT))
+                self.assertFalse(ok, "ALLOW_HARNESS_AMENDMENT=1 không được phép thông qua sửa đổi Spine")
+                self.assertTrue(any("src-tauri/src/commands/mod.rs" in v for v in violations))
+        finally:
+            os.environ.pop("ALLOW_HARNESS_AMENDMENT", None)
+
 if __name__ == "__main__":
     unittest.main()
