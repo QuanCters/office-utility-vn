@@ -149,38 +149,22 @@ pub fn execute_workflow_execution(
     })
 }
 
-/// 1. Điều phối thực thi tác vụ công cụ đơn lẻ (Non-blocking Rayon/Tokio)
-#[tauri::command]
-pub async fn dispatch_tool_task(
-    _app_handle: AppHandle,
-    state: State<'_, AppState>,
-    request: DispatchTaskRequest,
-    on_progress: tauri::ipc::Channel<TaskProgress>,
+/// Thực thi điều phối công cụ đơn lẻ kèm ghi nhận lịch sử vào SQLite (Mandatory Audit Persistence)
+/// Tuân thủ quy chuẩn:
+/// 1. Khôi phục an toàn Mutex Poisoning có kiểm định ROLLBACK và Sanity Ping qua `acquire_db_connection`
+/// 2. Ghi nhận lịch sử tác vụ là bắt buộc (Mandatory Audit): nếu CSDL lỗi, hàm trả về Err(CommandError::DatabaseError)
+/// 3. Định danh thực thi task_id duy nhất
+pub fn dispatch_tool_with_persistence(
+    db_mutex: &std::sync::Mutex<rusqlite::Connection>,
+    request: &DispatchTaskRequest,
+    cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+    progress_callback: Option<&(dyn Fn(TaskProgress) + Send + Sync)>,
 ) -> Result<DispatchTaskResponse, CommandError> {
-    let task_id = request.task_id.clone();
-    let cancel_flag = state.register_task(&task_id);
     let start_time = Instant::now();
 
-    let req_clone = request.clone();
-    let cancel_clone = std::sync::Arc::clone(&cancel_flag);
+    // 1. Thực thi tác vụ qua tuyến dispatch an toàn (Deny-by-Default allowlist)
+    let result = dispatch_tool_execution(request, cancel_flag, progress_callback);
 
-    let progress_sender = on_progress.clone();
-    let progress_callback = Box::new(move |p: TaskProgress| {
-        let _ = progress_sender.send(p);
-    });
-
-    // Thực thi trên threadpool nền để giữ Main UI 60 FPS
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        dispatch_tool_execution(&req_clone, &cancel_clone, Some(&*progress_callback))
-    })
-    .await
-    .map_err(|e| CommandError::ProcessExecutionError {
-        message: format!("Lỗi runtime luồng nền: {e}"),
-    })?;
-
-    state.unregister_task(&task_id);
-
-    // Ghi nhật ký vào SQLite
     let elapsed = start_time.elapsed().as_millis() as u64;
     let (status, err_msg) = match &result {
         Ok(resp) => (resp.status.clone(), None),
@@ -188,7 +172,7 @@ pub async fn dispatch_tool_task(
     };
 
     let history_record = TaskHistoryRecord {
-        id: task_id,
+        id: request.task_id.clone(),
         parent_task_id: None,
         tool_slug: Some(request.tool_slug.clone()),
         workflow_id: None,
@@ -204,24 +188,65 @@ pub async fn dispatch_tool_task(
         created_at: String::new(),
     };
 
-    // Ghi nhật ký vào SQLite kèm cơ chế kiểm chứng an toàn Mutex Poisoning
-    match acquire_db_connection(&state.db) {
-        Ok(conn) => {
-            if let Err(e) = db::add_task_history(&conn, &history_record) {
-                eprintln!("[dispatch_tool_task] Lỗi ghi nhận task_history: {e}");
-            }
-            if let Err(e) =
-                db::record_tool_usage(&conn, &request.tool_slug, &history_record.options_used_json)
-            {
-                eprintln!("[dispatch_tool_task] Lỗi ghi nhận tool_usage: {e}");
-            }
-        }
-        Err(db_err) => {
-            eprintln!(
-                "[dispatch_tool_task] Cảnh báo kiểm toán: Không thể ghi nhận task_history do lỗi CSDL: {db_err}"
-            );
-        }
+    // 2. Khôi phục và kiểm chứng an toàn kết nối CSDL SQLite
+    let conn = acquire_db_connection(db_mutex)?;
+
+    // 3. Chính sách Kiểm toán Bắt buộc (Mandatory Audit Persistence):
+    // Thất bại khi ghi lịch sử kiểm toán KHÔNG được nuốt ngầm mà phải trả về DatabaseError
+    if let Err(e) = db::add_task_history(&conn, &history_record) {
+        eprintln!("[dispatch_tool_with_persistence] Lỗi ghi nhận task_history: {e}");
+        return Err(CommandError::DatabaseError {
+            details: format!(
+                "Thất bại ghi nhận lịch sử kiểm toán cho tác vụ '{}': {e}",
+                request.task_id
+            ),
+        });
     }
+
+    if let Err(e) =
+        db::record_tool_usage(&conn, &request.tool_slug, &history_record.options_used_json)
+    {
+        eprintln!("[dispatch_tool_with_persistence] Cảnh báo: Lỗi ghi nhận tool_usage: {e}");
+    }
+
+    result
+}
+
+/// 1. Điều phối thực thi tác vụ công cụ đơn lẻ (Non-blocking Rayon/Tokio)
+#[tauri::command]
+pub async fn dispatch_tool_task(
+    _app_handle: AppHandle,
+    state: State<'_, AppState>,
+    request: DispatchTaskRequest,
+    on_progress: tauri::ipc::Channel<TaskProgress>,
+) -> Result<DispatchTaskResponse, CommandError> {
+    let task_id = request.task_id.clone();
+    let cancel_flag = state.register_task(&task_id);
+
+    let progress_sender = on_progress.clone();
+    let progress_callback = Box::new(move |p: TaskProgress| {
+        let _ = progress_sender.send(p);
+    });
+
+    let req_clone = request.clone();
+    let cancel_clone = std::sync::Arc::clone(&cancel_flag);
+    let db_mutex = std::sync::Arc::clone(&state.db);
+
+    // Thực thi trên threadpool nền để giữ Main UI 60 FPS
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        dispatch_tool_with_persistence(
+            &db_mutex,
+            &req_clone,
+            &cancel_clone,
+            Some(&*progress_callback),
+        )
+    })
+    .await
+    .map_err(|e| CommandError::ProcessExecutionError {
+        message: format!("Lỗi runtime luồng nền: {e}"),
+    })?;
+
+    state.unregister_task(&task_id);
 
     result
 }

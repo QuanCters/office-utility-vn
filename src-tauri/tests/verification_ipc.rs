@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 
 use office_shared::{CommandError, DispatchTaskRequest, TaskProgress};
 use office_utility_vn_lib::commands::{
-    dispatch_tool_execution, execute_workflow_execution, execute_workflow_with_persistence,
-    is_emergency_kill_switch_active, is_tool_enabled,
+    dispatch_tool_execution, dispatch_tool_with_persistence, execute_workflow_execution,
+    execute_workflow_with_persistence, is_emergency_kill_switch_active, is_tool_enabled,
 };
 use office_utility_vn_lib::db;
 use office_utility_vn_lib::state::AppState;
@@ -936,6 +936,128 @@ fn test_12_unsafe_pdf_engine_execution_bypass_detection() {
         sha_before, sha_after,
         "VI PHẠM BẤT BIẾN TỆP NGUỒN: Tệp PDF nguồn đã bị sửa đổi!"
     );
+}
+
+// =============================================================================
+// TEST 13: SINGLE-TOOL MANDATORY AUDIT PERSISTENCE VÀ INJECTED FAILURE PROPAGATION
+// =============================================================================
+#[test]
+fn test_13_single_tool_sqlite_audit_persistence_mandatory_and_failure_injection() {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let conn = db::init_in_memory().expect("Khởi tạo SQLite in-memory");
+    let db_mutex = Arc::new(Mutex::new(conn));
+
+    // 1. Happy Path: Dispatch công cụ allowlisted thành công và lưu vết task_history
+    let req_ok = DispatchTaskRequest {
+        task_id: "test-single-tool-audit-ok-01".to_string(),
+        tool_slug: "vietnamese-number-to-words".to_string(),
+        input_paths: vec![],
+        output_directory: None,
+        options: serde_json::json!({
+            "number": "1250000",
+            "currency": "VND",
+            "use_dong_chan": true,
+            "capitalize_first": true
+        }),
+    };
+
+    let res_ok = dispatch_tool_with_persistence(&db_mutex, &req_ok, &cancel_flag, None);
+    assert!(res_ok.is_ok(), "Dispatch allowlisted tool phải trả về Ok");
+
+    {
+        let guard = db_mutex.lock().unwrap();
+        let history = db::get_task_history(&guard, 10, 0).expect("Truy vấn task_history");
+        assert_eq!(history.len(), 1, "Kỳ vọng 1 bản ghi task_history");
+        assert_eq!(history[0].id, "test-single-tool-audit-ok-01");
+        assert_eq!(history[0].status, "SUCCESS");
+        assert_eq!(
+            history[0].tool_slug.as_deref(),
+            Some("vietnamese-number-to-words")
+        );
+    }
+
+    // 2. Failure Injection: Giả lập lỗi ghi CSDL (Injected Disk Write Failure)
+    // Cài đặt trigger chặn INSERT vào bảng task_history
+    {
+        let guard = db_mutex.lock().unwrap();
+        guard
+            .execute_batch(
+                "CREATE TRIGGER fail_single_history BEFORE INSERT ON task_history \
+                 BEGIN SELECT RAISE(ABORT, 'INJECTED_DISK_WRITE_FAILURE'); END;",
+            )
+            .expect("Cài đặt trigger mô phỏng lỗi ghi");
+    }
+
+    let req_fail = DispatchTaskRequest {
+        task_id: "test-single-tool-audit-fail-02".to_string(),
+        tool_slug: "vietnamese-number-to-words".to_string(),
+        input_paths: vec![],
+        output_directory: None,
+        options: serde_json::json!({
+            "number": "500000",
+        }),
+    };
+
+    let res_fail = dispatch_tool_with_persistence(&db_mutex, &req_fail, &cancel_flag, None);
+
+    // BẮT BUỘC FAIL-CLOSED: Không được nuốt ngầm lỗi ghi kiểm toán
+    assert!(
+        res_fail.is_err(),
+        "VI PHẠM CHÍNH SÁCH KIỂM TOÁN: Lỗi ghi SQLite task_history đã bị nuốt ngầm!"
+    );
+
+    match res_fail {
+        Err(CommandError::DatabaseError { details }) => {
+            assert!(
+                details.contains("Thất bại ghi nhận lịch sử kiểm toán")
+                    && details.contains("INJECTED_DISK_WRITE_FAILURE"),
+                "Chi tiết lỗi DatabaseError phải thể hiện rõ nguyên nhân lỗi ghi: {details}"
+            );
+        }
+        other => panic!(
+            "Kỳ vọng CommandError::DatabaseError khi ghi kiểm toán thất bại, nhận được: {:?}",
+            other
+        ),
+    }
+
+    // 3. Phục hồi và hoàn tất kiểm toán sau khi lỗi được khắc phục
+    {
+        let guard = db_mutex.lock().unwrap();
+        guard
+            .execute_batch("DROP TRIGGER fail_single_history;")
+            .expect("Hủy bỏ trigger mô phỏng lỗi");
+    }
+
+    let req_recovered = DispatchTaskRequest {
+        task_id: "test-single-tool-audit-recovered-03".to_string(),
+        tool_slug: "vietnamese-number-to-words".to_string(),
+        input_paths: vec![],
+        output_directory: None,
+        options: serde_json::json!({
+            "number": "750000",
+        }),
+    };
+
+    let res_recovered =
+        dispatch_tool_with_persistence(&db_mutex, &req_recovered, &cancel_flag, None);
+    assert!(
+        res_recovered.is_ok(),
+        "Sau khi sửa lỗi CSDL, dispatch phải hoạt động trở lại"
+    );
+
+    {
+        let guard = db_mutex.lock().unwrap();
+        let history = db::get_task_history(&guard, 10, 0).expect("Truy vấn task_history");
+        assert_eq!(
+            history.len(),
+            2,
+            "Chỉ 2 bản ghi thành công được lưu trữ; bản ghi thất bại không được để lại trạng thái rác"
+        );
+        let ids: Vec<&str> = history.iter().map(|h| h.id.as_str()).collect();
+        assert!(ids.contains(&"test-single-tool-audit-ok-01"));
+        assert!(ids.contains(&"test-single-tool-audit-recovered-03"));
+        assert!(!ids.contains(&"test-single-tool-audit-fail-02"));
+    }
 }
 
 // =============================================================================

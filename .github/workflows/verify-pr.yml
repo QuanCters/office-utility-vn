@@ -35,10 +35,12 @@ jobs:
           python3 harness/runner/run.py --tier L0
 
       - name: Upload Initial Ledger
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-ledger-init
+          name: evidence-ledger
           path: harness/reports/evidence-manifest.json
+          overwrite: true
 
   l1-rust-static-checks:
     name: L1 - Rust Static Checks (fmt, clippy, check)
@@ -47,6 +49,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Evidence Ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -57,10 +72,18 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
 
-      - name: Run L1 Script
+      - name: Run L1 Static Verification & Record Evidence
         run: |
           chmod +x harness/ci/verify-core.sh
-          ./harness/ci/verify-core.sh --static-only
+          python3 harness/runner/run.py --tier L1
+
+      - name: Upload Updated Ledger (L1)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports/evidence-manifest.json
+          overwrite: true
 
   l2-unit-and-property-tests:
     name: L2 - Unit & Property Tests
@@ -69,6 +92,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Evidence Ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -76,10 +112,18 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
 
-      - name: Run Core Workspace Tests
+      - name: Run L2 Core Tests & Record Evidence
         run: |
           chmod +x harness/ci/verify-core.sh
-          ./harness/ci/verify-core.sh --unit-only
+          python3 harness/runner/run.py --tier L2
+
+      - name: Upload Updated Ledger (L2)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports/evidence-manifest.json
+          overwrite: true
 
   l3-integration-and-fault-injection:
     name: L3 - Integration & Fault Injection
@@ -88,6 +132,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Evidence Ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -95,10 +152,18 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
 
-      - name: Run L3 Tauri Backend & Integration Tests
+      - name: Run L3 Integration Tests & Record Evidence
         run: |
           chmod +x harness/ci/verify-tauri.sh
-          ./harness/ci/verify-tauri.sh
+          python3 harness/runner/run.py --tier L3
+
+      - name: Upload Updated Ledger (L3)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports/evidence-manifest.json
+          overwrite: true
 
   l4-frontend-wasm-compile:
     name: L4 - Frontend Leptos WASM Build
@@ -107,6 +172,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Evidence Ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports
 
       - name: Setup Rust with WASM target
         uses: dtolnay/rust-toolchain@stable
@@ -121,10 +199,18 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
 
-      - name: Run L4 WASM Verification
+      - name: Run L4 WASM Verification & Record Evidence
         run: |
           chmod +x harness/ci/verify-wasm.sh
-          ./harness/ci/verify-wasm.sh
+          python3 harness/runner/run.py --tier L4
+
+      - name: Upload Updated Ledger (L4)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports/evidence-manifest.json
+          overwrite: true
 
   merge-gate-evaluation:
     name: Deterministic Merge Gate Evaluator
@@ -134,14 +220,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Download Evidence Ledger
+        uses: actions/download-artifact@v4
+        with:
+          name: evidence-ledger
+          path: harness/reports
+
       - name: Evaluate Merge Gate Policy
         run: |
+          python3 harness/runner/run.py --tier L5
           python3 harness/runner/policy.py --evaluate-gate
 
       - name: Upload Final Evidence Manifest Artifacts

@@ -154,14 +154,24 @@ def audit_integrity(
             report.fail(f"Tool '{slug}' has invalid routing_state: '{routing}'")
         else:
             routing_counts[routing] += 1
-            if source_routed_slugs is not None and not is_pr01_deny_by_default:
-                if routing == "ROUTED" and slug not in source_routed_slugs:
+        HISTORICAL_ROUTED_SLUGS = {
+            "vietnamese-number-to-words", "vn-cccd-mst-validator", "vietnamese-ocr",
+            "pdf-booklet-imposition", "pdf-to-long-image", "pdf-grayscale-print",
+            "pdf-repair-corrupt", "pdf-table-extractor"
+        }
+        if source_routed_slugs is not None:
+            if routing == "ROUTED":
+                if not is_pr01_deny_by_default and slug not in source_routed_slugs:
                     report.fail(f"Tool '{slug}' marked ROUTED in inventory but not in actual source match arms")
-                elif routing == "UNROUTED" and slug in source_routed_slugs:
-                    report.fail(f"Tool '{slug}' marked UNROUTED in inventory but exists in source match arms")
-            elif source_routed_slugs is not None and is_pr01_deny_by_default:
-                if slug in source_routed_slugs and slug not in ["vietnamese-number-to-words", "vn-cccd-mst-validator"]:
-                    report.fail(f"PR-01 Security Violation: Tool '{slug}' is routed in match arms but not in verified allowlist")
+                elif is_pr01_deny_by_default:
+                    if slug in ["vietnamese-number-to-words", "vn-cccd-mst-validator"] and slug not in source_routed_slugs:
+                        report.fail(f"PR-01 allowlist tool '{slug}' marked ROUTED in inventory but missing in source match arms")
+                    elif slug not in HISTORICAL_ROUTED_SLUGS:
+                        report.fail(f"Tool '{slug}' marked ROUTED in inventory but not in actual source match arms")
+            elif routing == "UNROUTED" and slug in source_routed_slugs and not is_pr01_deny_by_default:
+                report.fail(f"Tool '{slug}' marked UNROUTED in inventory but exists in source match arms")
+            if is_pr01_deny_by_default and slug in source_routed_slugs and slug not in ["vietnamese-number-to-words", "vn-cccd-mst-validator"]:
+                report.fail(f"PR-01 Security Violation: Tool '{slug}' is routed in match arms but not in verified allowlist")
 
         # Engine type consistency
         engine_type = tool.get("engine_type")

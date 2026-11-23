@@ -50,7 +50,8 @@ class AuditIntegrityUnitAndNegativeTests(unittest.TestCase):
         self.assertEqual(report.stats["total_tools"], 58)
         self.assertEqual(report.stats["total_findings"], 18)
         self.assertEqual(report.stats["source_registered_slugs_verified"], 58)
-        self.assertEqual(report.stats["source_routed_slugs_verified"], 8)
+        expected_routed = 2 if "ENABLED_TOOL_ALLOWLIST" in self.base_commands_text else 8
+        self.assertEqual(report.stats["source_routed_slugs_verified"], expected_routed)
 
     # -------------------------------------------------------------
     # Negative Test 1: Tool Count Mismatch (Summary / Array Length)

@@ -3,7 +3,7 @@
 harness/runner/policy.py
 Deterministic Policy Engine & Merge Gate Evaluator:
 - Thực thi kiểm tra Protected Paths & Secrets
-- Phân tích rủi ro tự động theo Git Diff
+- Phân tích rủi ro tự động theo Git Diff (PR-aware)
 - Đánh giá cổng Merge Gate xác định (PASS, FAIL, INCOMPLETE, MANUAL_HOLD) dựa trên Evidence Ledger & quality-gates.yaml
 """
 
@@ -94,19 +94,67 @@ def parse_simple_yaml(text: str) -> dict:
     return result
 
 def get_git_diff_files(repo_root: str) -> list[str]:
+    """
+    Xác định danh sách các tệp tin bị thay đổi một cách toàn diện (PR-aware).
+    Khắc phục điểm mù trong môi trường CI checkout sạch (clean checkout):
+    1. So sánh merge-base với nhánh cơ sở (GITHUB_BASE_REF hoặc BASE_REF)
+    2. Fallback sang origin/main hoặc HEAD~1 nếu không có base_ref
+    3. Kết hợp thêm các thay đổi chưa commit (unstaged, staged, untracked) trong working tree
+    """
+    files = set()
     try:
-        res = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
-        files = res.stdout.splitlines()
+        base_ref = os.environ.get("GITHUB_BASE_REF") or os.environ.get("BASE_REF")
+        diff_targets = []
+        if base_ref:
+            diff_targets.append(f"origin/{base_ref}...HEAD")
+            diff_targets.append(f"{base_ref}...HEAD")
+        else:
+            diff_targets.append("origin/main...HEAD")
+            diff_targets.append("main...HEAD")
+
+        for target in diff_targets:
+            res = subprocess.run(
+                ["git", "diff", "--name-only", target],
+                cwd=repo_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    if line.strip():
+                        files.add(line.strip())
+                break
+
+        # Luôn kiểm tra thêm các thay đổi chưa commit trong working tree (local dev)
+        res_head = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
+        if res_head.returncode == 0:
+            for line in res_head.stdout.splitlines():
+                if line.strip():
+                    files.add(line.strip())
+
+        res_cached = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
+        if res_cached.returncode == 0:
+            for line in res_cached.stdout.splitlines():
+                if line.strip():
+                    files.add(line.strip())
+
         res_untracked = subprocess.run(["git", "status", "--porcelain"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
-        for line in res_untracked.stdout.splitlines():
-            if line.startswith("??"):
-                files.append(line[3:].strip())
-        return [f.strip() for f in files if f.strip()]
+        if res_untracked.returncode == 0:
+            for line in res_untracked.stdout.splitlines():
+                if line.startswith("??"):
+                    files.add(line[3:].strip())
+
+        return sorted(list(files))
     except Exception as e:
         print(f"Warning: could not get git diff: {e}")
-        return []
+        return sorted(list(files))
 
 def check_protected_paths(repo_root: str) -> tuple[bool, list[str]]:
+    """
+    Kiểm tra các đường dẫn bất biến được bảo vệ (Protected Paths Guard).
+    Bao gồm Spine Layer, Scripts kiểm tra toàn vẹn, Harness policies/runners, CI Workflows và Vendor code.
+    """
     violations = []
     protected_roots = [
         "crates/office-shared/",
@@ -118,16 +166,21 @@ def check_protected_paths(repo_root: str) -> tuple[bool, list[str]]:
         "harness/runner/",
         ".github/workflows/",
         ".github/CODEOWNERS",
+        "vendor/",
     ]
 
     changed_files = get_git_diff_files(repo_root)
     is_agent_feature_run = os.environ.get("AGENT_FEATURE_RUN", "0") == "1"
+    allow_spine_amendment = (
+        os.environ.get("ALLOW_SPINE_AMENDMENT", "0") == "1"
+        or os.environ.get("SPINE_AMENDMENT_AUTHORIZED", "0") == "1"
+    )
 
-    if is_agent_feature_run:
+    if is_agent_feature_run or not allow_spine_amendment:
         for f in changed_files:
             for p in protected_roots:
                 if f.startswith(p) or f == p:
-                    violations.append(f"Agent feature PR cannot modify protected path: '{f}' (guard: {p})")
+                    violations.append(f"Protected path modification detected: '{f}' (guard: {p})")
 
     return (len(violations) == 0, violations)
 
@@ -180,6 +233,14 @@ def classify_risk(repo_root: str) -> dict:
             risk = "CRITICAL"
             reasons.append(f"Vendor pinned code touched: {f}")
             required_tiers = ["L0", "L1", "L2", "L3", "L4", "L5"]
+        elif f.startswith("scripts/verify_spine_lock.sh") or f.startswith("harness/"):
+            risk = "CRITICAL"
+            reasons.append(f"Spine lock / verification harness touched: {f}")
+            required_tiers = ["L0", "L1", "L2", "L3", "L4", "L5"]
+        elif f.startswith(".github/"):
+            risk = "CRITICAL"
+            reasons.append(f"CI workflow touched: {f}")
+            required_tiers = ["L0", "L1", "L2", "L3", "L4", "L5"]
         elif "pdf" in f.lower() or "doc_suite" in f:
             if risk != "CRITICAL":
                 risk = "HIGH"
@@ -201,7 +262,7 @@ def evaluate_merge_gate(repo_root: str, ledger_path: str = None) -> tuple[str, s
       - PASS (0): Đạt tất cả điều kiện
       - FAIL (1): Có lỗi test hoặc vi phạm chính sách
       - MANUAL_HOLD (2): Có AI Finding P0/P1 hoặc rủi ro cần xử lý
-      - INCOMPLETE (3): Thiếu bằng chứng hoặc đang dở dang
+      - INCOMPLETE (3): Thiếu bằng chứng, đang dở dang hoặc bị skip
     """
     policy_path = os.path.join(repo_root, "harness", "policies", "quality-gates.yaml")
     if not os.path.isfile(policy_path):
@@ -236,7 +297,7 @@ def evaluate_merge_gate(repo_root: str, ledger_path: str = None) -> tuple[str, s
     if p0_count > 0 or p1_count > 0:
         return ("MANUAL_HOLD", f"Unresolved critical/high findings detected (P0: {p0_count}, P1: {p1_count}). Requires maintainer disposition.", 2)
 
-    # 3. Kiểm tra Required Checks
+    # 3. Kiểm tra Required Checks (Tuyệt đối không coi SKIPPED là PASS)
     required_checks = policy.get("merge_policy", {}).get("required_checks", [])
     checks_state = ledger.get("checks", {})
 
@@ -247,14 +308,14 @@ def evaluate_merge_gate(repo_root: str, ledger_path: str = None) -> tuple[str, s
         st = checks_state.get(req.replace("-", "_"), "NOT_RUN")
         if st == "FAILED":
             failed_checks.append(req)
-        elif st in ("PENDING", "NOT_RUN"):
+        elif st in ("PENDING", "NOT_RUN", "SKIPPED"):
             missing_or_pending.append(req)
 
     if failed_checks:
         return ("FAIL", f"Required checks failed: {', '.join(failed_checks)}", 1)
 
     if missing_or_pending:
-        return ("INCOMPLETE", f"Required checks incomplete or missing: {', '.join(missing_or_pending)}", 3)
+        return ("INCOMPLETE", f"Required checks incomplete, missing, or skipped: {', '.join(missing_or_pending)}", 3)
 
     # 4. Kiểm tra Protected Paths và Secrets
     ok_paths, path_errs = check_protected_paths(repo_root)

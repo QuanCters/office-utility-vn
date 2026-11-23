@@ -40,10 +40,14 @@ def get_git_source_info(repo_root: str) -> dict:
     checkout_sha = os.environ.get("GITHUB_SHA", head_sha)
 
     # Base SHA: determine merge-base with origin/main or env
-    base_ref = os.environ.get("GITHUB_BASE_REF", "main")
+    base_ref = os.environ.get("GITHUB_BASE_REF") or os.environ.get("BASE_REF") or "main"
     base_sha = run_cmd(["git", "merge-base", f"origin/{base_ref}", "HEAD"], cwd=repo_root)
-    if not base_sha or "fatal" in base_sha:
+    if not base_sha or "fatal" in base_sha or base_sha == "UNKNOWN":
+        base_sha = run_cmd(["git", "merge-base", base_ref, "HEAD"], cwd=repo_root)
+    if not base_sha or "fatal" in base_sha or base_sha == "UNKNOWN":
         base_sha = run_cmd(["git", "rev-parse", "HEAD~1"], cwd=repo_root)
+    if not base_sha or "fatal" in base_sha:
+        base_sha = head_sha
 
     return {
         "base_sha": base_sha,
@@ -115,7 +119,8 @@ def check_stale_evidence(ledger: dict, current_head_sha: str) -> bool:
 def save_ledger(repo_root: str, ledger: dict, custom_name: str = None) -> str:
     reports_dir = os.path.join(repo_root, "harness", "reports")
     os.makedirs(reports_dir, exist_ok=True)
-    fname = custom_name or f"evidence_ledger_{ledger['source']['head_sha'][:8]}.json"
+    head_sha = ledger.get("source", {}).get("head_sha", "unknown")
+    fname = custom_name or f"evidence_ledger_{head_sha[:8]}.json"
     full_path = os.path.join(reports_dir, fname)
 
     with open(full_path, "w", encoding="utf-8") as f:
@@ -127,6 +132,120 @@ def save_ledger(repo_root: str, ledger: dict, custom_name: str = None) -> str:
         json.dump(ledger, f, indent=2, ensure_ascii=False)
 
     return full_path
+
+def record_evidence(repo_root: str, tier: str, status: str, metadata: dict = None) -> dict:
+    """
+    Ghi nhận trạng thái kiểm chứng của một tầng vào Evidence Ledger.
+    Đồng bộ hóa tên check theo contract schema và lưu trữ ngay lập tức.
+    """
+    reports_dir = os.path.join(repo_root, "harness", "reports")
+    manifest_path = os.path.join(reports_dir, "evidence-manifest.json")
+
+    if os.path.isfile(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                ledger = json.load(f)
+        except Exception:
+            ledger = create_evidence_ledger(repo_root)
+    else:
+        ledger = create_evidence_ledger(repo_root)
+
+    status_upper = status.upper()
+    if status_upper not in ["PASSED", "FAILED", "PENDING", "NOT_RUN", "SKIPPED"]:
+        status_upper = "PASSED" if status_upper in ["PASS", "OK", "SUCCESS"] else "FAILED"
+
+    tier_map = {
+        "L0": ["policy_integrity"],
+        "L1": ["rust_static"],
+        "L2": ["rust_core"],
+        "L3": ["integration_tests"],
+        "L4": ["wasm_build"],
+        "L5": ["verification_gate"],
+    }
+
+    tier_key = tier.upper()
+    check_keys = tier_map.get(tier_key, [tier.lower().replace("-", "_")])
+
+    for k in check_keys:
+        ledger["checks"][k] = status_upper
+
+    # Cập nhật quyết định sơ bộ
+    if status_upper == "FAILED":
+        ledger["decision"] = "FAIL"
+        ledger["decision_reason"] = f"Verification check failed at tier {tier}"
+    elif status_upper == "PASSED":
+        req_checks = ["policy_integrity", "rust_core", "wasm_build", "verification_gate"]
+        if all(ledger["checks"].get(c) == "PASSED" for c in req_checks):
+            ledger["decision"] = "PASS"
+            ledger["decision_reason"] = "All required quality gates passed."
+
+    if metadata:
+        if "risk_level" in metadata:
+            ledger["risk_assessment"] = metadata["risk_level"]
+        if "evidence_items" in metadata:
+            for item in metadata["evidence_items"]:
+                append_evidence_item(
+                    ledger,
+                    item.get("name", "artifact"),
+                    item.get("type", "TEST_LOG"),
+                    item.get("path", "")
+                )
+
+    save_ledger(repo_root, ledger)
+    return ledger
+
+def validate_evidence_ledger(repo_root: str, ledger_path: str = None) -> tuple[bool, list[str]]:
+    """
+    Xác thực tính toàn vẹn của Evidence Ledger:
+    - Kiểm tra schema bắt buộc
+    - Xác thực định danh nguồn (base_sha, head_sha, checkout_sha, tree_sha)
+    - Phát hiện stale evidence
+    - Phát hiện trạng thái check không hợp lệ
+    """
+    errors = []
+    if not ledger_path:
+        ledger_path = os.path.join(repo_root, "harness", "reports", "evidence-manifest.json")
+
+    if not os.path.isfile(ledger_path):
+        return False, [f"Evidence manifest file does not exist at '{ledger_path}'"]
+
+    try:
+        with open(ledger_path, "r", encoding="utf-8") as f:
+            ledger = json.load(f)
+    except Exception as e:
+        return False, [f"Failed to parse evidence manifest as JSON: {e}"]
+
+    # 1. Required top-level keys
+    required_keys = ["schema_version", "task_id", "source", "tool_versions", "review", "checks", "evidence", "decision"]
+    for k in required_keys:
+        if k not in ledger:
+            errors.append(f"Missing required key: '{k}'")
+
+    # 2. Source identity validation
+    source = ledger.get("source", {})
+    for s_key in ["base_sha", "head_sha", "checkout_sha", "tree_sha"]:
+        val = source.get(s_key, "")
+        if not val or val == "UNKNOWN":
+            errors.append(f"Invalid or missing source identity: 'source.{s_key}' = '{val}'")
+
+    # 3. Decision validation
+    valid_decisions = ["PASS", "FAIL", "INCOMPLETE", "MANUAL_HOLD"]
+    if ledger.get("decision") not in valid_decisions:
+        errors.append(f"Invalid decision '{ledger.get('decision')}'. Must be one of {valid_decisions}")
+
+    # 4. Check stale evidence
+    current_head = run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root)
+    if current_head and current_head != "UNKNOWN":
+        if check_stale_evidence(ledger, current_head):
+            errors.append(f"STALE EVIDENCE: Recorded HEAD ({source.get('head_sha')}) does not match repository HEAD ({current_head})")
+
+    # 5. Check checks enum
+    valid_check_states = ["PASSED", "FAILED", "PENDING", "NOT_RUN", "SKIPPED"]
+    for chk_name, chk_val in ledger.get("checks", {}).items():
+        if chk_val not in valid_check_states:
+            errors.append(f"Invalid check state for '{chk_name}': '{chk_val}' (must be one of {valid_check_states})")
+
+    return (len(errors) == 0, errors)
 
 def verify_artifacts(repo_root: str) -> bool:
     dist_dir = os.path.join(repo_root, "dist")
@@ -151,6 +270,33 @@ def main():
         saved = save_ledger(repo_root, ledger)
         print(f"✅ Initialized evidence ledger at: {saved}")
         sys.exit(0)
+
+    if "--validate-ledger" in sys.argv:
+        custom_path = None
+        for i, a in enumerate(sys.argv):
+            if a == "--validate-ledger" and i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("--"):
+                custom_path = sys.argv[i + 1]
+        ok, errs = validate_evidence_ledger(repo_root, custom_path)
+        if ok:
+            print("✅ Evidence ledger validation passed cleanly.")
+            sys.exit(0)
+        else:
+            print("❌ Evidence ledger validation failed:")
+            for e in errs:
+                print(f"  - {e}")
+            sys.exit(1)
+
+    if "--record-tier" in sys.argv:
+        try:
+            idx = sys.argv.index("--record-tier")
+            tier = sys.argv[idx + 1]
+            status = sys.argv[idx + 2]
+            record_evidence(repo_root, tier, status)
+            print(f"✅ Recorded tier {tier} as {status}")
+            sys.exit(0)
+        except Exception as e:
+            print(f"❌ Error recording tier: {e}")
+            sys.exit(1)
 
     if "--verify-artifacts" in sys.argv:
         ok = verify_artifacts(repo_root)
