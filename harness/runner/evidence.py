@@ -133,11 +133,117 @@ def save_ledger(repo_root: str, ledger: dict, custom_name: str = None) -> str:
 
     return full_path
 
+def record_tier_file(repo_root: str, tier: str, status: str, metadata: dict = None) -> str:
+    """
+    Ghi nhận kết quả riêng của một tier vào file JSON riêng biệt:
+    harness/reports/tier-<tier>.json
+    Ngăn chặn việc các runner song song (như L3 và L4) ghi đè lên nhau.
+    """
+    reports_dir = os.path.join(repo_root, "harness", "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    tier_lower = tier.lower()
+    source_info = get_git_source_info(repo_root)
+    status_upper = status.upper()
+    if status_upper not in ["PASSED", "FAILED", "PENDING", "NOT_RUN", "SKIPPED"]:
+        status_upper = "PASSED" if status_upper in ["PASS", "OK", "SUCCESS"] else "FAILED"
+
+    tier_map = {
+        "L0": ["policy_integrity"],
+        "L1": ["rust_static"],
+        "L2": ["rust_core"],
+        "L3": ["integration_tests"],
+        "L4": ["wasm_build"],
+        "L5": ["verification_gate"],
+    }
+    check_keys = tier_map.get(tier.upper(), [tier.lower().replace("-", "_")])
+    checks = {k: status_upper for k in check_keys}
+
+    tier_data = {
+        "schema_version": 1,
+        "tier": tier.upper(),
+        "status": status_upper,
+        "checks": checks,
+        "source": source_info,
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "metadata": metadata or {}
+    }
+    tier_path = os.path.join(reports_dir, f"tier-{tier_lower}.json")
+    with open(tier_path, "w", encoding="utf-8") as f:
+        json.dump(tier_data, f, indent=2, ensure_ascii=False)
+    return tier_path
+
+def aggregate_tier_results(repo_root: str) -> dict:
+    """
+    Thu thập và tổng hợp toàn bộ các artifact kiểm chứng độc lập (tier-*.json)
+    vào evidence-manifest.json trước khi Merge Gate đánh giá.
+    """
+    reports_dir = os.path.join(repo_root, "harness", "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    manifest_path = os.path.join(reports_dir, "evidence-manifest.json")
+
+    if os.path.isfile(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                ledger = json.load(f)
+        except Exception:
+            ledger = create_evidence_ledger(repo_root)
+    else:
+        ledger = create_evidence_ledger(repo_root)
+
+    tier_files = []
+    for root, _, files in os.walk(reports_dir):
+        for f in files:
+            if f.startswith("tier-") and f.endswith(".json"):
+                tier_files.append(os.path.join(root, f))
+
+    tier_files.sort()
+    failed_tiers = []
+
+    for tf in tier_files:
+        try:
+            with open(tf, "r", encoding="utf-8") as f:
+                tdata = json.load(f)
+            t_status = tdata.get("status", "NOT_RUN")
+            for chk_name, chk_status in tdata.get("checks", {}).items():
+                ledger["checks"][chk_name] = chk_status
+            if t_status == "FAILED":
+                failed_tiers.append(tdata.get("tier", os.path.basename(tf)))
+
+            meta = tdata.get("metadata", {})
+            if "risk_level" in meta:
+                ledger["risk_assessment"] = meta["risk_level"]
+            if "evidence_items" in meta:
+                for item in meta["evidence_items"]:
+                    append_evidence_item(ledger, item.get("name", "artifact"), item.get("type", "TEST_LOG"), item.get("path", ""))
+
+            append_evidence_item(ledger, os.path.basename(tf), "TIER_REPORT", tf)
+        except Exception as e:
+            print(f"Warning: could not process tier file {tf}: {e}")
+
+    if failed_tiers:
+        ledger["decision"] = "FAIL"
+        ledger["decision_reason"] = f"Verification checks failed in tiers: {', '.join(failed_tiers)}"
+    else:
+        req_checks = ["policy_integrity", "rust_core", "wasm_build", "verification_gate"]
+        if all(ledger["checks"].get(c) == "PASSED" for c in req_checks):
+            ledger["decision"] = "PASS"
+            ledger["decision_reason"] = "All required quality gates passed."
+        else:
+            pending = [c for c in req_checks if ledger["checks"].get(c) != "PASSED"]
+            ledger["decision"] = "INCOMPLETE"
+            ledger["decision_reason"] = f"Pending required checks: {', '.join(pending)}"
+
+    save_ledger(repo_root, ledger)
+    print(f"📊 Aggregated {len(tier_files)} tier reports into {manifest_path} (Decision: {ledger['decision']})")
+    return ledger
+
 def record_evidence(repo_root: str, tier: str, status: str, metadata: dict = None) -> dict:
     """
     Ghi nhận trạng thái kiểm chứng của một tầng vào Evidence Ledger.
     Đồng bộ hóa tên check theo contract schema và lưu trữ ngay lập tức.
+    Đồng thời ghi ra tier-<tier>.json riêng biệt.
     """
+    record_tier_file(repo_root, tier, status, metadata)
     reports_dir = os.path.join(repo_root, "harness", "reports")
     manifest_path = os.path.join(reports_dir, "evidence-manifest.json")
 
@@ -296,6 +402,23 @@ def main():
             sys.exit(0)
         except Exception as e:
             print(f"❌ Error recording tier: {e}")
+            sys.exit(1)
+
+    if "--aggregate-tiers" in sys.argv:
+        ledger = aggregate_tier_results(repo_root)
+        print(f"✅ Tiers aggregated cleanly. Decision: {ledger.get('decision')}")
+        sys.exit(0)
+
+    if "--record-tier-file" in sys.argv:
+        try:
+            idx = sys.argv.index("--record-tier-file")
+            tier = sys.argv[idx + 1]
+            status = sys.argv[idx + 2]
+            p = record_tier_file(repo_root, tier, status)
+            print(f"✅ Recorded tier file at: {p}")
+            sys.exit(0)
+        except Exception as e:
+            print(f"❌ Error recording tier file: {e}")
             sys.exit(1)
 
     if "--verify-artifacts" in sys.argv:

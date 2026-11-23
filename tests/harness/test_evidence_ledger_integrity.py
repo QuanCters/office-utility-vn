@@ -163,5 +163,42 @@ class EvidenceLedgerIntegrityTests(unittest.TestCase):
         finally:
             os.environ.pop("ALLOW_SPINE_AMENDMENT", None)
 
+    def test_tier_aggregation_merges_independent_tier_artifacts(self):
+        """Kiểm tra chức năng aggregate_tier_results gom các tier-*.json độc lập vào manifest mà không bị ghi đè"""
+        # Tạo riêng rẽ từng file tier artifact
+        evidence.record_tier_file(str(self.root), "L0", "PASSED")
+        evidence.record_tier_file(str(self.root), "L1", "PASSED")
+        evidence.record_tier_file(str(self.root), "L2", "PASSED")
+        evidence.record_tier_file(str(self.root), "L3", "PASSED")
+        evidence.record_tier_file(str(self.root), "L4", "PASSED")
+        evidence.record_tier_file(str(self.root), "L5", "PASSED")
+
+        # Gọi tổng hợp
+        manifest = evidence.aggregate_tier_results(str(self.root))
+
+        self.assertEqual(manifest["checks"]["policy_integrity"], "PASSED")
+        self.assertEqual(manifest["checks"]["rust_static"], "PASSED")
+        self.assertEqual(manifest["checks"]["rust_core"], "PASSED")
+        self.assertEqual(manifest["checks"]["integration_tests"], "PASSED")
+        self.assertEqual(manifest["checks"]["wasm_build"], "PASSED")
+        self.assertEqual(manifest["checks"]["verification_gate"], "PASSED")
+        self.assertEqual(manifest["decision"], "PASS")
+
+    def test_l5_verify_artifacts_fails_when_dist_empty_and_passes_when_present(self):
+        """Kiểm tra verify_artifacts trả về False khi dist rỗng và True khi có artifact WASM/JS hợp lệ"""
+        dist_dir = self.root / "dist"
+
+        # 1. Khi chưa có thư mục dist/
+        self.assertFalse(evidence.verify_artifacts(str(self.root)))
+
+        # 2. Khi dist/ tồn tại nhưng không có file wasm/js
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        (dist_dir / "random.txt").write_text("not wasm")
+        self.assertFalse(evidence.verify_artifacts(str(self.root)))
+
+        # 3. Khi dist/ có file .wasm hợp lệ
+        (dist_dir / "office_ui.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00fake_wasm_bytes")
+        self.assertTrue(evidence.verify_artifacts(str(self.root)))
+
 if __name__ == "__main__":
     unittest.main()

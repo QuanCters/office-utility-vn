@@ -94,14 +94,51 @@ class ProtectedPathsCiTests(unittest.TestCase):
                 )
 
     def test_protected_paths_guard_allows_authorized_spine_amendment(self):
-        """Khi có cờ ALLOW_SPINE_AMENDMENT=1, chính sách cho phép thay đổi có kiểm soát"""
-        with patch.object(policy, "get_git_diff_files", return_value=["src-tauri/src/commands/mod.rs"]):
-            os.environ["ALLOW_SPINE_AMENDMENT"] = "1"
-            try:
+        """Khi có cờ ALLOW_SPINE_AMENDMENT=1, chính sách cho phép thay đổi commands/mod.rs và scripts/verify_spine_lock.sh"""
+        for approved_file in ["src-tauri/src/commands/mod.rs", "scripts/verify_spine_lock.sh"]:
+            with patch.object(policy, "get_git_diff_files", return_value=[approved_file]):
+                os.environ["ALLOW_SPINE_AMENDMENT"] = "1"
+                try:
+                    ok, violations = policy.check_protected_paths(str(REPO_ROOT))
+                    self.assertTrue(ok, f"Khi đã ủy quyền Spine Amendment, {approved_file} phải được thông qua: {violations}")
+                finally:
+                    os.environ.pop("ALLOW_SPINE_AMENDMENT", None)
+
+    def test_protected_paths_guard_blocks_unauthorized_spine_even_with_amendment(self):
+        """Khi có cờ ALLOW_SPINE_AMENDMENT=1, các tệp spine khác (shared, db, other commands) và vendor/CODEOWNERS vẫn BẮT BUỘC bị chặn"""
+        blocked_files = [
+            "crates/office-shared/src/lib.rs",
+            "src-tauri/src/db/mod.rs",
+            "src-tauri/src/commands/unauthorized.rs",
+            "vendor/foo/lib.rs",
+            ".github/CODEOWNERS",
+        ]
+        os.environ["ALLOW_SPINE_AMENDMENT"] = "1"
+        try:
+            for b_file in blocked_files:
+                with patch.object(policy, "get_git_diff_files", return_value=[b_file]):
+                    ok, violations = policy.check_protected_paths(str(REPO_ROOT))
+                    self.assertFalse(ok, f"Tệp {b_file} không được phép tu chính ngay cả khi có ALLOW_SPINE_AMENDMENT=1")
+                    self.assertTrue(
+                        any(b_file in v for v in violations),
+                        f"Vi phạm phải ghi rõ {b_file}: {violations}"
+                    )
+        finally:
+            os.environ.pop("ALLOW_SPINE_AMENDMENT", None)
+
+    def test_ci_fail_closed_diff_detection(self):
+        """Trong môi trường CI (GITHUB_ACTIONS=true), nếu diff rỗng thì phải fail-closed (RuntimeError / Policy Violation)"""
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "GITHUB_BASE_REF": "main"}):
+            with patch("subprocess.run") as mock_run:
+                # Giả lập git diff trả về rỗng
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = ""
+                with self.assertRaises(RuntimeError):
+                    policy.get_git_diff_files(str(REPO_ROOT))
+
                 ok, violations = policy.check_protected_paths(str(REPO_ROOT))
-                self.assertTrue(ok, f"Khi đã ủy quyền Spine Amendment, check_protected_paths phải thông qua: {violations}")
-            finally:
-                os.environ.pop("ALLOW_SPINE_AMENDMENT", None)
+                self.assertFalse(ok)
+                self.assertTrue(any("Fail-closed" in v for v in violations))
 
 if __name__ == "__main__":
     unittest.main()

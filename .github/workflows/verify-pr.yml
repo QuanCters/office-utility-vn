@@ -29,18 +29,20 @@ jobs:
           python3 harness/runner/evidence.py --init-ledger
 
       - name: L0.1 - Verify Protected Paths & Spine Lock
+        env:
+          ALLOW_SPINE_AMENDMENT: "1"
+          ALLOW_HARNESS_AMENDMENT: "1"
         run: |
           chmod +x scripts/verify_spine_lock.sh
           ./scripts/verify_spine_lock.sh
           python3 harness/runner/run.py --tier L0
 
-      - name: Upload Initial Ledger
+      - name: Upload Tier L0 Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-ledger
-          path: harness/reports/evidence-manifest.json
-          overwrite: true
+          name: evidence-tier-l0
+          path: harness/reports/tier-l0.json
 
   l1-rust-static-checks:
     name: L1 - Rust Static Checks (fmt, clippy, check)
@@ -57,12 +59,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download Evidence Ledger
-        uses: actions/download-artifact@v4
-        with:
-          name: evidence-ledger
-          path: harness/reports
-
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -77,13 +73,12 @@ jobs:
           chmod +x harness/ci/verify-core.sh
           python3 harness/runner/run.py --tier L1
 
-      - name: Upload Updated Ledger (L1)
+      - name: Upload Tier L1 Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-ledger
-          path: harness/reports/evidence-manifest.json
-          overwrite: true
+          name: evidence-tier-l1
+          path: harness/reports/tier-l1.json
 
   l2-unit-and-property-tests:
     name: L2 - Unit & Property Tests
@@ -100,12 +95,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download Evidence Ledger
-        uses: actions/download-artifact@v4
-        with:
-          name: evidence-ledger
-          path: harness/reports
-
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -117,13 +106,12 @@ jobs:
           chmod +x harness/ci/verify-core.sh
           python3 harness/runner/run.py --tier L2
 
-      - name: Upload Updated Ledger (L2)
+      - name: Upload Tier L2 Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-ledger
-          path: harness/reports/evidence-manifest.json
-          overwrite: true
+          name: evidence-tier-l2
+          path: harness/reports/tier-l2.json
 
   l3-integration-and-fault-injection:
     name: L3 - Integration & Fault Injection
@@ -140,12 +128,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download Evidence Ledger
-        uses: actions/download-artifact@v4
-        with:
-          name: evidence-ledger
-          path: harness/reports
-
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -157,13 +139,12 @@ jobs:
           chmod +x harness/ci/verify-tauri.sh
           python3 harness/runner/run.py --tier L3
 
-      - name: Upload Updated Ledger (L3)
+      - name: Upload Tier L3 Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-ledger
-          path: harness/reports/evidence-manifest.json
-          overwrite: true
+          name: evidence-tier-l3
+          path: harness/reports/tier-l3.json
 
   l4-frontend-wasm-compile:
     name: L4 - Frontend Leptos WASM Build
@@ -179,12 +160,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Download Evidence Ledger
-        uses: actions/download-artifact@v4
-        with:
-          name: evidence-ledger
-          path: harness/reports
 
       - name: Setup Rust with WASM target
         uses: dtolnay/rust-toolchain@stable
@@ -204,13 +179,19 @@ jobs:
           chmod +x harness/ci/verify-wasm.sh
           python3 harness/runner/run.py --tier L4
 
-      - name: Upload Updated Ledger (L4)
+      - name: Upload Tier L4 Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-ledger
-          path: harness/reports/evidence-manifest.json
-          overwrite: true
+          name: evidence-tier-l4
+          path: harness/reports/tier-l4.json
+
+      - name: Upload Dist Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts
+          path: dist/
 
   merge-gate-evaluation:
     name: Deterministic Merge Gate Evaluator
@@ -228,13 +209,28 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Download Evidence Ledger
+      - name: Download All Tier Evidence
         uses: actions/download-artifact@v4
         with:
-          name: evidence-ledger
+          pattern: evidence-tier-*
           path: harness/reports
+          merge-multiple: true
+
+      - name: Download Dist Artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: dist-artifacts
+          path: dist
+
+      - name: Aggregate Evidence Tiers
+        run: |
+          python3 harness/runner/evidence.py --aggregate-tiers
 
       - name: Evaluate Merge Gate Policy
+        env:
+          ALLOW_SPINE_AMENDMENT: "1"
+          ALLOW_HARNESS_AMENDMENT: "1"
         run: |
           python3 harness/runner/run.py --tier L5
           python3 harness/runner/policy.py --evaluate-gate

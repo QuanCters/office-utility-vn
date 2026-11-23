@@ -100,87 +100,130 @@ def get_git_diff_files(repo_root: str) -> list[str]:
     1. So sánh merge-base với nhánh cơ sở (GITHUB_BASE_REF hoặc BASE_REF)
     2. Fallback sang origin/main hoặc HEAD~1 nếu không có base_ref
     3. Kết hợp thêm các thay đổi chưa commit (unstaged, staged, untracked) trong working tree
+    4. Trong môi trường CI, nếu không xác định được diff thì fail-closed (raise RuntimeError).
     """
     files = set()
-    try:
-        base_ref = os.environ.get("GITHUB_BASE_REF") or os.environ.get("BASE_REF")
-        diff_targets = []
-        if base_ref:
-            diff_targets.append(f"origin/{base_ref}...HEAD")
-            diff_targets.append(f"{base_ref}...HEAD")
-        else:
-            diff_targets.append("origin/main...HEAD")
-            diff_targets.append("main...HEAD")
+    is_ci = os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI") == "true"
+    base_ref = os.environ.get("GITHUB_BASE_REF") or os.environ.get("BASE_REF")
+    diff_targets = []
+    if base_ref:
+        diff_targets.append(f"origin/{base_ref}...HEAD")
+        diff_targets.append(f"{base_ref}...HEAD")
+    else:
+        diff_targets.append("origin/main...HEAD")
+        diff_targets.append("main...HEAD")
 
-        for target in diff_targets:
-            res = subprocess.run(
-                ["git", "diff", "--name-only", target],
-                cwd=repo_root,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            if res.returncode == 0:
-                for line in res.stdout.splitlines():
-                    if line.strip():
-                        files.add(line.strip())
-                break
-
-        # Luôn kiểm tra thêm các thay đổi chưa commit trong working tree (local dev)
-        res_head = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
-        if res_head.returncode == 0:
-            for line in res_head.stdout.splitlines():
+    diff_success = False
+    for target in diff_targets:
+        res = subprocess.run(
+            ["git", "diff", "--name-only", target],
+            cwd=repo_root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        if res.returncode == 0:
+            diff_success = True
+            for line in res.stdout.splitlines():
                 if line.strip():
                     files.add(line.strip())
+            break
 
-        res_cached = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
-        if res_cached.returncode == 0:
-            for line in res_cached.stdout.splitlines():
-                if line.strip():
-                    files.add(line.strip())
+    # Luôn kiểm tra thêm các thay đổi chưa commit trong working tree (local dev)
+    res_head = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
+    if res_head.returncode == 0:
+        for line in res_head.stdout.splitlines():
+            if line.strip():
+                files.add(line.strip())
 
-        res_untracked = subprocess.run(["git", "status", "--porcelain"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
-        if res_untracked.returncode == 0:
-            for line in res_untracked.stdout.splitlines():
-                if line.startswith("??"):
-                    files.add(line[3:].strip())
+    res_cached = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
+    if res_cached.returncode == 0:
+        for line in res_cached.stdout.splitlines():
+            if line.strip():
+                files.add(line.strip())
 
-        return sorted(list(files))
-    except Exception as e:
-        print(f"Warning: could not get git diff: {e}")
-        return sorted(list(files))
+    res_untracked = subprocess.run(["git", "status", "--porcelain"], cwd=repo_root, stdout=subprocess.PIPE, text=True)
+    if res_untracked.returncode == 0:
+        for line in res_untracked.stdout.splitlines():
+            if line.startswith("??"):
+                files.add(line[3:].strip())
+
+    if is_ci and not files:
+        raise RuntimeError("Fail-closed: unable to determine committed PR diff in CI environment (files list is empty)")
+
+    return sorted(list(files))
+
+# Tệp duy nhất được phép tu chính trong phạm vi RFC PR-01 đã được phê duyệt
+AUTHORIZED_SPINE_AMENDMENT_FILES = {
+    "src-tauri/src/commands/mod.rs",
+    "scripts/verify_spine_lock.sh",
+}
 
 def check_protected_paths(repo_root: str) -> tuple[bool, list[str]]:
     """
     Kiểm tra các đường dẫn bất biến được bảo vệ (Protected Paths Guard).
-    Bao gồm Spine Layer, Scripts kiểm tra toàn vẹn, Harness policies/runners, CI Workflows và Vendor code.
+    - Spine Layer: crates/office-shared/, src-tauri/src/db/, src-tauri/src/commands/, scripts/verify_spine_lock.sh
+    - Pinned Vendor: vendor/
+    - Governance: .github/CODEOWNERS
+    - Harness & CI: harness/policies/, harness/ci/, harness/runner/, .github/workflows/
     """
     violations = []
-    protected_roots = [
-        "crates/office-shared/",
-        "src-tauri/src/db/",
-        "src-tauri/src/commands/",
-        "scripts/verify_spine_lock.sh",
-        "harness/policies/",
-        "harness/ci/",
-        "harness/runner/",
-        ".github/workflows/",
-        ".github/CODEOWNERS",
-        "vendor/",
-    ]
+    try:
+        changed_files = get_git_diff_files(repo_root)
+    except Exception as e:
+        return (False, [f"Fail-closed policy violation: unable to determine changed files in CI: {e}"])
 
-    changed_files = get_git_diff_files(repo_root)
     is_agent_feature_run = os.environ.get("AGENT_FEATURE_RUN", "0") == "1"
     allow_spine_amendment = (
         os.environ.get("ALLOW_SPINE_AMENDMENT", "0") == "1"
         or os.environ.get("SPINE_AMENDMENT_AUTHORIZED", "0") == "1"
     )
+    allow_harness_amendment = (
+        os.environ.get("ALLOW_HARNESS_AMENDMENT", "0") == "1"
+    )
 
-    if is_agent_feature_run or not allow_spine_amendment:
-        for f in changed_files:
-            for p in protected_roots:
-                if f.startswith(p) or f == p:
-                    violations.append(f"Protected path modification detected: '{f}' (guard: {p})")
+    spine_roots = [
+        "crates/office-shared/",
+        "src-tauri/src/db/",
+        "src-tauri/src/commands/",
+        "scripts/verify_spine_lock.sh",
+    ]
+    vendor_and_governance = [
+        "vendor/",
+        ".github/CODEOWNERS",
+    ]
+    harness_and_ci = [
+        "harness/policies/",
+        "harness/ci/",
+        "harness/runner/",
+        ".github/workflows/",
+    ]
+
+    for f in changed_files:
+        # 1. Kiểm tra Spine Layer
+        is_spine = any(f.startswith(p) or f == p for p in spine_roots)
+        if is_spine:
+            if not is_agent_feature_run and allow_spine_amendment:
+                if f in AUTHORIZED_SPINE_AMENDMENT_FILES:
+                    # Thuộc danh sách cho phép có phạm vi cụ thể của RFC PR-01
+                    pass
+                else:
+                    violations.append(f"Protected spine path modification not authorized under amendment: '{f}'")
+            else:
+                violations.append(f"Protected spine path modification detected: '{f}'")
+
+        # 2. Kiểm tra Pinned Vendor & Governance (Tuyệt đối không có ngoại lệ)
+        is_vendor_gov = any(f.startswith(p) or f == p for p in vendor_and_governance)
+        if is_vendor_gov:
+            violations.append(f"Protected invariant path modification detected: '{f}' (guard: vendor/governance)")
+
+        # 3. Kiểm tra Harness & CI
+        is_harness_ci = any(f.startswith(p) or f == p for p in harness_and_ci)
+        if is_harness_ci:
+            if not is_agent_feature_run and (allow_harness_amendment or allow_spine_amendment):
+                pass
+            else:
+                violations.append(f"Protected path modification detected: '{f}' (guard: harness/ci)")
 
     return (len(violations) == 0, violations)
 
