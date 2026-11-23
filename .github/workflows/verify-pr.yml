@@ -2,7 +2,7 @@ name: Verification Harness - PR Gate (L0-L4)
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, master, "baseline/*"]
   workflow_dispatch:
 
 concurrency:
