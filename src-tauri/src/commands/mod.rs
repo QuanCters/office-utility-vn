@@ -1,19 +1,153 @@
-use std::path::{Path, PathBuf};
-use std::time::Instant;
-use tauri::{AppHandle, Manager, State};
+use office_engine::OfficeTool;
+use office_engine::vn_office::{VietnameseNumberToWordsTool, VnCccdMstValidatorTool};
 use office_shared::{
     AddonStatusResponse, CommandError, DispatchTaskRequest, DispatchTaskResponse,
     FileMetadataResponse, TaskHistoryRecord, TaskProgress, ToolPreset, ToolSettingRecord,
     WorkflowDag,
 };
-use office_engine::vn_office::{VietnameseNumberToWordsTool, VnCccdMstValidatorTool};
-use office_engine::OfficeTool;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+use tauri::{AppHandle, Manager, State};
 
 pub mod updater;
 pub use updater::*;
 
 use crate::db;
 use crate::state::AppState;
+
+pub const ENABLED_TOOL_ALLOWLIST: &[&str] =
+    &["vietnamese-number-to-words", "vn-cccd-mst-validator"];
+
+pub fn is_emergency_kill_switch_active() -> bool {
+    match std::env::var("OFFICE_UTILITY_EMERGENCY_FAIL_CLOSED") {
+        Ok(val) => {
+            let v = val.trim();
+            v == "1" || v.eq_ignore_ascii_case("true")
+        }
+        Err(_) => false,
+    }
+}
+
+pub fn is_tool_enabled(slug: &str) -> bool {
+    ENABLED_TOOL_ALLOWLIST.contains(&slug)
+}
+
+/// Thu nhận kết nối CSDL SQLite với cơ chế đánh giá an toàn Mutex Poisoning
+/// Không mặc nhiên coi into_inner() là thành công, mà phải kiểm tra tính toàn vẹn (ROLLBACK transaction dở dang và sanity ping)
+pub fn acquire_db_connection<'a>(
+    db_mutex: &'a std::sync::Mutex<rusqlite::Connection>,
+) -> Result<std::sync::MutexGuard<'a, rusqlite::Connection>, CommandError> {
+    match db_mutex.lock() {
+        Ok(guard) => Ok(guard),
+        Err(poisoned) => {
+            eprintln!(
+                "[acquire_db_connection] Cảnh báo an ninh: Mutex CSDL bị poisoned do luồng trước panic"
+            );
+            let guard = poisoned.into_inner();
+            // Đánh giá tính an toàn của kết nối SQLite:
+            // 1. Nếu luồng cũ panic trong một transaction dở dang (is_autocommit() == false), thực hiện ROLLBACK
+            if !guard.is_autocommit() {
+                eprintln!(
+                    "[acquire_db_connection] Phát hiện transaction dở dang sau panic. Đang khôi phục ROLLBACK..."
+                );
+                if let Err(rollback_err) = guard.execute_batch("ROLLBACK;") {
+                    eprintln!("[acquire_db_connection] ROLLBACK thất bại: {rollback_err}");
+                    return Err(CommandError::DatabaseError {
+                        details: format!(
+                            "Kết nối CSDL không thể phục hồi sau Mutex Poison (ROLLBACK thất bại): {rollback_err}"
+                        ),
+                    });
+                }
+            }
+            // 2. Thực hiện sanity check kết nối
+            if let Err(sanity_err) = guard.query_row("SELECT 1", [], |_| Ok(())) {
+                eprintln!("[acquire_db_connection] Sanity check thất bại sau poison: {sanity_err}");
+                return Err(CommandError::DatabaseError {
+                    details: format!("Kết nối CSDL bị hỏng sau Mutex Poison: {sanity_err}"),
+                });
+            }
+            eprintln!("[acquire_db_connection] Phục hồi và khử nhiễm kết nối CSDL thành công");
+            Ok(guard)
+        }
+    }
+}
+
+/// Điểm kết nối điều phối sản xuất chung (Enforced Minimal Allowlist Deny-by-Default)
+pub fn dispatch_tool_execution(
+    request: &DispatchTaskRequest,
+    cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+    progress_callback: Option<&(dyn Fn(TaskProgress) + Send + Sync)>,
+) -> Result<DispatchTaskResponse, CommandError> {
+    // 1. Kiểm tra biến môi trường khóa khẩn cấp toàn hệ thống (Emergency Kill-Switch)
+    if is_emergency_kill_switch_active() {
+        return Err(CommandError::ValidationFailed {
+            reason: "Hệ thống đang trong chế độ khóa khẩn cấp (Emergency Kill-Switch Active)"
+                .to_string(),
+        });
+    }
+
+    // 2. Kiểm tra cờ hủy hợp tác tức thì (< 100ms)
+    if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(CommandError::TaskCancelled);
+    }
+
+    let tool_slug = request.tool_slug.as_str();
+
+    // 3. Chính sách Deny-by-Default: Chỉ cho phép các công cụ nằm trong Allowlist đã kiểm chứng
+    if !is_tool_enabled(tool_slug) {
+        return Err(CommandError::ValidationFailed {
+            reason: format!(
+                "Công cụ '{tool_slug}' tạm thời bị khóa hoặc chưa khả dụng trong phiên bản hiện tại."
+            ),
+        });
+    }
+
+    // 4. Tuyến thực thi các công cụ đã được cấp phép và kiểm định hành vi
+    match tool_slug {
+        "vietnamese-number-to-words" => {
+            let tool = VietnameseNumberToWordsTool::default();
+            tool.execute(
+                request,
+                cancel_flag,
+                progress_callback.map(|cb| cb as &dyn Fn(TaskProgress)),
+            )
+        }
+        "vn-cccd-mst-validator" => {
+            let tool = VnCccdMstValidatorTool::default();
+            tool.execute(
+                request,
+                cancel_flag,
+                progress_callback.map(|cb| cb as &dyn Fn(TaskProgress)),
+            )
+        }
+        _ => Err(CommandError::ValidationFailed {
+            reason: format!(
+                "Công cụ '{tool_slug}' không có trong danh sách được cấp phép thực thi."
+            ),
+        }),
+    }
+}
+
+/// Điểm kết nối workflow sản xuất chung (Fail-Closed: Tạm thời vô hiệu hóa để bảo đảm an toàn dữ liệu)
+pub fn execute_workflow_execution(
+    workflow_id: &str,
+    _input_paths: Vec<String>,
+    _output_directory: Option<String>,
+    _progress_callback: Option<&(dyn Fn(TaskProgress) + Send + Sync)>,
+) -> Result<DispatchTaskResponse, CommandError> {
+    if is_emergency_kill_switch_active() {
+        return Err(CommandError::ValidationFailed {
+            reason: "Hệ thống đang trong chế độ khóa khẩn cấp (Emergency Kill-Switch Active)"
+                .to_string(),
+        });
+    }
+
+    Err(CommandError::ValidationFailed {
+        reason: format!(
+            "Tính năng thực thi Workflow Pipeline ('{workflow_id}') tạm thời bị khóa để bảo đảm an toàn dữ liệu."
+        ),
+    })
+}
 
 /// 1. Điều phối thực thi tác vụ công cụ đơn lẻ (Non-blocking Rayon/Tokio)
 #[tauri::command]
@@ -27,7 +161,6 @@ pub async fn dispatch_tool_task(
     let cancel_flag = state.register_task(&task_id);
     let start_time = Instant::now();
 
-    let tool_slug = request.tool_slug.clone();
     let req_clone = request.clone();
     let cancel_clone = std::sync::Arc::clone(&cancel_flag);
 
@@ -38,82 +171,7 @@ pub async fn dispatch_tool_task(
 
     // Thực thi trên threadpool nền để giữ Main UI 60 FPS
     let result = tauri::async_runtime::spawn_blocking(move || {
-        match tool_slug.as_str() {
-            "vietnamese-number-to-words" => {
-                let tool = VietnameseNumberToWordsTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "vn-cccd-mst-validator" => {
-                let tool = VnCccdMstValidatorTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "vietnamese-ocr" => {
-                let tool = office_engine::doc_suite::VietnameseOcrTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "pdf-table-extractor" => {
-                let tool = office_engine::doc_suite::PdfTableExtractorTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "pdf-to-long-image" => {
-                let tool = office_engine::doc_suite::PdfToLongImageTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "pdf-booklet-imposition" => {
-                let tool = office_engine::doc_suite::PdfBookletImpositionTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "pdf-grayscale-print" => {
-                let tool = office_engine::doc_suite::PdfGrayscalePrintTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            "pdf-repair-corrupt" => {
-                let tool = office_engine::doc_suite::PdfRepairCorruptTool::default();
-                tool.execute(&req_clone, &cancel_clone, Some(&*progress_callback))
-            }
-            _ => {
-                // Giả lập/Fallback cho các công cụ khác trong quá trình phát triển
-                if cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                    return Err(CommandError::TaskCancelled);
-                }
-
-                progress_callback(TaskProgress {
-                    task_id: req_clone.task_id.clone(),
-                    current_step: 1,
-                    total_steps: 2,
-                    percentage: 50.0,
-                    message: format!("Đang thực thi công cụ '{}'...", req_clone.tool_slug),
-                    processed_files: 0,
-                    failed_files: 0,
-                    total_files: req_clone.input_paths.len(),
-                    is_completed: false,
-                });
-
-                if cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                    return Err(CommandError::TaskCancelled);
-                }
-
-                progress_callback(TaskProgress {
-                    task_id: req_clone.task_id.clone(),
-                    current_step: 2,
-                    total_steps: 2,
-                    percentage: 100.0,
-                    message: "Hoàn tất thành công".to_string(),
-                    processed_files: req_clone.input_paths.len(),
-                    failed_files: 0,
-                    total_files: req_clone.input_paths.len(),
-                    is_completed: true,
-                });
-
-                Ok(DispatchTaskResponse {
-                    task_id: req_clone.task_id.clone(),
-                    status: "SUCCESS".to_string(),
-                    output_paths: req_clone.input_paths.clone(),
-                    failed_items: vec![],
-                    elapsed_ms: start_time.elapsed().as_millis() as u64,
-                })
-            }
-        }
+        dispatch_tool_execution(&req_clone, &cancel_clone, Some(&*progress_callback))
     })
     .await
     .map_err(|e| CommandError::ProcessExecutionError {
@@ -135,7 +193,10 @@ pub async fn dispatch_tool_task(
         tool_slug: Some(request.tool_slug.clone()),
         workflow_id: None,
         input_files_json: serde_json::to_string(&request.input_paths).unwrap_or_default(),
-        output_files_json: serde_json::to_string(&result.as_ref().map(|r| &r.output_paths).unwrap_or(&vec![])).unwrap_or_default(),
+        output_files_json: serde_json::to_string(
+            &result.as_ref().map(|r| &r.output_paths).unwrap_or(&vec![]),
+        )
+        .unwrap_or_default(),
         options_used_json: serde_json::to_string(&request.options).unwrap_or_default(),
         status,
         elapsed_ms: elapsed,
@@ -143,9 +204,23 @@ pub async fn dispatch_tool_task(
         created_at: String::new(),
     };
 
-    if let Ok(conn) = state.db.lock() {
-        let _ = db::add_task_history(&conn, &history_record);
-        let _ = db::record_tool_usage(&conn, &request.tool_slug, &history_record.options_used_json);
+    // Ghi nhật ký vào SQLite kèm cơ chế kiểm chứng an toàn Mutex Poisoning
+    match acquire_db_connection(&state.db) {
+        Ok(conn) => {
+            if let Err(e) = db::add_task_history(&conn, &history_record) {
+                eprintln!("[dispatch_tool_task] Lỗi ghi nhận task_history: {e}");
+            }
+            if let Err(e) =
+                db::record_tool_usage(&conn, &request.tool_slug, &history_record.options_used_json)
+            {
+                eprintln!("[dispatch_tool_task] Lỗi ghi nhận tool_usage: {e}");
+            }
+        }
+        Err(db_err) => {
+            eprintln!(
+                "[dispatch_tool_task] Cảnh báo kiểm toán: Không thể ghi nhận task_history do lỗi CSDL: {db_err}"
+            );
+        }
     }
 
     result
@@ -153,10 +228,7 @@ pub async fn dispatch_tool_task(
 
 /// 2. Hủy tác vụ đang chạy (< 100ms)
 #[tauri::command]
-pub async fn cancel_task(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<(), CommandError> {
+pub async fn cancel_task(state: State<'_, AppState>, task_id: String) -> Result<(), CommandError> {
     if state.cancel_task(&task_id) {
         Ok(())
     } else {
@@ -166,6 +238,93 @@ pub async fn cancel_task(
     }
 }
 
+/// Thực thi workflow kèm ghi nhận lịch sử vào SQLite với chính sách kiểm toán bất biến (Audit Trail Integrity)
+/// Tuân thủ quy chuẩn:
+/// 1. Khôi phục an toàn Mutex Poisoning có kiểm định ROLLBACK và Sanity Ping
+/// 2. Không nuốt lỗi SQL bằng unwrap_or(false) khi kiểm tra Foreign Key
+/// 3. Định danh thực thi duy nhất UUIDv4 ngăn ngừa collision
+/// 4. Thất bại ghi nhật ký kiểm toán phải báo lỗi về luồng gọi thay vì âm thầm bỏ qua
+pub fn execute_workflow_with_persistence(
+    db_mutex: &std::sync::Mutex<rusqlite::Connection>,
+    workflow_id: &str,
+    input_paths: Vec<String>,
+    output_directory: Option<String>,
+    progress_callback: Option<&(dyn Fn(TaskProgress) + Send + Sync)>,
+) -> Result<DispatchTaskResponse, CommandError> {
+    let start_time = Instant::now();
+
+    // 1. Thực thi core logic (luôn fail-closed trong PR-01)
+    let res = execute_workflow_execution(
+        workflow_id,
+        input_paths.clone(),
+        output_directory,
+        progress_callback,
+    );
+
+    let elapsed = start_time.elapsed().as_millis() as u64;
+    let (status, err_msg) = match &res {
+        Ok(resp) => (resp.status.clone(), None),
+        Err(e) => ("FAILED".to_string(), Some(e.to_string())),
+    };
+
+    // 2. Định danh duy nhất cho từng lần chạy để không vi phạm PRIMARY KEY của task_history
+    let execution_id = uuid::Uuid::new_v4().to_string();
+
+    // 3. Khôi phục an toàn Mutex CSDL có kiểm chứng toàn vẹn kết nối
+    let conn = acquire_db_connection(db_mutex)?;
+
+    // 4. Kiểm tra toàn vẹn Foreign Key: Tuyệt đối không nuốt lỗi SQL bằng unwrap_or(false)
+    let workflow_fk = if workflow_id.trim().is_empty() {
+        None
+    } else {
+        let fk_exists = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM workflows WHERE id = ?1)",
+                rusqlite::params![workflow_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(|e| CommandError::DatabaseError {
+                details: format!("Lỗi truy vấn toàn vẹn khóa ngoại workflow '{workflow_id}': {e}"),
+            })?;
+
+        if fk_exists {
+            Some(workflow_id.to_string())
+        } else {
+            eprintln!(
+                "[execute_workflow_with_persistence] Cảnh báo: workflow_id '{workflow_id}' không tồn tại trong CSDL"
+            );
+            None
+        }
+    };
+
+    let history_record = TaskHistoryRecord {
+        id: execution_id,
+        parent_task_id: None,
+        tool_slug: None,
+        workflow_id: workflow_fk,
+        input_files_json: serde_json::to_string(&input_paths).unwrap_or_default(),
+        output_files_json: serde_json::to_string(
+            &res.as_ref().map(|r| &r.output_paths).unwrap_or(&vec![]),
+        )
+        .unwrap_or_default(),
+        options_used_json: "{}".to_string(),
+        status,
+        elapsed_ms: elapsed,
+        error_message: err_msg,
+        created_at: String::new(),
+    };
+
+    // 5. Ghi nhận Task History: Thất bại ghi nhận lịch sử kiểm toán phải được báo cáo, không nuốt ngầm
+    if let Err(e) = db::add_task_history(&conn, &history_record) {
+        eprintln!("[execute_workflow_with_persistence] Lỗi ghi nhận task_history: {e}");
+        return Err(CommandError::DatabaseError {
+            details: format!("Thất bại ghi nhận lịch sử kiểm toán tác vụ: {e}"),
+        });
+    }
+
+    res
+}
+
 /// 3. Thực thi chuỗi tự động hóa Workflow (Macro DAG)
 #[tauri::command]
 pub async fn execute_workflow_pipeline(
@@ -173,106 +332,28 @@ pub async fn execute_workflow_pipeline(
     state: State<'_, AppState>,
     workflow_id: String,
     input_paths: Vec<String>,
-    _output_directory: Option<String>,
+    output_directory: Option<String>,
     on_progress: tauri::ipc::Channel<TaskProgress>,
 ) -> Result<DispatchTaskResponse, CommandError> {
-    let start_time = Instant::now();
-
-    // Lấy định nghĩa Workflow từ SQLite
-    let workflow = {
-        let conn = state.db.lock().map_err(|e| CommandError::DatabaseError {
-            details: format!("Không thể khóa DB: {e}"),
-        })?;
-        let workflows = db::get_all_workflows(&conn)?;
-        workflows
-            .into_iter()
-            .find(|w| w.id == workflow_id)
-            .ok_or_else(|| CommandError::ValidationFailed {
-                reason: format!("Không tìm thấy workflow '{workflow_id}'"),
-            })?
-    };
-
-    // Kiểm tra chu trình (Cycle Detection) bằng Kahn's Algorithm
-    let mut in_degrees: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    let mut adj_list: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
-
-    for node in &workflow.nodes {
-        in_degrees.insert(&node.id, 0);
-        adj_list.insert(&node.id, Vec::new());
-    }
-
-    for edge in &workflow.edges {
-        *in_degrees.entry(&edge.target_node_id).or_insert(0) += 1;
-        adj_list
-            .entry(&edge.source_node_id)
-            .or_default()
-            .push(&edge.target_node_id);
-    }
-
-    let mut queue: std::collections::VecDeque<&str> = in_degrees
-        .iter()
-        .filter(|&(_, &deg)| deg == 0)
-        .map(|(&id, _)| id)
-        .collect();
-
-    let mut visited_count = 0;
-    while let Some(curr) = queue.pop_front() {
-        visited_count += 1;
-        if let Some(neighbors) = adj_list.get(curr) {
-            for &nbr in neighbors {
-                if let Some(deg) = in_degrees.get_mut(nbr) {
-                    *deg -= 1;
-                    if *deg == 0 {
-                        queue.push_back(nbr);
-                    }
-                }
-            }
-        }
-    }
-
-    if visited_count != workflow.nodes.len() {
-        return Err(CommandError::WorkflowCycleDetected);
-    }
-
-    // Bắn thông báo tiến độ ban đầu
-    let _ = on_progress.send(TaskProgress {
-        task_id: workflow_id.clone(),
-        current_step: 1,
-        total_steps: workflow.nodes.len() as u32,
-        percentage: 10.0,
-        message: format!("Bắt đầu chạy chuỗi '{}'...", workflow.name),
-        processed_files: 0,
-        failed_files: 0,
-        total_files: input_paths.len(),
-        is_completed: false,
+    let progress_sender = on_progress.clone();
+    let progress_callback = Box::new(move |p: TaskProgress| {
+        let _ = progress_sender.send(p);
     });
 
-    let _ = on_progress.send(TaskProgress {
-        task_id: workflow_id.clone(),
-        current_step: workflow.nodes.len() as u32,
-        total_steps: workflow.nodes.len() as u32,
-        percentage: 100.0,
-        message: "Hoàn tất chuỗi tự động hóa".to_string(),
-        processed_files: input_paths.len(),
-        failed_files: 0,
-        total_files: input_paths.len(),
-        is_completed: true,
-    });
-
-    let elapsed = start_time.elapsed().as_millis() as u64;
-
-    Ok(DispatchTaskResponse {
-        task_id: workflow_id,
-        status: "SUCCESS".to_string(),
-        output_paths: input_paths,
-        failed_items: vec![],
-        elapsed_ms: elapsed,
-    })
+    execute_workflow_with_persistence(
+        &state.db,
+        &workflow_id,
+        input_paths,
+        output_directory,
+        Some(&*progress_callback),
+    )
 }
 
 /// 4. Kiểm tra nhanh chữ ký và MIME-type tệp (Deep Magic Bytes qua `infer`)
 #[tauri::command]
-pub async fn inspect_file_metadata(file_path: String) -> Result<FileMetadataResponse, CommandError> {
+pub async fn inspect_file_metadata(
+    file_path: String,
+) -> Result<FileMetadataResponse, CommandError> {
     let path = Path::new(&file_path);
     if !path.exists() {
         return Err(CommandError::FileNotFound {
@@ -327,7 +408,10 @@ pub async fn read_file_binary(_file_path: String) -> Result<Vec<u8>, CommandErro
 #[cfg(debug_assertions)]
 const APPROVED_DEV_FIXTURES: &[(&str, &str)] = &[
     ("tc04_sample", "/tmp/office-utility-uat/tc04_sample.xlsx"),
-    ("test_uat_sample", "/tmp/office-utility-uat/test_uat_sample.xlsx"),
+    (
+        "test_uat_sample",
+        "/tmp/office-utility-uat/test_uat_sample.xlsx",
+    ),
 ];
 
 /// Tải fixture phục vụ kiểm thử phát triển / UAT cục bộ (Debug Only).
@@ -342,7 +426,10 @@ pub async fn load_dev_fixture(
         .iter()
         .find(|(id, _)| *id == fixture_id)
         .ok_or_else(|| CommandError::ValidationFailed {
-            reason: format!("Mã kiểm thử '{}' không nằm trong danh mục fixture phát triển được cho phép", fixture_id),
+            reason: format!(
+                "Mã kiểm thử '{}' không nằm trong danh mục fixture phát triển được cho phép",
+                fixture_id
+            ),
         })?;
 
     let path = std::path::Path::new(matched.1);
@@ -376,7 +463,8 @@ pub async fn load_dev_fixture(
     })?;
     if !bytes.starts_with(b"PK\x03\x04") {
         return Err(CommandError::ValidationFailed {
-            reason: "Tệp fixture không phải là tệp bảng tính XLSX hợp lệ (thiếu header PK)".to_string(),
+            reason: "Tệp fixture không phải là tệp bảng tính XLSX hợp lệ (thiếu header PK)"
+                .to_string(),
         });
     }
 
@@ -426,7 +514,11 @@ pub async fn secure_save_document(
     bytes: Vec<u8>,
 ) -> Result<crate::safe_persistence::SaveSuccessResponse, CommandError> {
     let res = tauri::async_runtime::spawn_blocking(move || {
-        crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.execute_granted_save(&grant_id, &request_id, &bytes)
+        crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.execute_granted_save(
+            &grant_id,
+            &request_id,
+            &bytes,
+        )
     })
     .await
     .map_err(|e| CommandError::ProcessExecutionError {
@@ -632,39 +724,49 @@ pub async fn toggle_always_on_top(
 
 #[tauri::command]
 pub async fn minimize_window(window: tauri::Window) -> Result<(), CommandError> {
-    window.minimize().map_err(|e| CommandError::ProcessExecutionError {
-        message: format!("Không thể thu nhỏ cửa sổ: {e}"),
-    })
+    window
+        .minimize()
+        .map_err(|e| CommandError::ProcessExecutionError {
+            message: format!("Không thể thu nhỏ cửa sổ: {e}"),
+        })
 }
 
 #[tauri::command]
 pub async fn toggle_maximize_window(window: tauri::Window) -> Result<(), CommandError> {
     if window.is_maximized().unwrap_or(false) {
-        window.unmaximize().map_err(|e| CommandError::ProcessExecutionError {
-            message: format!("Không thể thu nhỏ cửa sổ: {e}"),
-        })
+        window
+            .unmaximize()
+            .map_err(|e| CommandError::ProcessExecutionError {
+                message: format!("Không thể thu nhỏ cửa sổ: {e}"),
+            })
     } else {
-        window.maximize().map_err(|e| CommandError::ProcessExecutionError {
-            message: format!("Không thể phóng to cửa sổ: {e}"),
-        })
+        window
+            .maximize()
+            .map_err(|e| CommandError::ProcessExecutionError {
+                message: format!("Không thể phóng to cửa sổ: {e}"),
+            })
     }
 }
 
 #[tauri::command]
 pub async fn close_window(window: tauri::Window) -> Result<(), CommandError> {
-    window.close().map_err(|e| CommandError::ProcessExecutionError {
-        message: format!("Không thể đóng cửa sổ: {e}"),
-    })
+    window
+        .close()
+        .map_err(|e| CommandError::ProcessExecutionError {
+            message: format!("Không thể đóng cửa sổ: {e}"),
+        })
 }
 
 #[tauri::command]
 pub async fn open_output_folder(app: AppHandle) -> Result<(), CommandError> {
     use tauri_plugin_opener::OpenerExt;
-    let download_dir = app.path().download_dir().unwrap_or_else(|_| PathBuf::from("./"));
+    let download_dir = app
+        .path()
+        .download_dir()
+        .unwrap_or_else(|_| PathBuf::from("./"));
     app.opener()
         .open_path(download_dir.to_string_lossy(), None::<&str>)
         .map_err(|e| CommandError::ProcessExecutionError {
             message: format!("Không thể mở thư mục kết quả: {e}"),
         })
 }
-

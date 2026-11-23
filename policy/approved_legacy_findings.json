@@ -1,0 +1,1806 @@
+{
+  "baseline_version": 1,
+  "expires_on": "2027-01-31",
+  "approved_findings": [
+    {
+      "fingerprint": "57cb48bb6a3ecda995431c22a7f50e7411aa643d95cf0fff444a9fbd5f666d85",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/base64_file_codec.rs",
+      "observed_line": 509,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "83446f38d860c03a64cfee5aea00b99a1f303fc8b2fb38bfe761f7dabe2ca516",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/base64_file_codec.rs",
+      "observed_line": 510,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1f0c61f11fb86f9f1cad2ec8e07926567f2fb6a6e3bab4dc6c8b223e64d43fe9",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/base64_file_codec.rs",
+      "observed_line": 545,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "f853e57e8c1d696f69901a18557bc4fb4e04da4d4dc571ecbbe2286a4cdfa92d",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/base64_file_codec.rs",
+      "observed_line": 572,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "451442e3c5ef66e41f13e62922f56e7b941dee67cc5d032b8e780829638efd0f",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/fuzzy_clustering.rs",
+      "observed_line": 851,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "9e0e16ad40420dc176995d27285d8c72761a843ccfda14c442bd9a8625e1c59a",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/schema_quality_gate.rs",
+      "observed_line": 1192,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2703fcfa39604e4c151319c9a10c5e3f238132565ba01593709e50cffa87e8bc",
+      "rule_id": "VNI001",
+      "path": "crates/office-engine/src/data_lab/vietnamese_font_converter.rs",
+      "observed_line": 222,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "7ac368067764c5b195c14c0b1f507512b37483f926cc191bd50e6594782b49b8",
+      "rule_id": "VNI001",
+      "path": "crates/office-engine/src/data_lab/vietnamese_font_converter.rs",
+      "observed_line": 277,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "95d2b60f37a27fa00c8f01dc3efd0d1e91bc214fee5a8ae7009bf4d1095b5c1d",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/vn_einvoice_auditor.rs",
+      "observed_line": 1087,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c562a609857527fb6397db3fbf86945906c80cc3db9519bf446319aeb841f549",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/data_lab/vn_font_encoding_doc.rs",
+      "observed_line": 1046,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "90c3bf7033bbfecad63bd5d1f9e11efceb8a91b9b1b5924f1c2f9c433137fed8",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/docx_template_mailmerge.rs",
+      "observed_line": 202,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "ec4ef444c6786eaf96c10ecc83596dc49da4720038f3b2685543140ca0f6b139",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/docx_template_mailmerge.rs",
+      "observed_line": 318,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "984031881eb6bec87e6e75ea6ced905c099cf8a1d8454f9f4b434bfb4db09f9e",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/docx_template_mailmerge.rs",
+      "observed_line": 581,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "b2c03593e8185c5a6776e5478c30a62d5ecffd269c34679a14981626771da8e0",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/markdown_to_styled_pdf.rs",
+      "observed_line": 428,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "7a34fc4e915e5a57e59b164fedbe420565e4c81d847fcf5dcc4a2e1c9fd13a43",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/markdown_to_styled_pdf.rs",
+      "observed_line": 529,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "17d9d2c5eb7405f7b96cbbe7e08555180fa02bf1d31470105f5ec5c49a8427d6",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_archive_linearize.rs",
+      "observed_line": 66,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "dd95bbc8364f076609bee2fc740f00409cdb552258e1fb6f94e885360bac0f5d",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_archive_linearize.rs",
+      "observed_line": 76,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "e1ec2a00d1d210c96cb5ce0bc24dbb5bd02c12d117c1663f177be39030bd22d9",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_archive_linearize.rs",
+      "observed_line": 90,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "69eb1322bf1159e4484251e19daf550771df21c9eae0d41051e525d045bf5fbc",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_archive_linearize.rs",
+      "observed_line": 100,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "da30b7cecd717f76c879b9676a5105c9e9d3bee487ea91edbd777f070f3f3bc1",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_archive_linearize.rs",
+      "observed_line": 423,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "9695e6b1ef59bd857de337fd6ce175e2212869d8e37154fdb78498fea75ec47a",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_booklet_imposition.rs",
+      "observed_line": 230,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "617681689f8d855425332bce58fb88c55300a5f4ba96000197a00cd9214b4a64",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_booklet_imposition.rs",
+      "observed_line": 254,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "454fc05d14c8cadfa496fc6ef0a5e12c23ee52b46bc3d1f483f3438fc8ebc220",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_booklet_imposition.rs",
+      "observed_line": 526,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "293cf38abb89c68946cf90bd739d7399169609148abeece7cde6b83f9ea7f16a",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_bookmark_toc.rs",
+      "observed_line": 187,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "e2ec8b5fdff085eec236309ef99c327c0c088ba985d7634a33a6f07efcf2b2e2",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_bookmark_toc.rs",
+      "observed_line": 193,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "759a0fc160487a6e1a8b16617aa23792c4f050df1a7987db20a31f9db4d7c3c6",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_bookmark_toc.rs",
+      "observed_line": 342,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "72adaa9b818d67f8671a39ffc817081e7e4813989b63a7522ce40f66d7d1547f",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_bookmark_toc.rs",
+      "observed_line": 522,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "064ccc1994f127a3cfdb3c622453aebbe7ca60dc46ddebc7357c93c63c3d3d15",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_bookmark_toc.rs",
+      "observed_line": 532,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "da3b2460e74c7c0047c7a96ad6aa9017fcf0886d3761ec1b3b2865f7e3008106",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_compress.rs",
+      "observed_line": 118,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "406c7d36a7beb9b98aa774ef4c2f8efcfc6bb23c52d5c0e7f1feaecd9769d66a",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_compress.rs",
+      "observed_line": 128,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "cfc7cfd0eac68fb169c14c8647fd22aebddb32632213ec5dcb1b1906367fc1c1",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_compress.rs",
+      "observed_line": 143,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d3cc12f0783443c98043da23869077851d021189bfc7d3b8c1263be7f96f98cb",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_compress.rs",
+      "observed_line": 153,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "ca462ffa49ee112e3b0f884e692c3be17c46ad83cc8bae09be9f0dd2a0d8c9c3",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_compress.rs",
+      "observed_line": 460,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "480e575b90c6ca30c5cf666d9fffe4fb48d81ae06907d5255083e2e70a9bcabe",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_compress.rs",
+      "observed_line": 488,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "dc7bede7ec24cb30b4f05306b51469ce210e79bb87b53b2b54393fa60603744b",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+      "observed_line": 59,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "52351a0ee6215723ac9b4e7b7830c4428756d16488bb8e05e434d70ac6697d20",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+      "observed_line": 69,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "abc352f29913cc6968fd136e5bf82ac9367e4e60550621b59fbb224abac3b77b",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+      "observed_line": 84,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "a3bacf46ca1d5e2c026dc225aae5505222fc1fffa4db7cb407333af12aeef624",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+      "observed_line": 94,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "21d2abd62c86bb525773ad463612d2adea708324a853672c3474d77e42c380f4",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+      "observed_line": 463,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d8b9d0cdf0f818ddb915993930c5ae654b391a69b8db4745e6b32d59cfca31a8",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+      "observed_line": 491,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "bdfce4aa13595d98042f6de408e5edcaafe1c98bb5bb17c842716f2d2cf26c86",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_flatten_forms.rs",
+      "observed_line": 56,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8ccf5d3f93ae294378880b630c34d091bccfef588cf395d1be8900e1371b1502",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_flatten_forms.rs",
+      "observed_line": 66,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "7ba48912e9d07d62d35f334dd1fcfe03db65eb4eed819d5db09ef2184f8f45f3",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_flatten_forms.rs",
+      "observed_line": 81,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "a77dac9968feb2f9f84d888b5939c19825cabfdf9cfdc5af084b9b94053004bd",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_flatten_forms.rs",
+      "observed_line": 91,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2cddcbab2504e223bd7a6e3cc5c59cb61cc1431cd9fb4687613bced26d6be88f",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_flatten_forms.rs",
+      "observed_line": 420,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "20c0735f870cf3f3ca741b077b040996108f8c7f07e5877869513c1ad6511582",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_flatten_forms.rs",
+      "observed_line": 448,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c07d26f4cd474805202af0290d3c54ad014b97bbe3567a9e0e830a3de31c7d9f",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_form_manager.rs",
+      "observed_line": 65,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3bae7ed388cb858b1bcd1a1b88a5ddd425bad0bec77adf4e5467833627e94db2",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_form_manager.rs",
+      "observed_line": 75,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "b4f7509bf73f224cbd81167287cd508a2bf582c0782c21ab49c7d331b4e20cbe",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_form_manager.rs",
+      "observed_line": 81,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1f46c32f2da8c3c6525652c02101e7225bfed56be3714b82832e3e21ddfbb7b0",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_form_manager.rs",
+      "observed_line": 91,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d08ea8b57b8a691b8c6849dad02544431504d16f084526e073374b7e217228e0",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_form_manager.rs",
+      "observed_line": 495,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "0d45fe2bd77dabbea8cd3dcf9f69bc60ac99cd9d06060041966ab7ec6e1a1f2f",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_grayscale_print.rs",
+      "observed_line": 130,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "fc8c4aa464c0e173b3fca138c215e08929d13736d25bf7d4edc33597684b014a",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_grayscale_print.rs",
+      "observed_line": 140,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1398f91bbd09257b0ea4939b9da0a58a3c76657802b671f0b6498d03d8fa7aaf",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_grayscale_print.rs",
+      "observed_line": 363,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "05a432a29fec61f4f0505f0049c05be85750d8bba523cdf1b02609783dae0929",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_merge_split.rs",
+      "observed_line": 64,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d9cd6ad8623b49a7b429f31333a98dd225e03fd2103dfebe5d36ecf9a797f53f",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_merge_split.rs",
+      "observed_line": 74,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "9509fa42b7981b16c0e53f00c0d9afd31a7a7c9a6bb903e675e139adbd92a6eb",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_merge_split.rs",
+      "observed_line": 85,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "45983ef6651a86d37d69ba956d64e39957d6aed96bc1c8ffa3b49015ba7d3ea6",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_merge_split.rs",
+      "observed_line": 95,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3167a12125ccc4a70e7c1109ea4cf1f90f8773a442832c0393d319b829ea4fc3",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_metadata_scrubber.rs",
+      "observed_line": 60,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "acb3710f043be739627be9657ec6635cf97c929c8aa8860593c6e367db9d6b4d",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_metadata_scrubber.rs",
+      "observed_line": 70,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "219a424f62e7025d9eaf59e351f30163a82baf802132bc1b499a904f2c3dbfa0",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_metadata_scrubber.rs",
+      "observed_line": 94,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "95c1992203d10d0135b2f1051723b9652727f6632809b2ee241a2a0d8025af3e",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_metadata_scrubber.rs",
+      "observed_line": 104,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "78f81a53107944f97a0200df8e1430129d5068ee666b21c076e24fc650d11189",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_metadata_scrubber.rs",
+      "observed_line": 389,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "dff4a4d05991dbecba77b3335433d73325054c84cb4250d391480d9abd60e8c5",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_metadata_scrubber.rs",
+      "observed_line": 417,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c17ea385c0e17baf410393c6f3a3d9d038f18843af874fe57ed1194513a26dad",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_number_header.rs",
+      "observed_line": 72,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "f7e3a6adba6f7b975ed3858f87bb45216cfba120dc0fcfbcdba6b29c87387675",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_number_header.rs",
+      "observed_line": 82,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "de7760b40e28fc39dda6ad7efe83667680a0541748640ff805752099422b1355",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_number_header.rs",
+      "observed_line": 88,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3cd934ce80c32e063d873b4c4a863bf803d1ce7dd1136519005f935548b77c38",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_number_header.rs",
+      "observed_line": 98,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "fbdf073f094c82586b4f3afdbea52daae5d9b03e4c0d5f4799c74d124c22b6af",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_number_header.rs",
+      "observed_line": 430,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2481f9079732f43bfd8b930c8c7cf67c29da89a58f8d66d6656906e536d45ebf",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_number_header.rs",
+      "observed_line": 461,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "61d77e767be4b2f367bed969ee28513d3b5d559802c6c6bd0ae7fb9224d3a443",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_organizer.rs",
+      "observed_line": 66,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1d0668de839c7979aca211102539257b1a37799335f33b3dd450249a27d219fb",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_organizer.rs",
+      "observed_line": 76,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1928ccde51705294fd3c5cef10a6ce5b33a92e698ae9062008397c0b84636b67",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_organizer.rs",
+      "observed_line": 96,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "88013c41f56f4e6694f0111f3d8f68adb17b97b92c33ba8e1fde334527ce0b40",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_organizer.rs",
+      "observed_line": 106,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "0e8fd153f3bbb38133b61e1364190b9bd0146cdd7071b5adda6cbfc4204ade1c",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_page_organizer.rs",
+      "observed_line": 1012,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "50f7ce07f433f9503a93ab4f2809606d70a77e7057d800df8736ff747bc0e676",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 110,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8bc1fd705c26fc088a2a28460fa56af9967aa77f1c7773d142d308d0d0ccb07c",
+      "rule_id": "PDF003",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 187,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3067212bdfdd002205c3938772b08f9f793830bf5f936040182a032a97992717",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 213,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3d973027bd0cb5a62147256bd777c9a046a5a6fc9d9396d07e5088f7d8f0fe1b",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 290,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5968b851e8d6a0acf5e74db4317167ed29bc4560015a392f764960fc4726d3db",
+      "rule_id": "PDF003",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 308,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "ce643510a280d557f1704da1c3acac28b3c2d690870d3188ed586621349bb4e7",
+      "rule_id": "PDF003",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 309,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "caddb6f4d217fa7c48d960b158a2e02e3a3412422933e98ef12ba0676c492fda",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "observed_line": 568,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "829acbb92db7d783a476b59a7fcc48c1307be09224aebd83cb3ebe523874453c",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 87,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "fe690dcb512996a4851108921f7278962ed897fec6c2ab8e01d484fc3ae08139",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 97,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8e6a3d325b4de553617907356a294c1c6bf7577d9bcc769fd3ec2c69d63e38d1",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 117,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "23ebeb3bc3e4667742ef3789493d9a59a3349ad92aee08e09915cdf4450e5930",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 127,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "496fd73d5858731eeb7882a40da8fc442c8d866885146d12eea3f8380db3c3e5",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 378,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "0c3e14c11f973311a5df9b9f2b2ea8b7ffc32303ce275d18970bad8da7a2218f",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 405,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c774168f6485ef25141e4706a29b24fd5902d489ad273509a42d3a187f096b83",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 534,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "cc3d1e212a4c4b9a7da1e245c5e37cf9eb0384d697fb92ed42f88a72c027b974",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs",
+      "observed_line": 589,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "918caefab0b3ceaa67e084aeb5c34f98536f52a3a7c0d230a88f24250418850e",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_redaction.rs",
+      "observed_line": 71,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5eeaf58272439ac4a2eb94593bd7122c056004aca73d2a0ef56069f4bd252258",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_redaction.rs",
+      "observed_line": 81,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5ed905f5ea63631dbbbbd5d49c9a5914b010e397204ba6f6186749bfa62d3260",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_redaction.rs",
+      "observed_line": 87,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1d862caaa80d9683fe87f3971e06f01c9067e897788598bb54eccfaed48dd3db",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_redaction.rs",
+      "observed_line": 97,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "6c4588c6df4c6d5514ae7b024f87fc227579e7b77a1d994c2a5d90cd540432de",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_redaction.rs",
+      "observed_line": 399,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "03b1733a7cf113db2436067847379c1a656f159d8ab5e5d7e44495b71b5b9d6f",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_repair_corrupt.rs",
+      "observed_line": 50,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2e1e7e256a7848d63a779acb2e65710f8cfea1e7a17d2c9cd77c37a1d9f223c4",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_repair_corrupt.rs",
+      "observed_line": 64,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "07408752100efa7bf50b369881e3d982bb723f471a82c558918db494a5aae399",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_repair_corrupt.rs",
+      "observed_line": 238,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "71448db5e9f7fc3fcee77aa4f5015389092e34ef790f48a46e2f50a9274cad56",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_repair_corrupt.rs",
+      "observed_line": 268,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "e0264369289ebc16618b24a8f0b05d765b6688058c7a4a66a1f7cb45d650ccce",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_repair_corrupt.rs",
+      "observed_line": 369,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5f99098d891779e0ed95c0be1503d1f4f8cc4f2c2f912b255fc85923f7d03717",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_repair_corrupt.rs",
+      "observed_line": 407,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8db72d5c257a4a2e0544b1ace425ba0b851bc7a5d77b45451cb4219d994ad0ed",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 126,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "fa2ae85bac09fb5d82aa72c6f175df7de4b159c5f13f75406f238a9244cfe477",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 140,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "455e309ff05aa69d11bfb822eab335c4d2446b4738584a6aa45b4434afb7ea04",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 145,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "92616633ef1eebcad0672ebe2011a7e42588cd1654b2881ddd6b3e08611f5e7e",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 161,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "0b7dff7e890e11f55bf67edd140187b7109fa61173687e6e0279e048ddf53651",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 203,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d618c0c4ecf4e9a113d7664bf87a09da74d5feea6b9401e9f6462e37853221d8",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 231,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "cad7fded6b2e12082d2d7830b0d8eb4c9eaefee0d7d5c83bc67785f2063bd044",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 250,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "6f743c4a3a81526f3cf98b17437598877f262e566f4af243dcddadfd7cad4efe",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 262,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "a0e1b6eb70a17c280ea4a63a34150865e38d14fc82383d06348c1f0a313b8d95",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 286,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8f87e4c5eb403aa0d7991ab6e4bb6db8cb917682e0df4ea42255d442b9f46198",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 387,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "0cfc5e129319261f6e5196a6bccd09f949cbf0879949e22d99e8b608d03f1e00",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 733,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "7a3cb6f9b9286032d6273d958b63dab44315bd6d4c6dd7ee10be3e2160957eee",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 941,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3b6d83d87ad33aa1ef38102600244af6de37c06ff1607f6a791e8b90d2c6e8d5",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 1063,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2d4e991617da78f18b1e40928d214b29796f931453aea8876752b629eec08972",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 1098,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1967ff567e53bba4537a4ea70f4cd1506297cef71e6f6fd049b0d65bfae09245",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_signature_pad.rs",
+      "observed_line": 1163,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "04c86a251f9126ba3603709a7a2375f0461eef5b9f9d5183c8b38b799b369531",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_table_extractor.rs",
+      "observed_line": 408,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "7f6fbcef6d253f67d7cfc5c9f444655e90df2df9c221c9078a8190742efbc218",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_table_extractor.rs",
+      "observed_line": 438,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8678fc7e384c2ff89a58062ceb1d1f3eac6773864d817bbfe30fa484eed267d7",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 250,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "344b315acd8ffa515b64825c13c1f1ad56d58bfe5abb501a56035601cef9a3df",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 253,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "15327bf32f065820b60b2201de0c13841a41b2a20133aa20612804bf1c21f9f9",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 263,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "57488e70d88a929963a0f39c7282597d7b39bb0a38eab0d94be3f354471122b0",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 537,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "90c8359a44a6427fbd0c69b1a4c9e3590181658c163c015b507d0ef562b3a7f9",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 654,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d6dd565d385d3b7c05cab40636778329e82dc9d536e2dff9182ec8450fb830ab",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 726,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "db1f513670b9e7c6ca5eda3ff9b6e45f8e0858d2cb31586fec1c2d6b34ab3bc0",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_images_pack.rs",
+      "observed_line": 939,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "91a5ebe4bce0b2b6379a6c48a6903b53a5143e68be679c7e0781e727da59e25f",
+      "rule_id": "FAKE003",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_long_image.rs",
+      "observed_line": 92,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "175d8ac5ef7fb8104ed1aad8ff8fc737a3c11a30de516b601c6ba7bd82911797",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_long_image.rs",
+      "observed_line": 266,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "e580d4d514d31b6beab7102f2d38401af866e6bcfec9947bbab22896a9aca366",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_long_image.rs",
+      "observed_line": 296,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "af13226d3445c42883931824f3d59432189b6f9fdd0db4e5a6917e341f319ce9",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_markdown.rs",
+      "observed_line": 55,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "4991651ff853ab410bac80449dcb1817fefe5194139462cf3305f2573c4727a9",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_to_markdown.rs",
+      "observed_line": 322,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "38839ee9333c160e193f7731ac111beb2794d78353797d84533bdb4862dc3e8e",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_visual_diff.rs",
+      "observed_line": 63,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "b4d9dbb1abb8cfcc9e3f458bc6a98959ec2e45e64696921f6df2155cd64a1ee9",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_visual_diff.rs",
+      "observed_line": 242,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "ce1fa6f6b89b18a261521aa200f8954979b4e008c5c46041fd56ba2d9b8eeb27",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_visual_diff.rs",
+      "observed_line": 496,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "14bba37fb05a3c383348d9c1a4081b0cd7ae927a298374149fd7682f5fa4d1f8",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 75,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2ac93a2b0fb64c66dedf098e14f491d9063a4d9885579a439d42e009663699f8",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 85,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8a3ea7b9267fa6aa13d0496df3b4d5a5e0b853e8dd635df841746f2508a70133",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 91,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3de0b9ba7c8169792c8cb71345aa801387b0a6ae497ef0c660f8e80c928129e3",
+      "rule_id": "PDF002",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 101,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "206841585f871db3ac5d93a1e3e5b1ff1f5afdcd74e95e7ccb94a6f066906702",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 297,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1c3f7f7f4d3f71b0a571f0f7c45fde0dab6ca79500dcb27f335cb1f6d55e4583",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 482,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "00a35028015f1020a42cda0f7771d2f5aeef38c7f4617bb04d7e9aed3f2f078d",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/pdf_watermark_stamp.rs",
+      "observed_line": 515,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "30d3d7bab53390399cf20a5a3e1458a5b9c4e95ad94356932fe834c5068f34af",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/vietnamese_ocr.rs",
+      "observed_line": 105,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c4505fa46abb7a243088f744a1ad428f6f230eb5089bee71b350ef3394514cdd",
+      "rule_id": "FAKE001",
+      "path": "crates/office-engine/src/doc_suite/vietnamese_ocr.rs",
+      "observed_line": 122,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "f19428e423710b8fa626dcf4bcab78bdffdd23d4a635aca9038c68f14467c71c",
+      "rule_id": "FAKE001",
+      "path": "crates/office-engine/src/doc_suite/vietnamese_ocr.rs",
+      "observed_line": 129,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "0e9cbf75713d517d8c5ad2cecae8b92e2872e03468cf257ee830860c82c6650c",
+      "rule_id": "PDF001",
+      "path": "crates/office-engine/src/doc_suite/vietnamese_ocr.rs",
+      "observed_line": 623,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c8f74d954b995b84a144e229225a8c802d8631504f38d01629a14212fad532eb",
+      "rule_id": "PNG002",
+      "path": "crates/office-engine/src/media_studio/image_batch.rs",
+      "observed_line": 1017,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "27c8dd86fbc201a383006eb7604ebaabf868bc35803ce7fa1dcaaabc134c16b9",
+      "rule_id": "FAKE002",
+      "path": "crates/office-engine/src/media_studio/video_to_gif_webp.rs",
+      "observed_line": 271,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "437e1075e940e8f3731c45b0827ac023789b32968ff2800ce48f4e7464037d31",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/gross_net_salary_calculator.rs",
+      "observed_line": 326,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "eea19f9c05da537b3a752f0b00ce15cdbb5a4b798ee6f3e78e34dea373a9f5c6",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vietqr_napas247_generator.rs",
+      "observed_line": 316,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "889686655cbc109de998454357ac2622706ae2ebd0dcc493a84d93305baf5de1",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vn_address_normalizer.rs",
+      "observed_line": 465,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "71a27691d229636d4320a8b871757cea3c2bdfca81d9c13bcb70db59cbce4270",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vn_bank_bin_mapper.rs",
+      "observed_line": 381,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8a7ae4d7d9c9f649b36fccb04f6f462826bf53de01c4cf8582ed424d6663d4b6",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vn_cccd_mst_validator.rs",
+      "observed_line": 429,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "098c3168a91f98db7ab92921fb0f45a6ab11435a072052e5ab2716496af97cb1",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vn_einvoice_xml_reader.rs",
+      "observed_line": 450,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "13691bf4a4996033b0f6879852ac981309facb71b5f84d52f409a79179bf0536",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vn_loan_amortization.rs",
+      "observed_line": 355,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "38c386e17dd6eff54d28c1bb13b1443c919eef86fa8fd7f867b696381b12ae29",
+      "rule_id": "FS001",
+      "path": "crates/office-engine/src/vn_office/vn_working_days_calc.rs",
+      "observed_line": 422,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "506ba2ab68b53b0b894874cf497eb58b4898053784129a42a4bbd02f8c8f172c",
+      "rule_id": "IPC001",
+      "path": "src-tauri/src/commands/mod.rs",
+      "observed_line": 74,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "848c94e6255be1c45163394ab56d7f0a912798b565b2fbdd96e3e586a59b600d",
+      "rule_id": "IO002",
+      "path": "src-tauri/src/commands/mod.rs",
+      "observed_line": 283,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1f11af4dc8f0c32516e8583a6fa65a56f6aea2b387ba9ddb311d844c31dab264",
+      "rule_id": "IO001",
+      "path": "src-tauri/src/commands/mod.rs",
+      "observed_line": 293,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3901a101a2efc19ed6a6eaa9cdce1d224e068583b2f9b53724ac15b98a9c0487",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/data_lab/reconcile_workbench.rs",
+      "observed_line": 112,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3707236fe48374b40966a36a7f2c2f0c3837780e7c0788acf18d5c381676d933",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/data_lab/split_pane_view.rs",
+      "observed_line": 1624,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "efef793b58c9195692800cf8a69ae2a29a46b6201c75e8946ce309cf0bfbe61d",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/data_lab/visual_canvas_workflow.rs",
+      "observed_line": 788,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "4529a495de379329ec96fc10fed89c6e619e5568e78d29627f41bc7401645b01",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/media_studio/hub_view.rs",
+      "observed_line": 104,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "ca1e36273db69bc6fff0e414d52645b9531b9d580390297454ae5b32f554514a",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/pdf_studio/hub_view.rs",
+      "observed_line": 599,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "bc702a5a6e70260c81040940c39db03252466bb73b292ae050e350c149951dfb",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/pdf_studio/vn_ribbon.rs",
+      "observed_line": 382,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "ae4df7abe38e5cdbae313f73fef7f84881773747f10d957e27c256a943c7f72d",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/vn_office/layout.rs",
+      "observed_line": 210,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1211905695abd83deb17599ba6ff0ef6dee82a1cac850d427ed5164bc004cf01",
+      "rule_id": "IME001",
+      "path": "src/micro_apps/vn_office/sidebar.rs",
+      "observed_line": 63,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c5c8f98fafa6eee42176b1b73ba535ebd9e3f3a1891b28f0386914777cb55d35",
+      "rule_id": "IME001",
+      "path": "src/tools/audio_silence_trimmer_view.rs",
+      "observed_line": 49,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "b6555115a626db00581486aeb52808b0eec4278e0dcf7c9820d5eaec12c5b1ad",
+      "rule_id": "IME001",
+      "path": "src/tools/audio_silence_trimmer_view.rs",
+      "observed_line": 66,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "82ee188a4f3aad2b0ea772c27cf02d10390730c7648d4825a6abf583fcb0a73c",
+      "rule_id": "IME001",
+      "path": "src/tools/audio_silence_trimmer_view.rs",
+      "observed_line": 88,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "c9413a0d665f5e6e8e8c8ff11c41b2a63bbb5d520582e8e1fa42afd57897f78f",
+      "rule_id": "IME001",
+      "path": "src/tools/audio_silence_trimmer_view.rs",
+      "observed_line": 113,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "9b05229f700b2a632631497e600eeb6d2d0c3fb3cce0286a13f297724b9d0561",
+      "rule_id": "IME001",
+      "path": "src/tools/audio_silence_trimmer_view.rs",
+      "observed_line": 150,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "32c14b65bea23dac2a4a624b897f33dfc714b09658a4e80c19bc00c9487effde",
+      "rule_id": "IME001",
+      "path": "src/tools/data_structure_converter_view.rs",
+      "observed_line": 31,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "81e5a908f5cc6fe17bc2863a157d9ff54572d53997cc616154f7e6e226f9d1fc",
+      "rule_id": "IME001",
+      "path": "src/tools/excel_split_by_column_view.rs",
+      "observed_line": 12,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "b1379bc0530d06d72a60f1d773f5face209ee4eaa3b7cf280e44277a7d9abdb0",
+      "rule_id": "IME001",
+      "path": "src/tools/excel_visual_joiner_view.rs",
+      "observed_line": 31,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "51b229cc57b98c0735b81c294b6edca710da6ee641b22d4d9f86ebb3aea1cf0f",
+      "rule_id": "IME001",
+      "path": "src/tools/excel_visual_joiner_view.rs",
+      "observed_line": 42,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d21e4d1499122333e867f5ea89448bfaf874cc76c2b47a0a001b899e52197436",
+      "rule_id": "IME001",
+      "path": "src/tools/gross_net_salary_calculator_view.rs",
+      "observed_line": 51,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "9f2fa293f6b94a8c89fdc097fff74fa5d521c1d24422ebf980911d72c617b03c",
+      "rule_id": "IME001",
+      "path": "src/tools/image_batch_view.rs",
+      "observed_line": 59,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "622a4fca57e3ebc2300015b1fcbaf9ea591bd2f437ba4f1100415c1832ad1f3c",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_crop_margin_view.rs",
+      "observed_line": 14,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "52d5fcb0955ee10cb1f50c35cd74e5bb92257395c692657d876375d1ef17f417",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_form_manager_view.rs",
+      "observed_line": 62,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8763eff0a1fc02ced287f68ecca04f55f8537ca79c7906e90c61cd7eae7845ee",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_merge_split_view.rs",
+      "observed_line": 64,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5e0e845b06bee64ac551f2dfd575a9126e8ab3c9a23fb183210814b7e7bd2f45",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_merge_split_view.rs",
+      "observed_line": 74,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "2f3835437a25ed3cf8b10e83502352febe6eaad9f4d163839ae3f654da8c5bcb",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_redaction_view.rs",
+      "observed_line": 12,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "307ad9d49edad8d5087cc47485a591a82f197045302e3ee407984c360037a704",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_signature_pad_view.rs",
+      "observed_line": 291,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "72ec2f7e96be0104eec54072c03cbbd634ac4ba32c92452d7b527bd99359c404",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_signature_pad_view.rs",
+      "observed_line": 304,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "8b2563011cc0f5c4a11817e2ebc8e591595111ea5a47369ffcc620b090fc5df2",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_to_images_pack_view.rs",
+      "observed_line": 68,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "23ea2bb2da5a1ed1d65a560545850b3a2016b560d80bda240e6087f4419ffe40",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_to_images_pack_view.rs",
+      "observed_line": 99,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "f7332bfe0117b2f08392975cd5d7e039b991bca0277ab97b5627bb31cbb6c456",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_to_long_image_view.rs",
+      "observed_line": 28,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "22d54afc90710e21613d5da1fced5caf20700e4c4e108903d405e48d785d21cb",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_to_markdown_view.rs",
+      "observed_line": 28,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "e9cd8cb64daf857b9c892a9e0e87ed3dfe6bfa1dbaca2a7520927d17228a8305",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_watermark_stamp_view.rs",
+      "observed_line": 31,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "d2ef988a696ce65b2883ffc5966a59fe7129865c8ce6b39af0225114f30316e8",
+      "rule_id": "IME001",
+      "path": "src/tools/pdf_watermark_stamp_view.rs",
+      "observed_line": 50,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "1fbb7f3ef4765ef192fa240e4cdbc63ae02a364864076b782ea8f0dbb13c0ce5",
+      "rule_id": "IME001",
+      "path": "src/tools/screenshot_beautifier_view.rs",
+      "observed_line": 44,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5b9f5868a58cb9296c807ad96d222a643770adbbecf71a1fffce058b81eb7cd6",
+      "rule_id": "IME001",
+      "path": "src/tools/video_to_gif_webp_view.rs",
+      "observed_line": 16,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "38dfc2eb9cf35a65f5fb83c8745c96353fbaec606361a83e415331440f76dd52",
+      "rule_id": "IME001",
+      "path": "src/tools/vietqr_napas247_generator_view.rs",
+      "observed_line": 40,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "82f08a999a9585df08b1720456180d97738a7ff656e33a69daadafde68a3699e",
+      "rule_id": "IME001",
+      "path": "src/tools/vietqr_napas247_generator_view.rs",
+      "observed_line": 55,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "3496924b16a39de072f9b2a5841eaede16f54cd46fc1a5b3b6035abaeed7d728",
+      "rule_id": "IME001",
+      "path": "src/tools/vn_loan_amortization_view.rs",
+      "observed_line": 21,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "5a5ef636fb14f0b82aae44e506763de13c1a2b688200a691427ace3a791ebbe6",
+      "rule_id": "IME001",
+      "path": "src/tools/vn_loan_amortization_view.rs",
+      "observed_line": 34,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "15c88370c2b41d535b10a5dee28b7f8a6853f67a1663a841232be7f9a685d97e",
+      "rule_id": "IME001",
+      "path": "src/tools/vn_loan_amortization_view.rs",
+      "observed_line": 47,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "66489a995f41cfae3d25872f95c7f02231eff18f29bff1366a1edf2023c787d4",
+      "rule_id": "IME001",
+      "path": "src/tools/vn_working_days_calc_view.rs",
+      "observed_line": 18,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "e0be6fa7a4ddd84d926c99ca688447ac3c3447fc3da45a57771b983652c4101b",
+      "rule_id": "IME001",
+      "path": "src/tools/vn_working_days_calc_view.rs",
+      "observed_line": 30,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "56098b0a728d9a5dc602af43029c49ca75f0d48c0344e054f44e4b92db99fc6a",
+      "rule_id": "IME001",
+      "path": "src/tools/watermark_batch_studio_view.rs",
+      "observed_line": 37,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    },
+    {
+      "fingerprint": "6f4df7cad7b21254e06b666ef605f93cba7647ce94fc4cd6aa56082473fe2570",
+      "rule_id": "IME001",
+      "path": "src/tools/watermark_batch_studio_view.rs",
+      "observed_line": 50,
+      "ticket": "LEGACY-BASELINE-001",
+      "owner": "office-utility-vn/maintainers",
+      "reason": "Legacy finding approved for incremental remediation"
+    }
+  ]
+}

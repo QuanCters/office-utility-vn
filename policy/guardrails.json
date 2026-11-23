@@ -1,0 +1,97 @@
+{
+  "policy_version": 1,
+  "project": "Office Utility VN",
+  "required_source_paths": [
+    "crates/office-engine/src/doc_suite/pdf_crop_margin.rs",
+    "crates/office-engine/src/doc_suite/pdf_merge_split.rs",
+    "crates/office-engine/src/doc_suite/vietnamese_ocr.rs",
+    "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+    "crates/office-engine/src/doc_suite/pdf_to_long_image.rs",
+    "crates/office-engine/src/media_studio/video_to_gif_webp.rs",
+    "crates/office-engine/src/media_studio/image_batch.rs",
+    "crates/office-engine/src/data_lab/base64_file_codec.rs",
+    "crates/office-engine/src/data_lab/vietnamese_font_converter.rs",
+    "crates/office-engine/src/data_lab/excel_sheet_unlocker.rs",
+    "src-tauri/src/commands/mod.rs",
+    "src-tauri/src/safe_persistence.rs"
+  ],
+  "rules": [
+    {
+      "id": "PDF001", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/doc_suite/*.rs",
+      "pattern": "String\\s*::\\s*from_utf8_lossy\\s*\\(",
+      "message": "Không biến byte PDF thành UTF-8 lossy; dùng parser PDF binary và bảo toàn stream."
+    },
+    {
+      "id": "PDF002", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/doc_suite/*.rs",
+      "pattern": "\\.find\\s*\\(\\s*\"(?:endobj| obj)\"\\s*\\)",
+      "message": "Không tự nhận diện PDF objects bằng chuỗi ' obj'/'endobj'."
+    },
+    {
+      "id": "PDF003", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs",
+      "pattern": "PKCS7-SIG:",
+      "message": "Không dùng payload ASCII thay chữ ký CMS/PAdES thật."
+    },
+    {
+      "id": "FAKE001", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/doc_suite/vietnamese_ocr.rs",
+      "pattern": "Ok\\s*\\(\\s*\"(?:HÓA ĐƠN|CỘNG HÒA)",
+      "message": "Không trả văn bản OCR hardcode trong production."
+    },
+    {
+      "id": "FAKE002", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/media_studio/video_to_gif_webp.rs",
+      "pattern": "bar_x\\s*=\\s*\\(progress_ratio\\s*\\*",
+      "message": "Không thay khung video thật bằng gradient/vạch chạy mô phỏng."
+    },
+    {
+      "id": "FAKE003", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/doc_suite/pdf_to_long_image.rs",
+      "pattern": "stream_content\\.contains\\s*\\(\\s*\"(?:re|Tj)\"\\s*\\)",
+      "message": "Không vẽ pseudo-bitmap dựa trên việc tìm toán tử PDF trong chuỗi."
+    },
+    {
+      "id": "VNI001", "category": "P1", "kind": "regex", "file_glob": "crates/office-engine/src/data_lab/vietnamese_font_converter.rs",
+      "pattern": "String\\s*::\\s*from_utf8_lossy\\s*\\(",
+      "message": "Không dùng lossy UTF-8 để nhận diện VNI/TCVN3; phân tích byte và trả AMBIGUOUS khi cần."
+    },
+    {
+      "id": "PNG001", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/media_studio/image_batch.rs",
+      "pattern": "\\bread_to_end\\s*\\(\\s*&mut\\s+decompressed\\s*\\)",
+      "message": "Không read_to_end vào Vec không được chứng minh bounded; dùng decoder limit có kiểm tra vượt ngưỡng."
+    },
+    {
+      "id": "PNG002", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/media_studio/image_batch.rs",
+      "pattern": "pixels\\s*:\\s*vec!\\s*\\[\\s*(?:200|255)(?:u8)?\\s*;",
+      "message": "Không dùng ảnh màu trắng/xám như kết quả giả khi giải mã thất bại."
+    },
+    {
+      "id": "FS001", "category": "P0", "kind": "regex", "file_glob": "crates/office-engine/src/**/*.rs",
+      "pattern": "let\\s+_\\s*=\\s*(?:std\\s*::\\s*)?fs\\s*::\\s*(?:rename|copy|remove_file)\\s*\\(",
+      "message": "Không nuốt kết quả của thao tác ghi/đổi tên/xóa tệp."
+    },
+    {
+      "id": "SESSION001", "category": "P1", "kind": "regex", "file_glob": "src-tauri/src/safe_persistence.rs",
+      "pattern": "sessions\\s*\\.\\s*get\\s*\\(\\s*&doc_id\\s*\\)\\s*\\.\\s*unwrap\\s*\\(\\s*\\)",
+      "message": "Không unwrap trạng thái session có thể bị thay đổi giữa các lock."
+    },
+    {
+      "id": "SECRET001", "category": "P1", "kind": "regex", "file_glob": "crates/office-engine/src/data_lab/excel_sheet_unlocker.rs",
+      "pattern": "password\\s*:\\s*Option\\s*<\\s*String\\s*>",
+      "message": "Bảo vệ mật khẩu bằng Zeroizing/Secret và hạn chế clone/log."
+    },
+    {
+      "id": "IO001", "category": "P1", "kind": "regex", "file_glob": "src-tauri/src/commands/mod.rs",
+      "pattern": "\\.read\\s*\\(\\s*&mut\\s+header\\s*\\)\\s*\\.unwrap_or\\s*\\(\\s*0\\s*\\)",
+      "message": "Không chuyển lỗi đọc file thành EOF giả."
+    },
+    {
+      "id": "IPC001", "category": "P0", "kind": "ipc_fallback", "file_glob": "src-tauri/src/commands/mod.rs",
+      "message": "Nhánh wildcard của dispatch_tool_task không được trả SUCCESS."
+    },
+    {
+      "id": "IO002", "category": "P1", "kind": "async_blocking", "file_glob": "src-tauri/src/commands/mod.rs",
+      "message": "inspect_file_metadata không được block Tokio worker; cô lập vào spawn_blocking/async fs."
+    },
+    {
+      "id": "IME001", "category": "P1", "kind": "ime_unsafe", "file_glob": "src/**/*.rs",
+      "message": "Controlled input Leptos phải composition-safe hoặc chuyển sang component đã được kiểm chứng."
+    }
+  ]
+}
