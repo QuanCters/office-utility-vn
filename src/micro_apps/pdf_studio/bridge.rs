@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_arch = "wasm32")]
-use leptos::prelude::Set;
+use leptos::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
