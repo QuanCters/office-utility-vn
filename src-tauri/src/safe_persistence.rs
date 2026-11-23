@@ -14,8 +14,18 @@ use serde::{Deserialize, Serialize};
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+/// Danh sách phần mở rộng tệp được phép đọc qua Native Dialog
+const ALLOWED_READ_EXTENSIONS: &[&str] = &[
+    // Định dạng bảng tính (GridCraft / Data Lab)
+    "xlsx", "xlsm", "xls", "csv", "tsv", "json", "ods",
+    // Định dạng tài liệu & PDF (PDF Studio)
+    "pdf", "txt", "docx",
+    // Định dạng đồ họa & media (Media Studio)
+    "png", "jpg", "jpeg",
+];
+
 /// Danh sách phần mở rộng tệp được phép lưu qua nhị phân
-const ALLOWED_EXTENSIONS: &[&str] = &[
+const ALLOWED_WRITE_EXTENSIONS: &[&str] = &[
     // Định dạng bảng tính (GridCraft / Data Lab)
     "xlsx", "xlsm", "csv", "tsv", "json", "ods",
     // Định dạng tài liệu & PDF (PDF Studio)
@@ -135,7 +145,7 @@ pub fn canonicalize_destination_path(dest_path: &Path) -> PathBuf {
 }
 
 /// Thẩm tra tính an toàn và quyền hạn đường dẫn đích ở tầng Native Backend
-pub fn validate_and_authorize_path(path_str: &str) -> Result<PathBuf, CommandError> {
+fn validate_path_internal(path_str: &str, allowed_exts: &[&str]) -> Result<PathBuf, CommandError> {
     let trimmed = path_str.trim();
     if trimmed.is_empty() {
         return Err(CommandError::ValidationFailed {
@@ -159,7 +169,7 @@ pub fn validate_and_authorize_path(path_str: &str) -> Result<PathBuf, CommandErr
 
     // Kiểm tra phần mở rộng tệp hợp lệ
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
+    if !allowed_exts.contains(&ext.as_str()) {
         return Err(CommandError::ValidationFailed {
             reason: format!("Phần mở rộng tệp '.{ext}' không được hỗ trợ hoặc không an toàn"),
         });
@@ -180,6 +190,42 @@ pub fn validate_and_authorize_path(path_str: &str) -> Result<PathBuf, CommandErr
     }
 
     Ok(p.to_path_buf())
+}
+
+/// Kiểm tra tính hợp lệ và thẩm quyền cho đường dẫn đọc tệp từ hệ thống
+pub fn validate_and_authorize_read_path(path_str: &str) -> Result<PathBuf, CommandError> {
+    let path = validate_path_internal(path_str, ALLOWED_READ_EXTENSIONS)?;
+    if path.exists() {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if ext == "xls" {
+            let mut file = std::fs::File::open(&path).map_err(|e| CommandError::IoError {
+                details: format!("Không thể mở tệp .xls để kiểm tra chữ ký: {e}"),
+            })?;
+            use std::io::Read;
+            let mut header = [0u8; 8];
+            let read_bytes = file.read(&mut header).map_err(|e| CommandError::IoError {
+                details: format!("Không thể đọc header tệp .xls: {e}"),
+            })?;
+            const OLE2_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+            if read_bytes < 8 || header != OLE2_MAGIC {
+                return Err(CommandError::InvalidFileSignature {
+                    expected: "OLE2 Header [D0 CF 11 E0 A1 B1 1A E1]".to_string(),
+                    actual: format!("{:02X?}", &header[..read_bytes]),
+                });
+            }
+        }
+    }
+    Ok(path)
+}
+
+/// Kiểm tra tính hợp lệ và thẩm quyền cho đường dẫn ghi tệp xuống hệ thống
+pub fn validate_and_authorize_write_path(path_str: &str) -> Result<PathBuf, CommandError> {
+    validate_path_internal(path_str, ALLOWED_WRITE_EXTENSIONS)
+}
+
+/// Kiểm tra tính hợp lệ và thẩm quyền đường dẫn tệp (mặc định áp dụng chính sách ghi an toàn)
+pub fn validate_and_authorize_path(path_str: &str) -> Result<PathBuf, CommandError> {
+    validate_and_authorize_write_path(path_str)
 }
 
 /// RAII Guard để tự động xóa tệp tạm nếu có sự cố trước khi commit hoán đổi nguyên tử
@@ -476,15 +522,37 @@ impl NativeSaveGrantManager {
         };
 
         let normalized = canonicalize_destination_path(&path);
-        validate_and_authorize_path(&normalized.to_string_lossy())?;
+        validate_and_authorize_read_path(&normalized.to_string_lossy())?;
 
-        if !normalized.exists() || !normalized.is_file() {
+        let file = std::fs::File::open(&normalized).map_err(|e| CommandError::IoError {
+            details: format!("Không thể mở tệp: {e}"),
+        })?;
+
+        let metadata = file.metadata().map_err(|e| CommandError::IoError {
+            details: format!("Không thể đọc thông tin tệp: {e}"),
+        })?;
+
+        if !metadata.is_file() {
             return Err(CommandError::IoError {
                 details: format!("Tệp được chọn không tồn tại hoặc không phải là tệp hợp lệ: {:?}", normalized),
             });
         }
 
-        let bytes = std::fs::read(&normalized).map_err(|e| CommandError::IoError {
+        let file_len = metadata.len();
+        if file_len > MAX_PAYLOAD_BYTES as u64 {
+            return Err(CommandError::ValidationFailed {
+                reason: format!(
+                    "Kích thước tệp ({} bytes) vượt quá giới hạn an toàn tối đa ({} bytes)",
+                    file_len,
+                    MAX_PAYLOAD_BYTES
+                ),
+            });
+        }
+
+        use std::io::Read;
+        let mut reader = file.take(MAX_PAYLOAD_BYTES as u64 + 1);
+        let mut bytes = Vec::with_capacity(file_len.min(MAX_PAYLOAD_BYTES as u64) as usize);
+        reader.read_to_end(&mut bytes).map_err(|e| CommandError::IoError {
             details: format!("Không thể đọc nội dung tệp từ native dialog: {e}"),
         })?;
 
@@ -496,6 +564,17 @@ impl NativeSaveGrantManager {
                     MAX_PAYLOAD_BYTES
                 ),
             });
+        }
+
+        // Kiểm tra chữ ký magic bytes nếu phần mở rộng là .xls (Compound File Binary Format / OLE2)
+        let ext = normalized.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if ext == "xls" {
+            const OLE2_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+            if bytes.len() < 8 || &bytes[0..8] != &OLE2_MAGIC {
+                return Err(CommandError::ValidationFailed {
+                    reason: "Tệp .xls không đúng định dạng chữ ký nhị phân Compound File Binary (OLE2)".to_string(),
+                });
+            }
         }
 
         let file_name = normalized
@@ -787,21 +866,43 @@ impl NativeSaveGrantManager {
         }
 
         // 2. Thẩm tra và cập nhật trạng thái InUse dưới khóa Mutex
+        // QUY CHUẨN ĐỒNG QUY: Luôn thu nạp khóa sessions TRƯỚC, sau đó mới thu nạp khóa grants
         let (dest_path, expected_revision, session_id) = {
+            let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
             let mut grants = self.grants.lock().unwrap_or_else(|e| e.into_inner());
-            let grant = grants.get_mut(grant_id).ok_or_else(|| CommandError::ValidationFailed {
-                reason: format!("Truy cập bị từ chối: Grant ID '{grant_id}' không tồn tại hoặc không hợp lệ"),
-            })?;
+            
+            let (target_doc_id, target_dest_path) = {
+                let g = grants.get(grant_id).ok_or_else(|| CommandError::ValidationFailed {
+                    reason: format!("Truy cập bị từ chối: Grant ID '{grant_id}' không tồn tại hoặc không hợp lệ"),
+                })?;
 
-            // Kiểm tra request_id khớp với grant
-            if grant.request_id != request_id {
-                return Err(CommandError::ValidationFailed {
-                    reason: format!(
-                        "Request ID '{request_id}' không khớp với Request ID được cấp phép '{}'",
-                        grant.request_id
-                    ),
-                });
+                // Kiểm tra request_id khớp với grant
+                if g.request_id != request_id {
+                    return Err(CommandError::ValidationFailed {
+                        reason: format!(
+                            "Request ID '{request_id}' không khớp với Request ID được cấp phép '{}'",
+                            g.request_id
+                        ),
+                    });
+                }
+                (g.document_id.clone(), g.authorized_dest_path.clone())
+            };
+
+            // Bất biến: Chống ghi đồng thời trên cấp độ tài liệu / đường dẫn đích (Document-level Write Exclusion)
+            for (gid, g) in grants.iter() {
+                if gid != grant_id
+                    && (g.document_id == target_doc_id || g.authorized_dest_path == target_dest_path)
+                    && g.status == GrantStatus::InUse
+                {
+                    return Err(CommandError::IoError {
+                        details: format!(
+                            "Từ chối thực thi grant: Đang có một tiến trình ghi đĩa (InUse) diễn ra trên cùng tài liệu '{target_doc_id}'"
+                        ),
+                    });
+                }
             }
+
+            let grant = grants.get_mut(grant_id).unwrap();
 
             // Kiểm tra trạng thái grant
             match grant.status {
@@ -850,8 +951,7 @@ impl NativeSaveGrantManager {
                 });
             }
 
-            // Kiểm tra session tương ứng
-            let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+            // Kiểm tra session tương ứng (sessions đã được lock ở đầu khối bảo đảm nhất quán)
             let session = sessions.get(&grant.document_id).ok_or_else(|| CommandError::ValidationFailed {
                 reason: format!("Phiên tài liệu '{}' không còn tồn tại trên Native Backend", grant.document_id),
             })?;
@@ -907,8 +1007,9 @@ impl NativeSaveGrantManager {
         let write_res = native_atomic_durable_write(&dest_str, bytes);
 
         // 4. Cập nhật trạng thái sau khi I/O hoàn tất
-        let mut grants = self.grants.lock().unwrap_or_else(|e| e.into_inner());
+        // QUY CHUẨN ĐỒNG QUY: Luôn thu nạp khóa sessions TRƯỚC, sau đó mới thu nạp khóa grants
         let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        let mut grants = self.grants.lock().unwrap_or_else(|e| e.into_inner());
 
         match write_res {
             Ok(()) => {
@@ -916,7 +1017,9 @@ impl NativeSaveGrantManager {
                     grant.status = GrantStatus::Consumed;
                 }
                 if let Some(session) = sessions.get_mut(&session_id) {
-                    session.last_committed_revision = expected_revision;
+                    if expected_revision > session.last_committed_revision {
+                        session.last_committed_revision = expected_revision;
+                    }
                 }
                 let fingerprint = compute_fingerprint(bytes);
                 Ok(SaveSuccessResponse {
@@ -942,6 +1045,62 @@ impl NativeSaveGrantManager {
                 Err(e)
             }
         }
+    }
+
+    /// Đọc nội dung nhị phân của tài liệu đã được ủy quyền an toàn trong session.
+    /// [BẢO MẬT STAGE 4C-0D]: Nghiêm cấm đọc raw path tùy ý, chỉ đọc khi tài liệu có session hợp lệ.
+    pub fn read_authorized_document_bytes(
+        &self,
+        document_id: &str,
+        app_instance_id: &str,
+        session_generation: u64,
+    ) -> Result<Vec<u8>, CommandError> {
+        let (path, is_auth) = {
+            let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+            let s = sessions.get(document_id).ok_or_else(|| CommandError::ValidationFailed {
+                reason: format!("Phiên tài liệu '{document_id}' không tồn tại hoặc đã bị hủy"),
+            })?;
+            if s.app_instance_id != app_instance_id || s.session_generation != session_generation {
+                return Err(CommandError::ValidationFailed {
+                    reason: "Phiên tài liệu không hợp lệ hoặc không thuộc ứng dụng này".to_string(),
+                });
+            }
+            (s.authorized_dest_path.clone(), s.is_user_authorized)
+        };
+
+        if !is_auth {
+            return Err(CommandError::ValidationFailed {
+                reason: "Tài liệu chưa được người dùng ủy quyền qua Native Dialog".to_string(),
+            });
+        }
+
+        let file = std::fs::File::open(&path).map_err(|e| CommandError::IoError {
+            details: format!("Không thể mở tệp đã ủy quyền: {e}"),
+        })?;
+        let meta = file.metadata().map_err(|e| CommandError::IoError {
+            details: format!("Không thể đọc thông tin tệp: {e}"),
+        })?;
+        let len = meta.len();
+        if len > MAX_PAYLOAD_BYTES as u64 {
+            return Err(CommandError::ValidationFailed {
+                reason: format!("Kích thước tệp ({} bytes) vượt quá giới hạn an toàn tối đa", len),
+            });
+        }
+
+        use std::io::Read;
+        let mut reader = file.take(MAX_PAYLOAD_BYTES as u64 + 1);
+        let mut bytes = Vec::with_capacity(len.min(MAX_PAYLOAD_BYTES as u64) as usize);
+        reader.read_to_end(&mut bytes).map_err(|e| CommandError::IoError {
+            details: format!("Không thể nạp nội dung tệp: {e}"),
+        })?;
+
+        if bytes.len() > MAX_PAYLOAD_BYTES {
+            return Err(CommandError::ValidationFailed {
+                reason: format!("Kích thước tệp ({} bytes) vượt quá giới hạn an toàn tối đa", bytes.len()),
+            });
+        }
+
+        Ok(bytes)
     }
 }
 
@@ -2813,5 +2972,228 @@ mod tests {
         // 4. KIỂM ĐỊNH TỐI THƯỢNG: Tệp gốc trên đĩa BẢO TOÀN NGUYÊN VẸN 100%
         let current_disk_content = std::fs::read(&existing_file).unwrap();
         assert_eq!(current_disk_content, original_content);
+    }
+
+    #[test]
+    fn test_lock_ordering_deadlock_freedom_under_high_concurrency() {
+        // [Workstream A - P1 4666249780]: Nhất quán thứ tự khóa (sessions -> grants) loại trừ hoàn toàn Deadlock
+        let temp_dir = tempfile::tempdir().unwrap();
+        let manager = Arc::new(NativeSaveGrantManager::new());
+        let barrier = Arc::new(Barrier::new(10));
+
+        let mut handles = Vec::new();
+        for i in 0..10 {
+            let mgr = Arc::clone(&manager);
+            let bar = Arc::clone(&barrier);
+            let path = temp_dir.path().join(format!("file_{i}.xlsx"));
+            handles.push(thread::spawn(move || {
+                let doc_id = format!("doc-{i}");
+                mgr.register_document_session(&doc_id, "app-inst", 1, &path, 0).unwrap();
+                bar.wait();
+
+                for j in 0..20 {
+                    let req_id = format!("req-{i}-{j}");
+                    if let Ok(grant) = mgr.issue_save_grant(
+                        &doc_id,
+                        "app-inst",
+                        1,
+                        &req_id,
+                        (j + 1) as u64,
+                        GrantOperationType::Save,
+                        OverwritePolicy::AllowOverwrite,
+                        30,
+                    ) {
+                        let _ = mgr.execute_granted_save(&grant.grant_id, &req_id, b"CONCURRENT_CONTENT");
+                    }
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_document_level_concurrent_save_exclusion() {
+        // [Workstream A - P1 4666369287]: Không cho phép 2 lượt ghi đồng thời trên cùng một tài liệu
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dest = temp_dir.path().join("exclusive.xlsx");
+        let manager = NativeSaveGrantManager::new();
+
+        manager.register_document_session("doc-excl", "app-inst", 1, &dest, 0).unwrap();
+
+        let grant1 = manager.issue_save_grant(
+            "doc-excl",
+            "app-inst",
+            1,
+            "req-1",
+            1,
+            GrantOperationType::Save,
+            OverwritePolicy::AllowOverwrite,
+            30,
+        ).unwrap();
+
+        let grant2 = manager.issue_save_grant(
+            "doc-excl",
+            "app-inst",
+            1,
+            "req-2",
+            2,
+            GrantOperationType::Save,
+            OverwritePolicy::AllowOverwrite,
+            30,
+        ).unwrap();
+
+        // Đánh dấu grant1 là InUse (đang tiến hành ghi)
+        {
+            let mut grants = manager.grants.lock().unwrap();
+            if let Some(entry) = grants.get_mut(&grant1.grant_id) {
+                entry.status = GrantStatus::InUse;
+            }
+        }
+
+        // Thực thi grant2 trong khi grant1 đang InUse phải bị từ chối
+        let res2 = manager.execute_granted_save(&grant2.grant_id, "req-2", b"DATA_2");
+        assert!(res2.is_err(), "Grant 2 phải bị từ chối khi tài liệu đang có lượt ghi InUse");
+        match res2.unwrap_err() {
+            CommandError::IoError { .. } => {}
+            other => panic!("Expected IoError, got {:?}", other),
+        }
+
+        // Hoàn tất grant1
+        {
+            let mut grants = manager.grants.lock().unwrap();
+            if let Some(entry) = grants.get_mut(&grant1.grant_id) {
+                entry.status = GrantStatus::Consumed;
+            }
+        }
+
+        // Bây giờ grant2 có thể thực thi
+        let res2_retry = manager.execute_granted_save(&grant2.grant_id, "req-2", b"DATA_2");
+        assert!(res2_retry.is_ok());
+    }
+
+    #[test]
+    fn test_revision_monotonicity_prevents_backward_revision() {
+        // [Workstream A - P1 4666369287]: Thứ tự revision đơn điệu tăng, chặn revision cũ
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dest = temp_dir.path().join("monotonic.xlsx");
+        let manager = NativeSaveGrantManager::new();
+
+        manager.register_document_session("doc-mono", "app-inst", 1, &dest, 0).unwrap();
+
+        // 1. Cấp grant revision 4 trước khi commit revision 5
+        let grant_rev4 = manager.issue_save_grant(
+            "doc-mono",
+            "app-inst",
+            1,
+            "req-4",
+            4,
+            GrantOperationType::Save,
+            OverwritePolicy::AllowOverwrite,
+            30,
+        ).unwrap();
+
+        // 2. Commit revision 5 thành công
+        let grant_rev5 = manager.issue_save_grant(
+            "doc-mono",
+            "app-inst",
+            1,
+            "req-5",
+            5,
+            GrantOperationType::Save,
+            OverwritePolicy::AllowOverwrite,
+            30,
+        ).unwrap();
+        let save_5 = manager.execute_granted_save(&grant_rev5.grant_id, "req-5", b"REV_5");
+        assert!(save_5.is_ok());
+
+        // 3. Grant 4 đã cấp trước đó giờ thực thi commit phiên bản cũ (4 <= 5) -> Phải bị từ chối
+        let save_4 = manager.execute_granted_save(&grant_rev4.grant_id, "req-4", b"REV_4");
+        assert!(save_4.is_err());
+        match save_4.unwrap_err() {
+            CommandError::IoError { .. } => {}
+            other => panic!("Expected IoError for backward revision, got {:?}", other),
+        }
+
+        // 4. Cố tình xin cấp mới grant cho revision 4 lỗi thời -> Bị từ chối ngay ở bước issue
+        let stale_issue = manager.issue_save_grant(
+            "doc-mono",
+            "app-inst",
+            1,
+            "req-stale",
+            4,
+            GrantOperationType::Save,
+            OverwritePolicy::AllowOverwrite,
+            30,
+        );
+        assert!(stale_issue.is_err());
+
+        // Commit revision 6 -> thành công
+        let grant_rev6 = manager.issue_save_grant(
+            "doc-mono",
+            "app-inst",
+            1,
+            "req-6",
+            6,
+            GrantOperationType::Save,
+            OverwritePolicy::AllowOverwrite,
+            30,
+        ).unwrap();
+        let save_6 = manager.execute_granted_save(&grant_rev6.grant_id, "req-6", b"REV_6");
+        assert!(save_6.is_ok());
+    }
+
+    #[test]
+    fn test_xls_format_separation_read_allowed_write_rejected() {
+        // [Workstream D - P2 4666660900]: Cho phép đọc .xls (nếu có OLE2 magic), CẤM ghi đè trực tiếp .xls
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // 1. Ghi tệp .xls phải bị từ chối ở tầng xác thực đường dẫn ghi
+        let xls_write_path = temp_dir.path().join("report.xls");
+        let write_val = validate_and_authorize_write_path(xls_write_path.to_str().unwrap());
+        assert!(write_val.is_err(), "validate_and_authorize_write_path phải chặn đuôi .xls");
+
+        // 2. Đọc tệp .xls giả mạo (không có header OLE2) -> Từ chối InvalidFileSignature
+        let fake_xls = temp_dir.path().join("fake.xls");
+        std::fs::write(&fake_xls, b"NOT_AN_OLE2_FILE").unwrap();
+        let read_fake = validate_and_authorize_read_path(fake_xls.to_str().unwrap());
+        assert!(read_fake.is_err(), "Tệp .xls không có header OLE2 phải bị từ chối");
+        match read_fake.unwrap_err() {
+            CommandError::InvalidFileSignature { .. } => {}
+            other => panic!("Expected InvalidFileSignature, got {:?}", other),
+        }
+
+        // 3. Đọc tệp .xls hợp lệ với header OLE2 chuẩn (\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1) -> Thành công
+        let valid_xls = temp_dir.path().join("valid.xls");
+        let mut ole2_bytes = vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+        ole2_bytes.extend_from_slice(b"EXCEL_OLE2_BODY_STREAM");
+        std::fs::write(&valid_xls, &ole2_bytes).unwrap();
+        let read_valid = validate_and_authorize_read_path(valid_xls.to_str().unwrap());
+        assert!(read_valid.is_ok(), "Tệp .xls có header OLE2 chuẩn phải được chấp nhận");
+    }
+
+    #[test]
+    fn test_bounded_file_read_oversized_file_rejected() {
+        // [Workstream A - P2 4666660908]: Đọc tệp giới hạn kích thước an toàn
+        let temp_dir = tempfile::tempdir().unwrap();
+        let oversized_file = temp_dir.path().join("oversized.xlsx");
+
+        // Tạo tệp rỗng nhưng đặt kích thước lớn hơn MAX_PAYLOAD_BYTES (50MB + 1)
+        let file = std::fs::File::create(&oversized_file).unwrap();
+        file.set_len((MAX_PAYLOAD_BYTES as u64) + 1024).unwrap();
+
+        let manager = NativeSaveGrantManager::new();
+        manager.register_document_session("doc-large", "app-inst", 1, &oversized_file, 0).unwrap();
+
+        let read_res = manager.read_authorized_document_bytes("doc-large", "app-inst", 1);
+        assert!(read_res.is_err());
+        match read_res.unwrap_err() {
+            CommandError::ValidationFailed { reason } => {
+                assert!(reason.contains("vượt quá giới hạn an toàn"));
+            }
+            other => panic!("Expected ValidationFailed, got {:?}", other),
+        }
     }
 }

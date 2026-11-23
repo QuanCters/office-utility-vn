@@ -424,25 +424,13 @@ impl Bridge {
                                 app_ctx_for_fail.request_repaint();
                             }
                         } else if t == "gridcraft:open" {
-                            let name = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("name"))
-                                .ok()
-                                .and_then(|v| v.as_string())
-                                .unwrap_or_else(|| "Book.xlsx".to_string());
                             let open_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("open_id"))
                                 .ok()
                                 .and_then(|v| v.as_string());
                             *cur_open_store.borrow_mut() = open_id;
-                            if let Ok(bytes_val) = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("bytes")) {
-                                let bytes = if let Some(array) = bytes_val.dyn_ref::<js_sys::Uint8Array>() {
-                                    array.to_vec()
-                                } else if bytes_val.is_instance_of::<js_sys::ArrayBuffer>() {
-                                    js_sys::Uint8Array::new(&bytes_val).to_vec()
-                                } else {
-                                    Vec::new()
-                                };
-                                inbox_for_msgs.lock().unwrap_or_else(|e| e.into_inner()).push((open_name(&name), bytes));
-                                app_ctx_for_msgs.request_repaint();
-                            }
+                            // Ghi nhận open_id để gửi xác nhận ACK, không push đúp nội dung vào inbox
+                            // vì self.host.listen đã xử lý mở tệp duy nhất một lần.
+                            app_ctx_for_msgs.request_repaint();
                         } else if t == "gridcraft:request_save" {
                             let save_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("id"))
                                 .ok()

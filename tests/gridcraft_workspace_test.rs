@@ -358,6 +358,7 @@ fn test_p1_finding2_multi_workbook_save_isolation_prevents_wrong_workbook_overwr
         file_path: "/data/A.xlsx".into(),
         file_name: "A.xlsx".into(),
         revision: 1,
+        is_dirty: false,
     });
     state.set_document_session(Some("doc-A".into()), Some("/data/A.xlsx".into()), 1);
     state.active_file_name.set(Some("A.xlsx".into()));
@@ -368,6 +369,7 @@ fn test_p1_finding2_multi_workbook_save_isolation_prevents_wrong_workbook_overwr
         file_path: "/data/B.xlsx".into(),
         file_name: "B.xlsx".into(),
         revision: 1,
+        is_dirty: false,
     });
     state.set_document_session(Some("doc-B".into()), Some("/data/B.xlsx".into()), 1);
     state.active_file_name.set(Some("B.xlsx".into()));
@@ -481,12 +483,14 @@ fn test_p1_filesystem_workbook_preservation_real_fixtures() {
         file_path: file_a.to_str().unwrap().to_string(),
         file_name: "Report_2025.xlsx".into(),
         revision: 1,
+        is_dirty: false,
     });
     state.register_document_session(WorkbookSession {
         document_id: "doc-bud-2026".into(),
         file_path: file_b.to_str().unwrap().to_string(),
         file_name: "Budget_2026.xlsx".into(),
         revision: 1,
+        is_dirty: false,
     });
 
     // Active file is set to B:
@@ -517,5 +521,127 @@ fn test_p1_filesystem_workbook_preservation_real_fixtures() {
     assert_eq!(
         read_b, original_content_b,
         "File B must NOT be overwritten when saving File A!"
+    );
+}
+
+#[test]
+fn test_gridcraft_fnv1a_fingerprint_equivalence() {
+    use office_utility_vn_ui::platform::coordinator::compute_content_fingerprint;
+    use office_utility_vn_ui::platform::persistence::compute_fingerprint;
+
+    let sample_payloads: Vec<&[u8]> = vec![
+        b"",
+        b"PK\x03\x04sample spreadsheet data",
+        b"Test financial numbers: 123456789.99 VND",
+        &[0u8; 1024],
+        &[0xff; 4096],
+    ];
+
+    for payload in sample_payloads {
+        let fp_coord = compute_content_fingerprint(payload);
+        let fp_persist = compute_fingerprint(payload);
+        assert_eq!(
+            fp_coord, fp_persist,
+            "Fingerprint algorithm mismatch between coordinator and persistence!"
+        );
+        assert_eq!(fp_coord.len(), 16, "Fingerprint must be 16-hex characters");
+    }
+}
+
+#[test]
+fn test_gridcraft_multi_workbook_aggregate_dirty_preservation() {
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+
+    let state = GridCraftState::new();
+
+    // 1. Mở Workbook A sạch ban đầu
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-wb-a".into(),
+        file_path: "/data/financials_a.xlsx".into(),
+        file_name: "financials_a.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+    });
+    assert!(!state.is_dirty.get_untracked());
+
+    // 2. Người dùng sửa Workbook A -> dirty = true -> aggregate dirty = true
+    state.set_document_dirty("doc-wb-a", true);
+    assert!(state.is_dirty.get_untracked());
+
+    // 3. Mở thêm Workbook B (mới nạp sạch)
+    // P1 Finding 4666660892: Mở Workbook B TUYỆT ĐỐI KHÔNG làm mất dirty của Workbook A!
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-wb-b".into(),
+        file_path: "/data/estimates_b.xlsx".into(),
+        file_name: "estimates_b.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+    });
+    state.recompute_aggregate_dirty();
+    assert!(
+        state.is_dirty.get_untracked(),
+        "Aggregate dirty state must remain TRUE while Workbook A has unsaved changes!"
+    );
+
+    // 4. Sửa tiếp Workbook B -> cả 2 đều dirty
+    state.set_document_dirty("doc-wb-b", true);
+    assert!(state.is_dirty.get_untracked());
+
+    // 5. Lưu thành công Workbook A -> A sạch, nhưng B vẫn dirty
+    state.set_document_dirty("doc-wb-a", false);
+    assert!(
+        state.is_dirty.get_untracked(),
+        "Aggregate dirty state must remain TRUE because Workbook B is still dirty!"
+    );
+
+    // 6. Lưu tiếp Workbook B -> cả 2 sạch -> aggregate dirty mới chuyển false
+    state.set_document_dirty("doc-wb-b", false);
+    assert!(
+        !state.is_dirty.get_untracked(),
+        "Aggregate dirty state becomes FALSE only when all workbooks are clean"
+    );
+}
+
+#[test]
+fn test_gridcraft_resolve_save_session_disambiguation() {
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+
+    let state = GridCraftState::new();
+
+    // Hai tệp cùng tên "budget.xlsx" ở 2 thư mục khác nhau
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-budget-q1".into(),
+        file_path: "/dir1/budget.xlsx".into(),
+        file_name: "budget.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+    });
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-budget-q2".into(),
+        file_path: "/dir2/budget.xlsx".into(),
+        file_name: "budget.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+    });
+
+    // Khi active_document_id là Q1: resolve bằng tên "budget.xlsx" phải trỏ về đúng Q1
+    state.active_document_id.set(Some("doc-budget-q1".into()));
+    let resolved_q1 = state.resolve_save_session("budget.xlsx").expect("Must resolve to active Q1");
+    assert_eq!(resolved_q1.document_id, "doc-budget-q1");
+    assert_eq!(resolved_q1.file_path, "/dir1/budget.xlsx");
+
+    // Khi active_document_id là Q2: resolve bằng tên "budget.xlsx" phải trỏ về đúng Q2
+    state.active_document_id.set(Some("doc-budget-q2".into()));
+    let resolved_q2 = state.resolve_save_session("budget.xlsx").expect("Must resolve to active Q2");
+    assert_eq!(resolved_q2.document_id, "doc-budget-q2");
+    assert_eq!(resolved_q2.file_path, "/dir2/budget.xlsx");
+
+    // Khi active_document_id không trùng với tài liệu nào (hoặc None):
+    // lookup theo tên mơ hồ phải trả về None để buộc rơi vào Save As an toàn thay vì ghi đè sai file!
+    state.active_document_id.set(None);
+    let ambiguous = state.resolve_save_session("budget.xlsx");
+    assert!(
+        ambiguous.is_none(),
+        "Ambiguous filename resolution without active document ID must return None"
     );
 }

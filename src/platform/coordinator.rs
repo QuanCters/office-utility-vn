@@ -188,8 +188,8 @@ impl HostDocumentCoordinator {
             None => "untitled.xlsx".to_string(),
         };
 
-        // Băm nội dung snapshot xuất ra
-        let fingerprint = format!("{:x}", md5_or_simple_hash(&bytes));
+        // Băm nội dung snapshot xuất ra bằng thuật toán FNV-1a nhất quán
+        let fingerprint = compute_content_fingerprint(&bytes);
 
         // Bất biến 7: Nếu đang lưu dở một request khác, giữ cờ dirty_during_save
         let dirty_flag = match &self.state {
@@ -354,10 +354,22 @@ impl HostDocumentCoordinator {
     }
 }
 
-/// Hàm băm nội dung đơn giản để tính fingerprint độc lập.
+/// Tính mã băm nội dung nhanh và nhất quán (64-bit FNV-1a hex).
+pub fn compute_content_fingerprint(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{:016x}", hash)
+}
+
+/// Hàm băm nội dung đơn giản để tính fingerprint độc lập (FNV-1a 64-bit).
 pub fn md5_or_simple_hash(bytes: &[u8]) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    hasher.finish()
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }

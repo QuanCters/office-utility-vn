@@ -692,6 +692,7 @@ fn test_pdf_studio_save_outcomes_and_cancel_preserves_dirty() {
     let outcome_saved = SaveOutcome::Saved {
         dest_path: "/data/contract.pdf".to_string(),
         committed_revision: 5,
+        new_document_id: Some("doc-123".to_string()),
     };
     let outcome_canceled = SaveOutcome::Canceled;
     let outcome_failed = SaveOutcome::Failed("Permission denied".to_string());
@@ -731,9 +732,9 @@ fn test_pdf_studio_save_outcomes_and_cancel_preserves_dirty() {
 
     // Giả lập xử lý SaveOutcome::Saved: Chỉ khi lưu thành công thì mới xóa dirty
     match outcome_saved {
-        SaveOutcome::Saved { ref dest_path, committed_revision } => {
+        SaveOutcome::Saved { ref dest_path, committed_revision, ref new_document_id } => {
             state.set_unsaved_changes(false);
-            state.set_active_document_session(Some("doc-123".to_string()), committed_revision);
+            state.set_active_document_session(new_document_id.clone(), committed_revision);
             state.status_message.set(format!("Đã lưu: {dest_path}"));
         }
         _ => panic!("Expected Saved"),
@@ -741,4 +742,100 @@ fn test_pdf_studio_save_outcomes_and_cancel_preserves_dirty() {
     assert!(!state.has_unsaved_changes());
     assert_eq!(state.active_revision(), 5);
     assert_eq!(state.active_document_id().as_deref(), Some("doc-123"));
+}
+
+#[test]
+fn test_pdf_studio_save_as_activates_new_document_session() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::SaveOutcome;
+
+    let state = PdfStudioState::new();
+    state.add_file("/documents/original_a.pdf");
+    state.set_active_document_session(Some("doc-session-aaa".to_string()), 1);
+    state.set_unsaved_changes(true);
+
+    assert_eq!(state.active_file_path().as_deref(), Some("/documents/original_a.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-session-aaa"));
+    assert_eq!(state.active_revision(), 1);
+
+    // Thực hiện Save As sang tệp B: backend cấp document_id mới "doc-session-bbb"
+    let save_as_outcome = SaveOutcome::Saved {
+        dest_path: "/documents/saved_b.pdf".to_string(),
+        committed_revision: 1,
+        new_document_id: Some("doc-session-bbb".to_string()),
+    };
+
+    if let SaveOutcome::Saved { dest_path, committed_revision, new_document_id } = save_as_outcome {
+        state.set_unsaved_changes(false);
+        state.set_active_document_session(new_document_id, committed_revision);
+        state.add_file(&dest_path);
+    }
+
+    // Xác nhận session B đã được kích hoạt làm active session, không còn trỏ về file A
+    assert_eq!(state.active_file_path().as_deref(), Some("/documents/saved_b.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-session-bbb"));
+    assert_eq!(state.active_revision(), 1);
+    assert!(!state.has_unsaved_changes());
+}
+
+#[test]
+fn test_pdf_studio_concurrent_edits_during_save_preserve_dirty() {
+    let state = PdfStudioState::new();
+    state.add_file("/documents/doc.pdf");
+    state.set_active_document_session(Some("doc-1".to_string()), 1);
+
+    // Người dùng chỉnh sửa lần 1
+    state.set_unsaved_changes(true);
+    let snapshot_gen = state.edit_generation.get_untracked();
+    assert_eq!(snapshot_gen, 1);
+
+    // Trong lúc save đang chạy bất đồng bộ, người dùng tiếp tục chỉnh sửa lần 2 (thế hệ tăng lên)
+    state.set_unsaved_changes(true);
+    let newer_gen = state.edit_generation.get_untracked();
+    assert_eq!(newer_gen, 2);
+
+    // Khi tác vụ lưu của snapshot_gen hoàn thành:
+    // Vì newer_gen (2) != snapshot_gen (1), dirty state BẮT BUỘC phải duy trì true!
+    let current_gen = state.edit_generation.get_untracked();
+    if current_gen == snapshot_gen {
+        state.has_unsaved_changes.set(false);
+    } else {
+        state.has_unsaved_changes.set(true);
+    }
+
+    assert!(state.has_unsaved_changes(), "Bắt buộc giữ unsaved_changes = true nếu có chỉnh sửa mới trong khi đang lưu!");
+}
+
+#[test]
+fn test_pdf_studio_cached_document_reopening() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
+        cache_authorized_pdf_bytes, get_authorized_pdf_bytes, read_file_bytes,
+    };
+
+    let fake_path = "/authorized/documents/report_q4.pdf";
+    let fake_bytes = b"%PDF-1.7 Test document content for caching".to_vec();
+
+    // Chưa cache thì get trả về None
+    assert!(get_authorized_pdf_bytes(fake_path).is_none());
+
+    // Nạp vào cache ủy quyền phiên
+    cache_authorized_pdf_bytes(fake_path, fake_bytes.clone());
+
+    // Đọc lại từ cache
+    let retrieved = get_authorized_pdf_bytes(fake_path);
+    assert_eq!(retrieved, Some(fake_bytes.clone()));
+
+    // read_file_bytes cũng phải đọc thành công từ cache
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        let mut f = std::pin::pin!(f);
+        let waker = std::task::Waker::noop();
+        let mut cx = std::task::Context::from_waker(&waker);
+        match f.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(res) => res,
+            std::task::Poll::Pending => panic!("Future pending unexpectedly"),
+        }
+    }
+
+    let read_res = block_on(read_file_bytes(fake_path));
+    assert!(read_res.is_ok());
+    assert_eq!(read_res.unwrap(), fake_bytes);
 }

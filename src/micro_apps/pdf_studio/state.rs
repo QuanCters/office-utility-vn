@@ -132,6 +132,10 @@ pub struct PdfStudioState {
     pub active_document_id: RwSignal<Option<String>>,
     /// Số thứ tự revision hiện hành của tài liệu đã được cam kết ghi đĩa.
     pub active_revision: RwSignal<u64>,
+    /// Thế hệ chỉnh sửa của tài liệu (tăng dần khi có edit mới để chống mất dirty lúc đang lưu)
+    pub edit_generation: RwSignal<u64>,
+    /// Bộ đệm lưu trữ nội dung nhị phân của các tệp PDF đã mở trong phiên
+    pub cached_documents: RwSignal<std::collections::HashMap<String, Vec<u8>>>,
     /// Danh mục lọc hiện tại trên trang chủ PDF Studio Hub (None = Tất cả).
     pub hub_active_category: RwSignal<Option<PdfCategory>>,
 }
@@ -170,21 +174,41 @@ impl PdfStudioState {
             has_unsaved_changes: RwSignal::new(false),
             active_document_id: RwSignal::new(None),
             active_revision: RwSignal::new(0),
+            edit_generation: RwSignal::new(0),
+            cached_documents: RwSignal::new(std::collections::HashMap::new()),
             hub_active_category: RwSignal::new(None),
         }
     }
 
+    /// Lưu bộ đệm nội dung nhị phân của tài liệu đã được ủy quyền
+    pub fn cache_document_bytes(&self, key: &str, bytes: Vec<u8>) {
+        let mut map = self.cached_documents.get_untracked();
+        map.insert(key.to_string(), bytes);
+        self.cached_documents.set(map);
+    }
+
+    /// Lấy bộ đệm nội dung nhị phân của tài liệu
+    pub fn get_cached_document_bytes(&self, key: &str) -> Option<Vec<u8>> {
+        self.cached_documents.with(|map| map.get(key).cloned())
+    }
+
     /// Thêm một tệp PDF vào danh sách làm việc chung.
-    /// Nếu chưa có tệp nào đang được chọn, tự động đặt tệp đầu tiên làm active.
+    /// Tự động cập nhật chỉ số tệp active sang tệp mới thêm.
     pub fn add_file(&self, path: impl Into<String>) {
         let path_str = path.into();
         if path_str.trim().is_empty() {
             return;
         }
-        self.loaded_files.update(|f| f.push(path_str));
-        if self.active_file_index.get().is_none() {
-            self.active_file_index.set(Some(0));
-        }
+        let mut idx = 0;
+        self.loaded_files.update(|f| {
+            if let Some(pos) = f.iter().position(|p| p == &path_str) {
+                idx = pos;
+            } else {
+                f.push(path_str);
+                idx = f.len() - 1;
+            }
+        });
+        self.active_file_index.set(Some(idx));
     }
 
     /// Thêm nhiều tệp PDF vào danh sách làm việc chung.
@@ -399,9 +423,12 @@ impl PdfStudioState {
         self.is_canvas_ready.set(ready);
     }
 
-    /// Cập nhật cờ thay đổi chưa lưu (dirty).
+    /// Cập nhật cờ thay đổi chưa lưu (dirty) và tăng thế hệ chỉnh sửa (edit_generation)
     pub fn set_unsaved_changes(&self, dirty: bool) {
         self.has_unsaved_changes.set(dirty);
+        if dirty {
+            self.edit_generation.update(|g| *g += 1);
+        }
     }
 
     /// Lấy document ID được ủy quyền hiện tại.
@@ -428,7 +455,7 @@ impl PdfStudioState {
                 self.status_message.set(format!("PDFCraft Canvas sẵn sàng (v{})", version));
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Dirty { dirty } => {
-                self.has_unsaved_changes.set(*dirty);
+                self.set_unsaved_changes(*dirty);
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Save { name, .. } => {
                 // TUYỆT ĐỐI KHÔNG xóa has_unsaved_changes ở đây! (Gate 1 - Stage 4B-2B)

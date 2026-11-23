@@ -52,6 +52,8 @@ pub enum SaveOutcome {
     Saved {
         dest_path: String,
         committed_revision: u64,
+        #[serde(default)]
+        new_document_id: Option<String>,
     },
     /// Người dùng bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> Giữ nguyên dirty và session
     Canceled,
@@ -59,6 +61,21 @@ pub enum SaveOutcome {
     Failed(String),
     /// Kích hoạt tải về qua trình duyệt Web thuần túy (chỉ áp dụng khi không chạy trong Tauri)
     BrowserDownloadInitiated,
+}
+
+static AUTHORIZED_PDF_CACHE: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// Lưu nội dung nhị phân vào bộ đệm tài liệu đã được ủy quyền trong phiên
+pub fn cache_authorized_pdf_bytes(path: &str, bytes: Vec<u8>) {
+    if let Ok(mut cache) = AUTHORIZED_PDF_CACHE.lock() {
+        cache.insert(path.to_string(), bytes);
+    }
+}
+
+/// Lấy nội dung nhị phân từ bộ đệm tài liệu đã được ủy quyền
+pub fn get_authorized_pdf_bytes(path: &str) -> Option<Vec<u8>> {
+    AUTHORIZED_PDF_CACHE.lock().ok().and_then(|c| c.get(path).cloned())
 }
 
 impl IncomingBridgeMessage {
@@ -367,6 +384,7 @@ pub fn setup_bridge_listener(
                 let active_path = if !save_as { state.active_file_path() } else { None };
                 let doc_id = state.active_document_id();
                 let cur_rev = state.active_revision();
+                let snapshot_gen = state.edit_generation.get_untracked();
                 let s = state;
                 wasm_bindgen_futures::spawn_local(async move {
                     match save_file_to_disk_or_download(
@@ -379,9 +397,17 @@ pub fn setup_bridge_listener(
                     )
                     .await
                     {
-                        Ok(SaveOutcome::Saved { dest_path, committed_revision }) => {
-                            s.has_unsaved_changes.set(false);
-                            s.set_active_document_session(doc_id, committed_revision);
+                        Ok(SaveOutcome::Saved { dest_path, committed_revision, new_document_id }) => {
+                            let current_gen = s.edit_generation.get_untracked();
+                            if current_gen == snapshot_gen {
+                                s.has_unsaved_changes.set(false);
+                            } else {
+                                s.has_unsaved_changes.set(true);
+                            }
+                            let target_doc_id = new_document_id.or(doc_id);
+                            s.set_active_document_session(target_doc_id, committed_revision);
+                            cache_authorized_pdf_bytes(&dest_path, bytes_clone.clone());
+                            s.cache_document_bytes(&dest_path, bytes_clone);
                             if save_as || active_path.is_none() {
                                 s.add_file(&dest_path);
                             }
@@ -398,7 +424,12 @@ pub fn setup_bridge_listener(
                             s.status_message.set(format!("❌ Lưu tệp thất bại: {err}"));
                         }
                         Ok(SaveOutcome::BrowserDownloadInitiated) => {
-                            s.has_unsaved_changes.set(false);
+                            let current_gen = s.edit_generation.get_untracked();
+                            if current_gen == snapshot_gen {
+                                s.has_unsaved_changes.set(false);
+                            } else {
+                                s.has_unsaved_changes.set(true);
+                            }
                             s.status_message.set("Đã bắt đầu tải về qua trình duyệt.".to_string());
                         }
                         Err(err) => {
@@ -453,6 +484,8 @@ pub async fn open_file_into_pdf_studio(
             let bytes: Vec<u8> = serde_json::from_value(bytes_val).unwrap_or_default();
 
             if !file_path.is_empty() {
+                cache_authorized_pdf_bytes(&file_path, bytes.clone());
+                state.cache_document_bytes(&file_path, bytes.clone());
                 state.add_file(&file_path);
                 state.set_active_document_session(doc_id, rev);
                 if !bytes.is_empty() {
@@ -476,16 +509,21 @@ pub async fn open_file_into_pdf_studio(
     Ok(())
 }
 
-/// Đọc nội dung nhị phân của tệp nội bộ (web fetch đối với /assets/... hoặc blob: URL).
+/// Đọc nội dung nhị phân của tệp nội bộ (ưu tiên cache tài liệu đã ủy quyền, web fetch đối với /assets/... hoặc blob: URL).
 /// [BẢO MẬT STAGE 4C-0D CLOSURE]: Loại bỏ hoàn toàn lệnh gọi IPC 'read_file_binary' raw-path.
 #[cfg(target_arch = "wasm32")]
 pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
-    // 0. Tuân thủ nghiêm ngặt NFR-SEC-01 (Zero-Cloud): Nghiêm cấm tải file từ URL http:// hoặc https://
+    // 0. Kiểm tra bộ đệm tài liệu đã được ủy quyền trong phiên
+    if let Some(cached) = get_authorized_pdf_bytes(file_path) {
+        return Ok(cached);
+    }
+
+    // 1. Tuân thủ nghiêm ngặt NFR-SEC-01 (Zero-Cloud): Nghiêm cấm tải file từ URL http:// hoặc https://
     if file_path.starts_with("http://") || file_path.starts_with("https://") {
         return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
     }
 
-    // 1. Fetch qua web nếu file_path là local web path nội bộ (ví dụ: /assets/... hoặc blob:)
+    // 2. Fetch qua web nếu file_path là local web path nội bộ (ví dụ: /assets/... hoặc blob:)
     if file_path.starts_with('/') || file_path.starts_with("blob:") {
         if let Some(win) = web_sys::window() {
             if let Ok(resp_val) = wasm_bindgen_futures::JsFuture::from(win.fetch_with_str(file_path)).await {
@@ -493,7 +531,9 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
                     if let Ok(ab_val) = resp.array_buffer() {
                         if let Ok(buffer_val) = wasm_bindgen_futures::JsFuture::from(ab_val).await {
                             let u8_arr = js_sys::Uint8Array::new(&buffer_val);
-                            return Ok(u8_arr.to_vec());
+                            let bytes = u8_arr.to_vec();
+                            cache_authorized_pdf_bytes(file_path, bytes.clone());
+                            return Ok(bytes);
                         }
                     }
                 }
@@ -506,6 +546,9 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
+    if let Some(cached) = get_authorized_pdf_bytes(file_path) {
+        return Ok(cached);
+    }
     if file_path.starts_with("http://") || file_path.starts_with("https://") {
         return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
     }
@@ -574,6 +617,7 @@ pub async fn save_file_to_disk_or_download(
                                 return Ok(SaveOutcome::Saved {
                                     dest_path: dest,
                                     committed_revision: rev,
+                                    new_document_id: document_id.map(|s| s.to_string()),
                                 });
                             }
                             Err(e) => {
@@ -600,6 +644,7 @@ pub async fn save_file_to_disk_or_download(
         match invoke("native_dialog_save_as", args).await {
             Ok(js_res) => {
                 if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res) {
+                    let new_doc_id = handle.get("document_id").and_then(|v| v.as_str()).map(|s| s.to_string());
                     if let Some(grant) = handle.get("grant") {
                         if let (Some(grant_id), Some(req_id)) = (
                             grant.get("grant_id").and_then(|v| v.as_str()),
@@ -623,6 +668,7 @@ pub async fn save_file_to_disk_or_download(
                                     return Ok(SaveOutcome::Saved {
                                         dest_path,
                                         committed_revision: rev,
+                                        new_document_id: new_doc_id,
                                     });
                                 }
                                 Err(e) => {
@@ -650,16 +696,18 @@ pub async fn save_file_to_disk_or_download(
 pub async fn save_file_to_disk_or_download(
     _name: &str,
     file_path: Option<&str>,
-    _document_id: Option<&str>,
+    document_id: Option<&str>,
     _expected_rev: u64,
     _save_as: bool,
     bytes: &[u8],
 ) -> Result<SaveOutcome, String> {
     if let Some(path) = file_path {
         std::fs::write(path, bytes).map_err(|e| format!("Không thể ghi tệp: {e}"))?;
+        cache_authorized_pdf_bytes(path, bytes.to_vec());
         Ok(SaveOutcome::Saved {
             dest_path: path.to_string(),
             committed_revision: 1,
+            new_document_id: document_id.map(|s| s.to_string()),
         })
     } else {
         Ok(SaveOutcome::Canceled)

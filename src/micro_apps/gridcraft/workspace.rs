@@ -162,7 +162,11 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 .ok()
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(false);
-                                s.is_dirty.set(dirty);
+                                if let Some(active_id) = s.active_document_id.get_untracked() {
+                                    s.set_document_dirty(&active_id, dirty);
+                                } else {
+                                    s.is_dirty.set(dirty);
+                                }
                                 if dirty {
                                     if coordinator.read_value().state()
                                         == &crate::platform::coordinator::DocumentState::Unloaded
@@ -360,13 +364,14 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                             });
                                                 let is_still_dirty =
                                                     coordinator.read_value().is_dirty();
-                                                s.is_dirty.set(is_still_dirty);
+                                                s.set_document_dirty(&new_doc_id, is_still_dirty);
                                                 s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
-                                                document_id: new_doc_id.clone(),
-                                                file_path: dest_path.clone(),
-                                                file_name: name_clone.clone(),
-                                                revision: committed_rev,
-                                            });
+                                                    document_id: new_doc_id.clone(),
+                                                    file_path: dest_path.clone(),
+                                                    file_name: name_clone.clone(),
+                                                    revision: committed_rev,
+                                                    is_dirty: is_still_dirty,
+                                                });
                                                 s.set_document_session(
                                                     Some(new_doc_id),
                                                     Some(dest_path.clone()),
