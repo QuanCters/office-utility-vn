@@ -1,14 +1,14 @@
 #![allow(unused_imports, unused_variables, dead_code)]
 
-use leptos::prelude::*;
 use crate::micro_apps::gridcraft::state::GridCraftState;
 use crate::platform::adapter::{DocumentStateEvent, GridCraftAdapter, MicroAppAdapter};
 use crate::platform::coordinator::HostDocumentCoordinator;
+use leptos::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
@@ -18,7 +18,8 @@ extern "C" {
 }
 
 /// Địa chỉ nạp iframe GridCraft chuẩn hóa cho Stage 4A & 4B
-pub const GRIDCRAFT_IFRAME_SRC: &str = "/gridcraft/index.html?host=parent&save=confirmed&chrome=notitlebar";
+pub const GRIDCRAFT_IFRAME_SRC: &str =
+    "/gridcraft/index.html?host=parent&save=confirmed&chrome=notitlebar";
 
 /// ID phần tử iframe
 pub const GRIDCRAFT_IFRAME_ID: &str = "gridcraft-workspace-frame";
@@ -35,251 +36,511 @@ pub enum DevSaveResult {
     Failed(String),
 }
 
+/// Xử lý hoàn tất lưu tệp và kiểm tra an toàn toàn bộ ứng dụng trước khi ủy quyền đóng cửa sổ (Finding 4)
+pub fn handle_gridcraft_save_completion(
+    is_still_dirty: bool,
+    close_req_id: Option<String>,
+    close_manager: Option<crate::platform::window_close::WindowCloseManager>,
+    app_state: Option<crate::app::AppState>,
+) {
+    if let Some(req_id) = close_req_id {
+        if !is_still_dirty {
+            let other_dirty = app_state
+                .as_ref()
+                .map(|st| st.has_unsaved_work_or_running_task())
+                .unwrap_or(false);
+            if other_dirty {
+                if let Some(cm) = close_manager {
+                    cm.cancel_close(&req_id);
+                    cm.error_message.set(Some(
+                        "Vui lòng hoàn tất lưu tệp trong các ứng dụng khác trước khi đóng cửa sổ."
+                            .into(),
+                    ));
+                }
+            } else if let Some(cm) = close_manager {
+                cm.authorize_close(&req_id);
+            }
+        } else if let Some(cm) = close_manager {
+            cm.cancel_close(&req_id);
+            cm.error_message.set(Some(
+                "Phát hiện thay đổi mới trong quá trình lưu, đã hủy đóng cửa sổ để bảo vệ dữ liệu."
+                    .into(),
+            ));
+        }
+    }
+}
+
 /// Component `GridCraftWorkspace`:
 /// Chiếm trọn 100% không gian làm việc (Full-Workspace),
 /// nhúng trực tiếp giao diện gốc GridCraft WebAssembly mà không có bất kỳ thành phần nào của Data Lab cũ.
 #[component]
-pub fn GridCraftWorkspace(
-    #[prop(into)] state: GridCraftState,
-) -> impl IntoView {
+pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView {
     let coordinator = StoredValue::new(HostDocumentCoordinator::new());
-    let close_manager = leptos::prelude::use_context::<crate::platform::window_close::WindowCloseManager>();
+    let close_manager =
+        leptos::prelude::use_context::<crate::platform::window_close::WindowCloseManager>();
+    let app_state = leptos::prelude::use_context::<crate::app::AppState>();
+
+    // Finding 1: Đồng bộ hóa Coordinator ngay khi mở Workspace nếu State đã có tài liệu active
+    let init_doc = state.active_document_id.get_untracked();
+    let init_path = state.active_file_path.get_untracked();
+    if let (Some(doc_id), Some(path)) = (init_doc, init_path) {
+        coordinator.update_value(|c| {
+            c.on_document_opened(&doc_id, &path, "init-mount");
+            if state.is_dirty.get_untracked() {
+                c.on_user_edit();
+            }
+        });
+    }
 
     #[cfg(target_arch = "wasm32")]
     {
         let window = web_sys::window();
         if let Some(win) = window {
             let s = state;
-            let listener = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |ev: web_sys::MessageEvent| {
-                let data = ev.data();
-                let type_val = match js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("type")) {
-                    Ok(v) => v.as_string(),
-                    Err(_) => None,
-                };
+            let listener = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(
+                move |ev: web_sys::MessageEvent| {
+                    let data = ev.data();
+                    let type_val =
+                        match js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("type"))
+                        {
+                            Ok(v) => v.as_string(),
+                            Err(_) => None,
+                        };
 
-                if let Some(msg_type) = type_val {
-                    match msg_type.as_str() {
-                        "gridcraft:ready" => {
-                            s.is_canvas_ready.set(true);
-                            s.error_message.set(None);
-                            #[cfg(debug_assertions)]
-                            {
-                                if s.active_file_path.get_untracked().is_some() {
+                    if let Some(msg_type) = type_val {
+                        match msg_type.as_str() {
+                            "gridcraft:ready" => {
+                                s.is_canvas_ready.set(true);
+                                s.error_message.set(None);
+                                #[cfg(debug_assertions)]
+                                {
+                                    if s.active_file_path.get_untracked().is_some() {
+                                        wasm_bindgen_futures::spawn_local(async move {
+                                            let args =
+                                                serde_wasm_bindgen::to_value(&serde_json::json!({
+                                                    "fixtureId": "tc04_sample",
+                                                }))
+                                                .unwrap();
+                                            if let Ok(val) = invoke("load_dev_fixture", args).await
+                                            {
+                                                if let Ok(handle) = serde_wasm_bindgen::from_value::<
+                                                    serde_json::Value,
+                                                >(
+                                                    val
+                                                ) {
+                                                    let file_name = handle
+                                                        .get("file_name")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("tc04_sample.xlsx")
+                                                        .to_string();
+                                                    let bytes_val = handle
+                                                        .get("bytes")
+                                                        .cloned()
+                                                        .unwrap_or(serde_json::Value::Null);
+                                                    let bytes: Vec<u8> =
+                                                        serde_json::from_value(bytes_val)
+                                                            .unwrap_or_default();
+                                                    if !bytes.is_empty() {
+                                                        send_open_to_iframe(
+                                                            GRIDCRAFT_IFRAME_ID,
+                                                            &file_name,
+                                                            &bytes,
+                                                            None,
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                            "gridcraft:dirty" => {
+                                let dirty = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("dirty"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                                s.is_dirty.set(dirty);
+                                if dirty {
+                                    if coordinator.read_value().state()
+                                        == &crate::platform::coordinator::DocumentState::Unloaded
+                                    {
+                                        let cur_doc = s
+                                            .active_document_id
+                                            .get_untracked()
+                                            .unwrap_or_else(|| "gridcraft-doc".into());
+                                        let cur_path = s
+                                            .active_file_path
+                                            .get_untracked()
+                                            .unwrap_or_else(|| "workbook.xlsx".into());
+                                        coordinator.update_value(|c| {
+                                            c.on_document_opened(&cur_doc, &cur_path, "dirty-init");
+                                        });
+                                    }
+                                    coordinator.update_value(|c| c.on_user_edit());
+                                }
+                            }
+                            "gridcraft:save" => {
+                                let name = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("name"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string())
+                                .unwrap_or_else(|| "workbook.xlsx".to_string());
+                                let req_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("id"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string());
+                                let save_as = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("saveAs"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+
+                                let bytes_val = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("bytes"),
+                                )
+                                .unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+                                let bytes = if let Some(array) =
+                                    bytes_val.dyn_ref::<js_sys::Uint8Array>()
+                                {
+                                    array.to_vec()
+                                } else if bytes_val.is_instance_of::<js_sys::ArrayBuffer>() {
+                                    js_sys::Uint8Array::new(&bytes_val).to_vec()
+                                } else {
+                                    Vec::new()
+                                };
+
+                                let gate_res =
+                                    s.handle_save_requested(&name, req_id.as_deref(), &bytes);
+
+                                if gate_res.is_err() {
+                                    // Gating an ninh (Gate 5): Vô hiệu hóa Production Save
+                                    if let Some(ref id) = req_id {
+                                        send_save_failed_to_iframe(
+                                            GRIDCRAFT_IFRAME_ID,
+                                            "Tính năng lưu tệp Production bị vô hiệu hóa an toàn.",
+                                            Some(id),
+                                        );
+                                    }
+                                    if let Some(close_req_id) =
+                                        s.pending_close_request_id.get_untracked()
+                                    {
+                                        s.pending_close_request_id.set(None);
+                                        if let Some(cm) = close_manager {
+                                            cm.cancel_close(&close_req_id);
+                                            cm.error_message.set(Some("Lưu thất bại: Tính năng lưu tệp Production bị vô hiệu hóa an toàn.".into()));
+                                        }
+                                    }
+                                } else {
+                                    // Finding 2: Phân giải chính xác phiên workbook đích để tránh ghi đè workbook khác
+                                    let resolved_session = s.resolve_save_session(&name);
+                                    let (target_doc_id, target_path, target_rev) =
+                                        if let Some(ref sess) = resolved_session {
+                                            (
+                                                Some(sess.document_id.clone()),
+                                                Some(sess.file_path.clone()),
+                                                sess.revision,
+                                            )
+                                        } else if save_as {
+                                            (None, None, 0)
+                                        } else {
+                                            // Tệp lạ không thuộc phiên đã đăng ký -> buộc Save As để bảo vệ file hiện hành
+                                            (None, None, 0)
+                                        };
+
+                                    let effective_doc_id =
+                                        target_doc_id.as_deref().unwrap_or("gridcraft-doc");
+                                    let effective_path = target_path.as_deref().unwrap_or(&name);
+
+                                    // Finding 1: Đồng bộ hóa Coordinator với workbook này trước khi phát lệnh lưu
+                                    if coordinator.read_value().state()
+                                        == &crate::platform::coordinator::DocumentState::Unloaded
+                                        || coordinator.read_value().dest_path()
+                                            != Some(effective_path)
+                                    {
+                                        coordinator.update_value(|c| {
+                                            c.on_document_opened(
+                                                effective_doc_id,
+                                                effective_path,
+                                                "save-sync",
+                                            );
+                                            if s.is_dirty.get() {
+                                                c.on_user_edit();
+                                            }
+                                        });
+                                    }
+
+                                    static SAVE_REQ_COUNTER: std::sync::atomic::AtomicU64 =
+                                        std::sync::atomic::AtomicU64::new(1);
+                                    let session_gen = coordinator.read_value().session_generation();
+                                    let counter = SAVE_REQ_COUNTER
+                                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    let req_id_str = req_id.unwrap_or_else(|| {
+                                        format!(
+                                            "save-g{}-{}-{}",
+                                            session_gen,
+                                            js_sys::Date::now() as u64,
+                                            counter
+                                        )
+                                    });
+                                    let name_clone = name.clone();
+                                    let bytes_clone = bytes.clone();
+                                    let req_clone = req_id_str.clone();
+
+                                    let action = coordinator.update_value(|c| {
+                                        c.on_save_requested(
+                                            session_gen,
+                                            effective_doc_id,
+                                            &req_clone,
+                                            bytes_clone.clone(),
+                                            js_sys::Date::now() as u64,
+                                        )
+                                    });
+
+                                    // Finding 1: Nếu coordinator từ chối lưu (khác gen, sai doc ID), fail-closed ngay lập tức!
+                                    if matches!(
+                                        action,
+                                        crate::platform::coordinator::CoordinatorAction::None
+                                    ) {
+                                        s.save_blocked_detail.set(
+                                            "Yêu cầu lưu bị từ chối bởi bộ điều phối an toàn."
+                                                .into(),
+                                        );
+                                        s.is_save_blocked_alert.set(true);
+                                        send_save_failed_to_iframe(
+                                            GRIDCRAFT_IFRAME_ID,
+                                            "Yêu cầu lưu bị từ chối",
+                                            Some(&req_clone),
+                                        );
+                                        if let Some(close_req_id) =
+                                            s.pending_close_request_id.get_untracked()
+                                        {
+                                            s.pending_close_request_id.set(None);
+                                            if let Some(cm) = close_manager {
+                                                cm.cancel_close(&close_req_id);
+                                                cm.error_message.set(Some("Yêu cầu lưu bị từ chối bởi bộ điều phối an toàn.".into()));
+                                            }
+                                        }
+                                        return;
+                                    }
+
                                     wasm_bindgen_futures::spawn_local(async move {
-                                        let args = serde_wasm_bindgen::to_value(&serde_json::json!({
-                                            "fixtureId": "tc04_sample",
-                                        }))
-                                        .unwrap();
-                                        if let Ok(val) = invoke("load_dev_fixture", args).await {
-                                            if let Ok(handle) = serde_wasm_bindgen::from_value::<serde_json::Value>(val) {
-                                                let file_name = handle.get("file_name").and_then(|v| v.as_str()).unwrap_or("tc04_sample.xlsx").to_string();
-                                                let bytes_val = handle.get("bytes").cloned().unwrap_or(serde_json::Value::Null);
-                                                let bytes: Vec<u8> = serde_json::from_value(bytes_val).unwrap_or_default();
-                                                if !bytes.is_empty() {
-                                                    send_open_to_iframe(GRIDCRAFT_IFRAME_ID, &file_name, &bytes, None);
+                                        let outcome = execute_gridcraft_save(
+                                            &name_clone,
+                                            target_path.as_deref(),
+                                            target_doc_id.as_deref(),
+                                            target_rev + 1,
+                                            session_gen,
+                                            save_as,
+                                            &req_clone,
+                                            &bytes_clone,
+                                        )
+                                        .await;
+
+                                        match outcome {
+                                            Ok(DevSaveResult::Saved {
+                                                dest_path,
+                                                new_doc_id,
+                                                committed_rev,
+                                            }) => {
+                                                coordinator.update_value(|c| {
+                                                let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
+                                                c.on_durable_write_completed(&req_clone, &fp);
+                                            });
+                                                let is_still_dirty =
+                                                    coordinator.read_value().is_dirty();
+                                                s.is_dirty.set(is_still_dirty);
+                                                s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
+                                                document_id: new_doc_id.clone(),
+                                                file_path: dest_path.clone(),
+                                                file_name: name_clone.clone(),
+                                                revision: committed_rev,
+                                            });
+                                                s.set_document_session(
+                                                    Some(new_doc_id),
+                                                    Some(dest_path.clone()),
+                                                    committed_rev,
+                                                );
+                                                s.active_file_name.set(Some(name_clone));
+                                                send_saved_to_iframe(
+                                                    GRIDCRAFT_IFRAME_ID,
+                                                    &req_clone,
+                                                );
+
+                                                // Finding 4: Kiểm tra toàn bộ ứng dụng trước khi ủy quyền đóng cửa sổ
+                                                let close_req =
+                                                    s.pending_close_request_id.get_untracked();
+                                                s.pending_close_request_id.set(None);
+                                                handle_gridcraft_save_completion(
+                                                    is_still_dirty,
+                                                    close_req,
+                                                    close_manager,
+                                                    app_state,
+                                                );
+                                            }
+                                            Ok(DevSaveResult::Canceled) => {
+                                                coordinator.update_value(|c| {
+                                                    c.on_save_cancelled(&req_clone)
+                                                });
+                                                s.is_dirty.set(true);
+                                                send_save_failed_to_iframe(
+                                                    GRIDCRAFT_IFRAME_ID,
+                                                    "Đã hủy thao tác lưu",
+                                                    Some(&req_clone),
+                                                );
+                                                if let Some(close_req_id) =
+                                                    s.pending_close_request_id.get_untracked()
+                                                {
+                                                    s.pending_close_request_id.set(None);
+                                                    if let Some(cm) = close_manager {
+                                                        cm.cancel_close(&close_req_id);
+                                                    }
+                                                }
+                                            }
+                                            Ok(DevSaveResult::Failed(err)) => {
+                                                coordinator.update_value(|c| {
+                                                    let _ =
+                                                        c.on_durable_write_failed(&req_clone, &err);
+                                                });
+                                                s.is_dirty.set(true);
+                                                s.save_blocked_detail
+                                                    .set(format!("❌ Lỗi ghi đĩa: {err}"));
+                                                s.is_save_blocked_alert.set(true);
+                                                send_save_failed_to_iframe(
+                                                    GRIDCRAFT_IFRAME_ID,
+                                                    &err,
+                                                    Some(&req_clone),
+                                                );
+                                                if let Some(close_req_id) =
+                                                    s.pending_close_request_id.get_untracked()
+                                                {
+                                                    s.pending_close_request_id.set(None);
+                                                    if let Some(cm) = close_manager {
+                                                        cm.cancel_close(&close_req_id);
+                                                        cm.error_message.set(Some(format!(
+                                                            "Lỗi ghi đĩa: {err}"
+                                                        )));
+                                                    }
+                                                }
+                                            }
+                                            Err(err) => {
+                                                coordinator.update_value(|c| {
+                                                    let _ =
+                                                        c.on_durable_write_failed(&req_clone, &err);
+                                                });
+                                                s.is_dirty.set(true);
+                                                s.save_blocked_detail
+                                                    .set(format!("❌ Lỗi hệ thống: {err}"));
+                                                s.is_save_blocked_alert.set(true);
+                                                send_save_failed_to_iframe(
+                                                    GRIDCRAFT_IFRAME_ID,
+                                                    &err,
+                                                    Some(&req_clone),
+                                                );
+                                                if let Some(close_req_id) =
+                                                    s.pending_close_request_id.get_untracked()
+                                                {
+                                                    s.pending_close_request_id.set(None);
+                                                    if let Some(cm) = close_manager {
+                                                        cm.cancel_close(&close_req_id);
+                                                        cm.error_message.set(Some(format!(
+                                                            "Lỗi hệ thống: {err}"
+                                                        )));
+                                                    }
                                                 }
                                             }
                                         }
                                     });
                                 }
                             }
-                        }
-                        "gridcraft:dirty" => {
-                            let dirty = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("dirty"))
-                                .ok()
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(false);
-                            s.is_dirty.set(dirty);
-                            if dirty {
-                                coordinator.update_value(|c| c.on_user_edit());
-                            }
-                        }
-                        "gridcraft:save" => {
-                            let name = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("name"))
-                                .ok()
-                                .and_then(|v| v.as_string())
-                                .unwrap_or_else(|| "workbook.xlsx".to_string());
-                            let req_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("id"))
-                                .ok()
-                                .and_then(|v| v.as_string());
-                            let save_as = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("saveAs"))
-                                .ok()
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(false);
-                            
-                            let bytes_val = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("bytes"))
-                                .unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
-                            let bytes = if let Some(array) = bytes_val.dyn_ref::<js_sys::Uint8Array>() {
-                                array.to_vec()
-                            } else if bytes_val.is_instance_of::<js_sys::ArrayBuffer>() {
-                                js_sys::Uint8Array::new(&bytes_val).to_vec()
-                            } else {
-                                Vec::new()
-                            };
-
-                            let gate_res = s.handle_save_requested(&name, req_id.as_deref(), &bytes);
-
-                            if gate_res.is_err() {
-                                // Gating an ninh (Gate 5): Vô hiệu hóa Production Save
-                                if let Some(ref id) = req_id {
-                                    send_save_failed_to_iframe(
-                                        GRIDCRAFT_IFRAME_ID,
-                                        "Tính năng lưu tệp Production bị vô hiệu hóa an toàn.",
-                                        Some(id),
-                                    );
-                                }
-                                if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
-                                    s.pending_close_request_id.set(None);
-                                    if let Some(cm) = close_manager {
-                                        cm.cancel_close(&close_req_id);
-                                        cm.error_message.set(Some("Lưu thất bại: Tính năng lưu tệp Production bị vô hiệu hóa an toàn.".into()));
-                                    }
-                                }
-                            } else {
-                                // Quy trình lưu tệp chính thức qua Native Persistence (Stage 4C-1 Product Cutover)
-                                static SAVE_REQ_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                            "gridcraft:request_open" => {
                                 let session_gen = coordinator.read_value().session_generation();
-                                let counter = SAVE_REQ_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                let req_id_str = req_id.unwrap_or_else(|| format!("save-g{}-{}-{}", session_gen, js_sys::Date::now() as u64, counter));
-                                let doc_id = s.active_document_id.get();
-                                let cur_rev = s.active_revision.get();
-                                let active_path = s.active_file_path.get();
-                                let name_clone = name.clone();
-                                let bytes_clone = bytes.clone();
-                                let req_clone = req_id_str.clone();
-
-                                coordinator.update_value(|c| {
-                                    let _ = c.on_save_requested(session_gen, doc_id.as_deref().unwrap_or("gridcraft-doc"), &req_clone, bytes_clone.clone(), js_sys::Date::now() as u64);
-                                });
-
                                 wasm_bindgen_futures::spawn_local(async move {
-                                    let outcome = execute_gridcraft_save(
-                                        &name_clone,
-                                        active_path.as_deref(),
-                                        doc_id.as_deref(),
-                                        cur_rev + 1,
+                                    let _ = open_file_into_gridcraft(
+                                        GRIDCRAFT_IFRAME_ID,
+                                        s,
                                         session_gen,
-                                        save_as,
-                                        &req_clone,
-                                        &bytes_clone,
-                                    ).await;
-
-                                    match outcome {
-                                        Ok(DevSaveResult::Saved { dest_path, new_doc_id, committed_rev }) => {
+                                    )
+                                    .await;
+                                });
+                            }
+                            "gridcraft:open_succeeded" => {
+                                let open_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("open_id"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string());
+                                if let Some(id) = open_id {
+                                    let cur_gen = coordinator.read_value().session_generation();
+                                    if let Some(prov) = s.provisional_open.get_untracked() {
+                                        if prov.open_id == id && prov.generation == cur_gen {
+                                            let doc_id = prov.document_id.clone();
+                                            let path = prov.file_path.clone();
                                             coordinator.update_value(|c| {
-                                                let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
-                                                c.on_durable_write_completed(&req_clone, &fp);
+                                                c.on_document_opened(
+                                                    &doc_id,
+                                                    &path,
+                                                    "open-succeeded",
+                                                );
                                             });
-                                            // Task 2 & Task 4 (Stage 4C-0): Chỉ chuyển sang Clean nếu Coordinator
-                                            // không phát hiện thêm chỉnh sửa nào xen ngang trong lúc lưu (dirty_during_save).
-                                            let is_still_dirty = coordinator.read_value().is_dirty();
-                                            s.is_dirty.set(is_still_dirty);
-                                            s.set_document_session(Some(new_doc_id), Some(dest_path.clone()), committed_rev);
-                                            s.active_file_name.set(Some(name_clone));
-                                            send_saved_to_iframe(GRIDCRAFT_IFRAME_ID, &req_clone);
-
-                                            // Stage 4C-0C Task 3: Liên kết với yêu cầu đóng cửa sổ (Save & Exit)
-                                            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
-                                                s.pending_close_request_id.set(None);
-                                                if !is_still_dirty {
-                                                    if let Some(cm) = close_manager {
-                                                        cm.authorize_close(&close_req_id);
-                                                    }
-                                                } else {
-                                                    if let Some(cm) = close_manager {
-                                                        cm.cancel_close(&close_req_id);
-                                                        cm.error_message.set(Some("Phát hiện thay đổi mới trong quá trình lưu, đã hủy đóng cửa sổ để bảo vệ dữ liệu.".into()));
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Ok(DevSaveResult::Canceled) => {
-                                            coordinator.update_value(|c| c.on_save_cancelled(&req_clone));
-                                            s.is_dirty.set(true);
-                                            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, "Đã hủy thao tác lưu", Some(&req_clone));
-                                            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
-                                                s.pending_close_request_id.set(None);
-                                                if let Some(cm) = close_manager {
-                                                    cm.cancel_close(&close_req_id);
-                                                }
-                                            }
-                                        }
-                                        Ok(DevSaveResult::Failed(err)) => {
-                                            coordinator.update_value(|c| {
-                                                let _ = c.on_durable_write_failed(&req_clone, &err);
-                                            });
-                                            s.is_dirty.set(true);
-                                            s.save_blocked_detail.set(format!("❌ Lỗi ghi đĩa: {err}"));
-                                            s.is_save_blocked_alert.set(true);
-                                            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &err, Some(&req_clone));
-                                            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
-                                                s.pending_close_request_id.set(None);
-                                                if let Some(cm) = close_manager {
-                                                    cm.cancel_close(&close_req_id);
-                                                    cm.error_message.set(Some(format!("Lỗi ghi đĩa: {err}")));
-                                                }
-                                            }
-                                        }
-                                        Err(err) => {
-                                            coordinator.update_value(|c| {
-                                                let _ = c.on_durable_write_failed(&req_clone, &err);
-                                            });
-                                            s.is_dirty.set(true);
-                                            s.save_blocked_detail.set(format!("❌ Lỗi hệ thống: {err}"));
-                                            s.is_save_blocked_alert.set(true);
-                                            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &err, Some(&req_clone));
-                                            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
-                                                s.pending_close_request_id.set(None);
-                                                if let Some(cm) = close_manager {
-                                                    cm.cancel_close(&close_req_id);
-                                                    cm.error_message.set(Some(format!("Lỗi hệ thống: {err}")));
-                                                }
-                                            }
                                         }
                                     }
-                                });
+                                    s.commit_provisional_open_with_generation(&id, cur_gen);
+                                }
                             }
-                        }
-                        "gridcraft:request_open" => {
-                            let session_gen = coordinator.read_value().session_generation();
-                            wasm_bindgen_futures::spawn_local(async move {
-                                let _ = open_file_into_gridcraft(GRIDCRAFT_IFRAME_ID, s, session_gen).await;
-                            });
-                        }
-                        "gridcraft:open_succeeded" => {
-                            let open_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("open_id"))
+                            "gridcraft:open_failed" => {
+                                let open_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("open_id"),
+                                )
                                 .ok()
                                 .and_then(|v| v.as_string());
-                            if let Some(id) = open_id {
-                                let cur_gen = coordinator.read_value().session_generation();
-                                s.commit_provisional_open_with_generation(&id, cur_gen);
-                            }
-                        }
-                        "gridcraft:open_failed" => {
-                            let open_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("open_id"))
-                                .ok()
-                                .and_then(|v| v.as_string());
-                            let err = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("error"))
+                                let err = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("error"),
+                                )
                                 .ok()
                                 .and_then(|v| v.as_string())
                                 .unwrap_or_else(|| "Tệp không hợp lệ".to_string());
-                            s.abort_provisional_open(open_id.as_deref());
-                            s.save_blocked_detail.set(format!("❌ Không thể mở tệp: {err}"));
-                            s.is_save_blocked_alert.set(true);
-                        }
-                        "gridcraft:failed" => {
-                            let error = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("error"))
+                                s.abort_provisional_open(open_id.as_deref());
+                                s.save_blocked_detail
+                                    .set(format!("❌ Không thể mở tệp: {err}"));
+                                s.is_save_blocked_alert.set(true);
+                            }
+                            "gridcraft:failed" => {
+                                let error = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("error"),
+                                )
                                 .ok()
                                 .and_then(|v| v.as_string())
                                 .unwrap_or_else(|| "Lỗi GridCraft".to_string());
-                            s.error_message.set(Some(error));
+                                s.error_message.set(Some(error));
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
-                }
-            });
+                },
+            );
 
-            let _ = win.add_event_listener_with_callback("message", listener.as_ref().unchecked_ref());
+            let _ =
+                win.add_event_listener_with_callback("message", listener.as_ref().unchecked_ref());
+            let win_clone = win.clone();
+            let listener_js = listener.as_ref().clone();
+            on_cleanup(move || {
+                let _ = win_clone
+                    .remove_event_listener_with_callback("message", listener_js.unchecked_ref());
+            });
             listener.forget();
         }
     }
@@ -379,10 +640,22 @@ pub fn send_save_failed_to_iframe(iframe_id: &str, error: &str, req_id: Option<&
                 if let Ok(iframe) = elem.dyn_into::<web_sys::HtmlIFrameElement>() {
                     if let Some(cw) = iframe.content_window() {
                         let obj = js_sys::Object::new();
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:failed"));
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("error"), &wasm_bindgen::JsValue::from_str(error));
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("type"),
+                            &wasm_bindgen::JsValue::from_str("gridcraft:failed"),
+                        );
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("error"),
+                            &wasm_bindgen::JsValue::from_str(error),
+                        );
                         if let Some(id) = req_id {
-                            let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(id));
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("id"),
+                                &wasm_bindgen::JsValue::from_str(id),
+                            );
                         }
                         let _ = cw.post_message(&obj, "*");
                     }
@@ -405,8 +678,16 @@ pub fn send_saved_to_iframe(iframe_id: &str, req_id: &str) {
                 if let Ok(iframe) = elem.dyn_into::<web_sys::HtmlIFrameElement>() {
                     if let Some(cw) = iframe.content_window() {
                         let obj = js_sys::Object::new();
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:saved"));
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(req_id));
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("type"),
+                            &wasm_bindgen::JsValue::from_str("gridcraft:saved"),
+                        );
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("id"),
+                            &wasm_bindgen::JsValue::from_str(req_id),
+                        );
                         let _ = cw.post_message(&obj, "*");
                     }
                 }
@@ -428,12 +709,28 @@ pub fn send_request_save_to_iframe(iframe_id: &str, req_id: Option<&str>, save_a
                 if let Ok(iframe) = elem.dyn_into::<web_sys::HtmlIFrameElement>() {
                     if let Some(cw) = iframe.content_window() {
                         let obj = js_sys::Object::new();
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:request_save"));
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("type"),
+                            &wasm_bindgen::JsValue::from_str("gridcraft:request_save"),
+                        );
                         if let Some(id) = req_id {
-                            let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(id));
-                            let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("correlation_id"), &wasm_bindgen::JsValue::from_str(id));
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("id"),
+                                &wasm_bindgen::JsValue::from_str(id),
+                            );
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("correlation_id"),
+                                &wasm_bindgen::JsValue::from_str(id),
+                            );
                         }
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("saveAs"), &wasm_bindgen::JsValue::from_bool(save_as));
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("saveAs"),
+                            &wasm_bindgen::JsValue::from_bool(save_as),
+                        );
                         let _ = cw.post_message(&obj, "*");
                     }
                 }
@@ -456,11 +753,27 @@ pub fn send_open_to_iframe(iframe_id: &str, name: &str, bytes: &[u8], open_id: O
                     if let Some(cw) = iframe.content_window() {
                         let uint8_array = js_sys::Uint8Array::from(bytes);
                         let obj = js_sys::Object::new();
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:open"));
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("name"), &wasm_bindgen::JsValue::from_str(name));
-                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("bytes"), &uint8_array);
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("type"),
+                            &wasm_bindgen::JsValue::from_str("gridcraft:open"),
+                        );
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("name"),
+                            &wasm_bindgen::JsValue::from_str(name),
+                        );
+                        let _ = js_sys::Reflect::set(
+                            &obj,
+                            &wasm_bindgen::JsValue::from_str("bytes"),
+                            &uint8_array,
+                        );
                         if let Some(id) = open_id {
-                            let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("open_id"), &wasm_bindgen::JsValue::from_str(id));
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("open_id"),
+                                &wasm_bindgen::JsValue::from_str(id),
+                            );
                         }
                         let _ = cw.post_message(&obj, "*");
                     }
@@ -511,10 +824,17 @@ pub async fn execute_gridcraft_save(
 
                     match invoke("secure_save_document", save_args).await {
                         Ok(save_res) => {
-                            let (dest, rev) = if let Ok(resp) = serde_wasm_bindgen::from_value::<serde_json::Value>(save_res) {
+                            let (dest, rev) = if let Ok(resp) =
+                                serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
+                            {
                                 (
-                                    resp.get("dest_path").and_then(|v| v.as_str()).unwrap_or(_path).to_string(),
-                                    resp.get("committed_revision").and_then(|v| v.as_u64()).unwrap_or(expected_rev),
+                                    resp.get("dest_path")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or(_path)
+                                        .to_string(),
+                                    resp.get("committed_revision")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(expected_rev),
                                 )
                             } else {
                                 (_path.to_string(), expected_rev)
@@ -547,7 +867,9 @@ pub async fn execute_gridcraft_save(
 
     match invoke("native_dialog_save_as", args).await {
         Ok(js_res) => {
-            if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res) {
+            if let Ok(Some(handle)) =
+                serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res)
+            {
                 if let Some(grant) = handle.get("grant") {
                     if let (Some(grant_id), Some(g_req_id)) = (
                         grant.get("grant_id").and_then(|v| v.as_str()),
@@ -562,13 +884,25 @@ pub async fn execute_gridcraft_save(
 
                         match invoke("secure_save_document", save_args).await {
                             Ok(save_res) => {
-                                let rev = if let Ok(resp) = serde_wasm_bindgen::from_value::<serde_json::Value>(save_res) {
-                                    resp.get("committed_revision").and_then(|v| v.as_u64()).unwrap_or(1)
+                                let rev = if let Ok(resp) =
+                                    serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
+                                {
+                                    resp.get("committed_revision")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(1)
                                 } else {
                                     1
                                 };
-                                let dest_path = handle.get("file_path").and_then(|v| v.as_str()).unwrap_or(name).to_string();
-                                let new_doc_id = handle.get("document_id").and_then(|v| v.as_str()).unwrap_or("doc-gridcraft-new").to_string();
+                                let dest_path = handle
+                                    .get("file_path")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(name)
+                                    .to_string();
+                                let new_doc_id = handle
+                                    .get("document_id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("doc-gridcraft-new")
+                                    .to_string();
                                 return Ok(DevSaveResult::Saved {
                                     dest_path,
                                     new_doc_id,
@@ -576,12 +910,16 @@ pub async fn execute_gridcraft_save(
                                 });
                             }
                             Err(e) => {
-                                return Ok(DevSaveResult::Failed(format!("Ghi đĩa thất bại: {e:?}")));
+                                return Ok(DevSaveResult::Failed(format!(
+                                    "Ghi đĩa thất bại: {e:?}"
+                                )));
                             }
                         }
                     }
                 }
-                Ok(DevSaveResult::Failed("Phản hồi Save As không hợp lệ".to_string()))
+                Ok(DevSaveResult::Failed(
+                    "Phản hồi Save As không hợp lệ".to_string(),
+                ))
             } else {
                 // Người dùng Cancel
                 Ok(DevSaveResult::Canceled)
@@ -602,7 +940,17 @@ pub async fn execute_gridcraft_dev_save(
     req_id: &str,
     bytes: &[u8],
 ) -> Result<DevSaveResult, String> {
-    execute_gridcraft_save(name, file_path, document_id, expected_rev, 1, save_as, req_id, bytes).await
+    execute_gridcraft_save(
+        name,
+        file_path,
+        document_id,
+        expected_rev,
+        1,
+        save_as,
+        req_id,
+        bytes,
+    )
+    .await
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -634,7 +982,11 @@ pub async fn execute_gridcraft_dev_save(
 
 /// Mở tệp bảng tính qua hộp thoại OS Native File Dialog và nạp vào GridCraft (Stage 4C-1 Transactional Open)
 #[cfg(target_arch = "wasm32")]
-pub async fn open_file_into_gridcraft(iframe_id: &str, state: GridCraftState, session_gen: u64) -> Result<(), String> {
+pub async fn open_file_into_gridcraft(
+    iframe_id: &str,
+    state: GridCraftState,
+    session_gen: u64,
+) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "appInstanceId": "gridcraft-workspace-instance",
         "sessionGeneration": session_gen,
@@ -644,19 +996,45 @@ pub async fn open_file_into_gridcraft(iframe_id: &str, state: GridCraftState, se
     .map_err(|e| format!("{e:?}"))?;
 
     if let Ok(js_res) = invoke("native_dialog_open_file", args).await {
-        if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res) {
-            let doc_id = handle.get("document_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let file_name = handle.get("file_name").and_then(|v| v.as_str()).unwrap_or("workbook.xlsx").to_string();
-            let file_path = handle.get("file_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let rev = handle.get("initial_revision").and_then(|v| v.as_u64()).unwrap_or(0);
+        if let Ok(Some(handle)) =
+            serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res)
+        {
+            let doc_id = handle
+                .get("document_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let file_name = handle
+                .get("file_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("workbook.xlsx")
+                .to_string();
+            let file_path = handle
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let rev = handle
+                .get("initial_revision")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
 
-            let bytes_val = handle.get("bytes").cloned().unwrap_or(serde_json::Value::Null);
+            let bytes_val = handle
+                .get("bytes")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
             let bytes: Vec<u8> = serde_json::from_value(bytes_val).unwrap_or_default();
 
             // Workstream 4: Audit Open request ID generation (kết hợp generation, timestamp và counter đơn điệu)
-            static OPEN_REQ_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+            static OPEN_REQ_COUNTER: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(1);
             let counter = OPEN_REQ_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let open_req_id = format!("open-g{}-{}-{}", session_gen, js_sys::Date::now() as u64, counter);
+            let open_req_id = format!(
+                "open-g{}-{}-{}",
+                session_gen,
+                js_sys::Date::now() as u64,
+                counter
+            );
 
             state.begin_provisional_open(
                 open_req_id.clone(),

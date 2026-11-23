@@ -29,6 +29,17 @@ pub struct GridCraftState {
     pub provisional_open: RwSignal<Option<ProvisionalOpen>>,
     /// ID yêu cầu đóng cửa sổ đang chờ lưu tệp hoàn tất (Stage 4C-0C Task 3)
     pub pending_close_request_id: RwSignal<Option<String>>,
+    /// Ánh xạ các phiên workbook theo ID hoặc tên tệp (Finding 2: Multi-Workbook Save Isolation)
+    pub document_sessions: RwSignal<std::collections::HashMap<String, WorkbookSession>>,
+}
+
+/// Dữ liệu phiên làm việc của một workbook độc lập (Stage 4C-1 Workbook Session Identity)
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WorkbookSession {
+    pub document_id: String,
+    pub file_path: String,
+    pub file_name: String,
+    pub revision: u64,
 }
 
 /// Dữ liệu của một phiên mở tệp tạm thời đang chờ GridCraft giải mã
@@ -64,6 +75,7 @@ impl GridCraftState {
             is_exit_confirm_open: RwSignal::new(false),
             provisional_open: RwSignal::new(None),
             pending_close_request_id: RwSignal::new(None),
+            document_sessions: RwSignal::new(std::collections::HashMap::new()),
         }
     }
 
@@ -77,13 +89,61 @@ impl GridCraftState {
         Ok(())
     }
 
+    /// Đăng ký hoặc cập nhật một phiên workbook cụ thể (Finding 2)
+    pub fn register_document_session(&self, session: WorkbookSession) {
+        self.document_sessions.update(|map| {
+            map.insert(session.document_id.clone(), session.clone());
+            map.insert(session.file_name.clone(), session);
+        });
+    }
+
+    /// Lấy thông tin phiên workbook theo document ID hoặc file name
+    pub fn get_session_for_document(&self, doc_id_or_name: &str) -> Option<WorkbookSession> {
+        self.document_sessions
+            .with(|map| map.get(doc_id_or_name).cloned())
+    }
+
+    /// Phân giải phiên workbook đích chính xác để lưu (Finding 2: Multi-Workbook Save Isolation)
+    /// Trả về `None` nếu tệp không thuộc phiên làm việc nào đã đăng ký (buộc Save As).
+    pub fn resolve_save_session(&self, name_or_doc_id: &str) -> Option<WorkbookSession> {
+        // 1. Tìm trực tiếp trong ánh xạ các phiên đã đăng ký
+        if let Some(sess) = self.get_session_for_document(name_or_doc_id) {
+            return Some(sess);
+        }
+        // 2. Nếu khớp tên với active_file_name, trả về phiên của active document
+        if let Some(ref cur_name) = self.active_file_name.get_untracked() {
+            if cur_name == name_or_doc_id {
+                if let (Some(doc_id), Some(path)) = (
+                    self.active_document_id.get_untracked(),
+                    self.active_file_path.get_untracked(),
+                ) {
+                    return Some(WorkbookSession {
+                        document_id: doc_id,
+                        file_path: path,
+                        file_name: cur_name.clone(),
+                        revision: self.active_revision.get_untracked(),
+                    });
+                }
+            }
+        }
+        None
+    }
+
     /// Cập nhật phiên tài liệu đã mở hoặc lưu
-    pub fn set_document_session(
-        &self,
-        doc_id: Option<String>,
-        path: Option<String>,
-        rev: u64,
-    ) {
+    pub fn set_document_session(&self, doc_id: Option<String>, path: Option<String>, rev: u64) {
+        if let (Some(d_id), Some(f_path)) = (&doc_id, &path) {
+            let f_name = std::path::Path::new(f_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("workbook.xlsx")
+                .to_string();
+            self.register_document_session(WorkbookSession {
+                document_id: d_id.clone(),
+                file_path: f_path.clone(),
+                file_name: f_name,
+                revision: rev,
+            });
+        }
         self.active_document_id.set(doc_id);
         self.active_file_path.set(path);
         self.active_revision.set(rev);
@@ -116,10 +176,24 @@ impl GridCraftState {
     }
 
     /// Hoàn tất cam kết giao dịch mở tệp khi iframe xác nhận parse thành công (Có kiểm tra generation)
-    pub fn commit_provisional_open_with_generation(&self, open_id: &str, current_generation: u64) -> bool {
+    pub fn commit_provisional_open_with_generation(
+        &self,
+        open_id: &str,
+        current_generation: u64,
+    ) -> bool {
         if let Some(prov) = self.provisional_open.get_untracked() {
             if prov.open_id == open_id && prov.generation == current_generation {
-                self.set_document_session(Some(prov.document_id), Some(prov.file_path), prov.revision);
+                self.register_document_session(WorkbookSession {
+                    document_id: prov.document_id.clone(),
+                    file_path: prov.file_path.clone(),
+                    file_name: prov.file_name.clone(),
+                    revision: prov.revision,
+                });
+                self.set_document_session(
+                    Some(prov.document_id),
+                    Some(prov.file_path),
+                    prov.revision,
+                );
                 self.active_file_name.set(Some(prov.file_name));
                 self.is_dirty.set(false);
                 self.provisional_open.set(None);

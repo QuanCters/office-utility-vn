@@ -25,13 +25,9 @@ pub enum DocumentState {
         dirty: bool,
     },
     /// Phát hiện xung đột dữ liệu ngoài luồng hoặc bất đồng bộ.
-    Conflict {
-        reason: String,
-    },
+    Conflict { reason: String },
     /// Đang chờ xác nhận của người dùng trước khi đóng/chuyển app vì có thay đổi chưa lưu.
-    ClosingPending {
-        target_navigation: String,
-    },
+    ClosingPending { target_navigation: String },
 }
 
 /// Quyết định của người dùng khi được hỏi về tài liệu chưa lưu (Unsaved Changes Dialog).
@@ -62,10 +58,7 @@ pub enum CoordinatorAction {
         bytes: Vec<u8>,
     },
     /// Hiển thị thông báo lỗi lưu tệp cho người dùng.
-    ShowSaveError {
-        error: String,
-        dest_path: String,
-    },
+    ShowSaveError { error: String, dest_path: String },
     /// Không cần hành động bổ sung.
     None,
 }
@@ -158,7 +151,9 @@ impl HostDocumentCoordinator {
             DocumentState::Clean => {
                 self.state = DocumentState::Dirty;
             }
-            DocumentState::Saving { dirty_during_save, .. } => {
+            DocumentState::Saving {
+                dirty_during_save, ..
+            } => {
                 // Đánh dấu có edit xen ngang khi đang lưu
                 *dirty_during_save = true;
             }
@@ -219,11 +214,7 @@ impl HostDocumentCoordinator {
     }
 
     /// Được gọi khi backend báo cáo việc ghi đĩa hoàn tất bền vững.
-    pub fn on_durable_write_completed(
-        &mut self,
-        request_id: &str,
-        written_fingerprint: &str,
-    ) {
+    pub fn on_durable_write_completed(&mut self, request_id: &str, written_fingerprint: &str) {
         if let DocumentState::Saving {
             request_id: cur_req,
             snapshot_fingerprint,
@@ -318,7 +309,10 @@ impl HostDocumentCoordinator {
     pub fn on_navigation_requested(&mut self, target: impl Into<String>) -> CoordinatorAction {
         let tgt = target.into();
         if self.is_dirty() {
-            let path = self.dest_path.clone().unwrap_or_else(|| "Tài liệu chưa đặt tên".to_string());
+            let path = self
+                .dest_path
+                .clone()
+                .unwrap_or_else(|| "Tài liệu chưa đặt tên".to_string());
             self.state = DocumentState::ClosingPending {
                 target_navigation: tgt.clone(),
             };
@@ -332,7 +326,10 @@ impl HostDocumentCoordinator {
     }
 
     /// Xử lý quyết định của người dùng từ hộp thoại xác nhận Unsaved Changes.
-    pub fn on_closing_dialog_decision(&mut self, decision: UserClosingDecision) -> CoordinatorAction {
+    pub fn on_closing_dialog_decision(
+        &mut self,
+        decision: UserClosingDecision,
+    ) -> CoordinatorAction {
         if let DocumentState::ClosingPending { target_navigation } = &self.state {
             let nav = target_navigation.clone();
             match decision {
@@ -358,7 +355,7 @@ impl HostDocumentCoordinator {
 }
 
 /// Hàm băm nội dung đơn giản để tính fingerprint độc lập.
-fn md5_or_simple_hash(bytes: &[u8]) -> u64 {
+pub fn md5_or_simple_hash(bytes: &[u8]) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     bytes.hash(&mut hasher);
