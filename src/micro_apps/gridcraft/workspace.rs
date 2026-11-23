@@ -296,14 +296,16 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     let bytes_clone = bytes.clone();
                                     let req_clone = req_id_str.clone();
 
-                                    let action = coordinator.update_value(|c| {
-                                        c.on_save_requested(
+                                    let mut action =
+                                        crate::platform::coordinator::CoordinatorAction::None;
+                                    coordinator.update_value(|c| {
+                                        action = c.on_save_requested(
                                             session_gen,
                                             effective_doc_id,
                                             &req_clone,
                                             bytes_clone.clone(),
                                             js_sys::Date::now() as u64,
-                                        )
+                                        );
                                     });
 
                                     // Finding 1: Nếu coordinator từ chối lưu (khác gen, sai doc ID), fail-closed ngay lập tức!
