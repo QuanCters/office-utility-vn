@@ -488,17 +488,33 @@ pub fn apply_save_outcome(
             let target_doc_id = new_document_id.or_else(|| ctx.originating_document_id.clone());
             let is_save_as = ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::SaveAs;
 
-            let is_still_active_target = s.active_file_path().as_deref() == ctx.originating_path.as_deref()
+            let is_originating_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => s.active_file_path().is_none(),
+            };
+            let is_still_active_target = is_originating_active
                 || s.active_file_path().as_deref() == Some(&dest_path);
+
+            // P1 #4680342554: Chụp và so sánh live generation của tài liệu nguồn TRƯỚC KHI thay đổi active document identity hoặc selection!
+            let live_originating_gen = if is_originating_active {
+                s.edit_generation.get_untracked()
+            } else if let Some(ref p) = ctx.originating_path {
+                s.get_document_session(p).map(|sess| sess.edit_generation).unwrap_or(ctx.snapshot_edit_generation)
+            } else {
+                ctx.snapshot_edit_generation
+            };
+
+            let has_newer_edits = live_originating_gen > ctx.snapshot_edit_generation;
+            let dest_is_dirty = has_newer_edits;
+            let dest_gen = if has_newer_edits { live_originating_gen } else { ctx.snapshot_edit_generation };
 
             // 1. Luôn cập nhật phiên và bộ nhớ cache cho tài liệu đã được lưu TRƯỚC khi chuyển active file
             let mut map = s.document_sessions.get_untracked();
             if let Some(sess) = map.get_mut(&dest_path) {
                 sess.document_id = target_doc_id.clone();
                 sess.revision = committed_revision;
-                if sess.edit_generation == ctx.snapshot_edit_generation {
-                    sess.is_dirty = false;
-                }
+                sess.is_dirty = dest_is_dirty;
+                sess.edit_generation = dest_gen;
             } else {
                 map.insert(
                     dest_path.clone(),
@@ -506,17 +522,19 @@ pub fn apply_save_outcome(
                         file_path: dest_path.clone(),
                         document_id: target_doc_id.clone(),
                         revision: committed_revision,
-                        is_dirty: false,
-                        edit_generation: ctx.snapshot_edit_generation,
+                        is_dirty: dest_is_dirty,
+                        edit_generation: dest_gen,
                     },
                 );
             }
             s.document_sessions.set(map);
 
             cache_authorized_pdf_bytes(&dest_path, bytes.to_vec());
-            s.cache_document_bytes(&dest_path, bytes.to_vec());
+            if !has_newer_edits {
+                s.cache_document_bytes(&dest_path, bytes.to_vec());
+            }
 
-            // 2. Thêm hoặc chọn tệp mới lưu
+            // 2. Thêm hoặc chọn tệp mới lưu (Save As)
             if is_save_as || ctx.originating_path.is_none() {
                 if is_still_active_target {
                     s.add_file(&dest_path);
@@ -536,12 +554,8 @@ pub fn apply_save_outcome(
             if is_still_active_target {
                 s.active_document_id.set(target_doc_id);
                 s.active_revision.set(committed_revision);
-                let current_gen = s.edit_generation.get_untracked();
-                if current_gen == ctx.snapshot_edit_generation {
-                    s.has_unsaved_changes.set(false);
-                } else {
-                    s.has_unsaved_changes.set(true);
-                }
+                s.edit_generation.set(dest_gen);
+                s.has_unsaved_changes.set(dest_is_dirty);
             } else {
                 // Người dùng đã chuyển sang tài liệu khác trong khi lưu!
                 // Giữ nguyên active state của tài liệu đang chọn.

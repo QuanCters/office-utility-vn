@@ -206,7 +206,7 @@ impl Bridge {
                     doc.title = name.clone();
                 }
             }
-            self.host.post_dirty(app.session.documents().iter().any(|d| d.is_dirty()));
+            self.post_dirty_state(app);
             return;
         }
 
@@ -393,7 +393,64 @@ impl Bridge {
             }
         }
 
-        self.host.post_dirty(app.session.documents().iter().any(|d| d.is_dirty()));
+        self.post_dirty_state(app);
+    }
+
+    fn post_dirty_state(&self, app: &SheetApp) {
+        let any_dirty = app.session.documents().iter().any(|d| d.is_dirty());
+        self.host.post_dirty(any_dirty);
+
+        if let Some(w) = web_sys::window() {
+            let parent = w.parent().ok().flatten().unwrap_or(w);
+            let obj = js_sys::Object::new();
+            let _ = js_sys::Reflect::set(
+                &obj,
+                &wasm_bindgen::JsValue::from_str("type"),
+                &wasm_bindgen::JsValue::from_str("gridcraft:dirty"),
+            );
+            let _ = js_sys::Reflect::set(
+                &obj,
+                &wasm_bindgen::JsValue::from_str("dirty"),
+                &wasm_bindgen::JsValue::from_bool(any_dirty),
+            );
+
+            if let Some(active_doc) = app.session.active() {
+                let name = active_doc.display_title();
+                let _ = js_sys::Reflect::set(
+                    &obj,
+                    &wasm_bindgen::JsValue::from_str("name"),
+                    &wasm_bindgen::JsValue::from_str(&name),
+                );
+                let _ = js_sys::Reflect::set(
+                    &obj,
+                    &wasm_bindgen::JsValue::from_str("doc_dirty"),
+                    &wasm_bindgen::JsValue::from_bool(active_doc.is_dirty()),
+                );
+            }
+
+            let docs_arr = js_sys::Array::new();
+            for doc in app.session.documents() {
+                let doc_obj = js_sys::Object::new();
+                let _ = js_sys::Reflect::set(
+                    &doc_obj,
+                    &wasm_bindgen::JsValue::from_str("name"),
+                    &wasm_bindgen::JsValue::from_str(&doc.display_title()),
+                );
+                let _ = js_sys::Reflect::set(
+                    &doc_obj,
+                    &wasm_bindgen::JsValue::from_str("dirty"),
+                    &wasm_bindgen::JsValue::from_bool(doc.is_dirty()),
+                );
+                docs_arr.push(&doc_obj);
+            }
+            let _ = js_sys::Reflect::set(
+                &obj,
+                &wasm_bindgen::JsValue::from_str("documents"),
+                &docs_arr,
+            );
+
+            let _ = parent.post_message(&obj, "*");
+        }
     }
 
     fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {

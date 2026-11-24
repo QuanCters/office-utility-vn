@@ -380,34 +380,73 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 .ok()
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(false);
-                                if dirty {
-                                    if let Some(active_id) = s.active_document_id.get_untracked() {
-                                        s.bump_edit_revision(&active_id);
+                                let doc_name = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("name"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string());
+                                let doc_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("doc_id"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string());
+                                let documents = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("documents"),
+                                )
+                                .ok()
+                                .and_then(|v| v.dyn_into::<js_sys::Array>().ok());
+
+                                // 1. Đồng bộ trạng thái dirty chi tiết của từng workbook nếu mảng documents có mặt
+                                if let Some(docs) = documents {
+                                    for i in 0..docs.length() {
+                                        let item = docs.get(i);
+                                        if let Ok(obj) = item.dyn_into::<js_sys::Object>() {
+                                            let n = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("name"))
+                                                .ok().and_then(|v| v.as_string());
+                                            let d = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("dirty"))
+                                                .ok().and_then(|v| v.as_bool()).unwrap_or(false);
+                                            if let Some(doc_n) = n {
+                                                s.set_document_dirty(&doc_n, d);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 2. Quy gán chính xác edit revision cho workbook nguồn (P1 #4680342546)
+                                let target_key = doc_id.or(doc_name);
+                                if let Some(ref key) = target_key {
+                                    if dirty {
+                                        s.bump_edit_revision(key);
+                                        if coordinator.read_value().state()
+                                            == &crate::platform::coordinator::DocumentState::Unloaded
+                                        {
+                                            let cur_doc = s
+                                                .active_document_id
+                                                .get_untracked()
+                                                .unwrap_or_else(|| "gridcraft-doc".into());
+                                            let cur_path = s
+                                                .active_file_path
+                                                .get_untracked()
+                                                .unwrap_or_else(|| "workbook.xlsx".into());
+                                            coordinator.update_value(|c| {
+                                                c.on_document_opened(&cur_doc, &cur_path, "dirty-init");
+                                            });
+                                        }
+                                        coordinator.update_value(|c| c.on_user_edit());
                                     } else {
-                                        s.edit_revision.update(|r| *r = r.wrapping_add(1));
-                                        s.is_dirty.set(true);
+                                        s.set_document_dirty(key, false);
                                     }
-                                    if coordinator.read_value().state()
-                                        == &crate::platform::coordinator::DocumentState::Unloaded
-                                    {
-                                        let cur_doc = s
-                                            .active_document_id
-                                            .get_untracked()
-                                            .unwrap_or_else(|| "gridcraft-doc".into());
-                                        let cur_path = s
-                                            .active_file_path
-                                            .get_untracked()
-                                            .unwrap_or_else(|| "workbook.xlsx".into());
-                                        coordinator.update_value(|c| {
-                                            c.on_document_opened(&cur_doc, &cur_path, "dirty-init");
-                                        });
-                                    }
-                                    coordinator.update_value(|c| c.on_user_edit());
                                 } else {
-                                    if let Some(active_id) = s.active_document_id.get_untracked() {
-                                        s.set_document_dirty(&active_id, false);
+                                    // Danh tính không rõ ràng: Fail closed mà TUYỆT ĐỐI không đoán mò active_document_id!
+                                    if dirty {
+                                        s.is_dirty.set(true);
+                                        s.edit_revision.update(|r| *r = r.wrapping_add(1));
+                                        coordinator.update_value(|c| c.on_user_edit());
                                     } else {
-                                        s.is_dirty.set(false);
+                                        s.recompute_aggregate_dirty();
                                     }
                                 }
                             }

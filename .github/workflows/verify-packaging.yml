@@ -1,0 +1,128 @@
+name: Verification Harness - Desktop Packaging (Windows & macOS)
+
+on:
+  pull_request:
+    branches: [main, master, "baseline/*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-prebuild:
+    name: Pre-Build Provenance & Spine Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify Spine Lock
+        run: ./scripts/verify_spine_lock.sh
+
+      - name: Verify Pinned Vendor Dependencies
+        run: python3 harness/runner/run.py --check-vendor-pin
+
+      - name: Verify Pre-Build Artifact Provenance
+        run: python3 harness/runner/evidence.py --verify-artifacts
+
+  package-verification:
+    name: Desktop Packaging Verification (${{ matrix.platform }})
+    needs: [verify-prebuild]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+            args: ''
+            os_name: 'windows'
+          - platform: 'macos-latest'
+            target: 'universal-apple-darwin'
+            args: '--target universal-apple-darwin'
+            os_name: 'macos'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            wasm32-unknown-unknown,
+            ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin,aarch64-apple-darwin' || matrix.target }}
+
+      - name: Install Trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # Build binaries and desktop packages strictly for verification (no release or tag creation)
+      - name: Build Tauri Package Verification Candidate
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+
+      # Mandatory post-build dist verification fail-closed
+      - name: Verify Post-Build Dist Artifacts Fail-Closed
+        shell: bash
+        run: python3 harness/runner/evidence.py --verify-artifacts --check-dist --dist-required
+
+      # Verify generated packages exist and fail closed if missing
+      - name: Assert Required Platform Package Artifacts Exist
+        shell: bash
+        run: |
+          mkdir -p packaging-evidence
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            EXE_COUNT=$(find src-tauri/target -path "*/bundle/nsis/*.exe" | wc -l)
+            MSI_COUNT=$(find src-tauri/target -path "*/bundle/msi/*.msi" | wc -l)
+            if [ "$EXE_COUNT" -eq 0 ] && [ "$MSI_COUNT" -eq 0 ]; then
+              echo "❌ Error: Required Windows packages (*.exe or *.msi) missing from bundle directory!"
+              exit 1
+            fi
+            echo "✓ Verified Windows package artifacts exist (EXE: $EXE_COUNT, MSI: $MSI_COUNT)."
+            find src-tauri/target -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" \) -exec sha256sum {} + > packaging-evidence/windows-checksums.txt
+          elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            DMG_COUNT=$(find src-tauri/target -path "*/bundle/dmg/*.dmg" | wc -l)
+            APP_COUNT=$(find src-tauri/target -path "*/bundle/macos/*.app" | wc -l)
+            if [ "$DMG_COUNT" -eq 0 ] && [ "$APP_COUNT" -eq 0 ]; then
+              echo "❌ Error: Required macOS packages (*.dmg or *.app) missing from bundle directory!"
+              exit 1
+            fi
+            echo "✓ Verified macOS package artifacts exist (DMG: $DMG_COUNT, APP: $APP_COUNT)."
+            find src-tauri/target -path "*/bundle/*" \( -name "*.dmg" -o -name "*.app" \) -exec shasum -a 256 {} + > packaging-evidence/macos-checksums.txt
+          fi
+          cat packaging-evidence/*checksums.txt
+
+      # Upload verification evidence (checksums only, not public installers) bound to checkout SHA
+      - name: Upload Packaging Verification Evidence Manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaging-evidence-${{ matrix.os_name }}-${{ github.sha }}
+          path: packaging-evidence/

@@ -1569,6 +1569,104 @@ fn test_p2_gridcraft_pdf_and_format_validation() {
     assert!(validate_save_as_format_compatibility("data.pdf", csv_bytes).is_err());
 }
 
+#[test]
+fn test_p1_4680342546_gridcraft_dirty_attribution_and_multi_workbook_close_prevention() {
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_outcome;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::coordinator::HostDocumentCoordinator;
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+
+    let app_state = office_utility_vn_ui::app::AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_manager = WindowCloseManager::new();
+    let coordinator = StoredValue::new(HostDocumentCoordinator::new());
+
+    // 1. Mở Workbook A sạch ban đầu
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-session-A".into(),
+        file_path: "/workbooks/A.xlsx".into(),
+        file_name: "A.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+    });
+    state.set_document_session(Some("doc-session-A".into()), Some("/workbooks/A.xlsx".into()), 1);
+
+    // 2. Mở tiếp Workbook B sạch ban đầu (Host active doc chuyển sang B)
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-session-B".into(),
+        file_path: "/workbooks/B.xlsx".into(),
+        file_name: "B.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+    });
+    state.set_document_session(Some("doc-session-B".into()), Some("/workbooks/B.xlsx".into()), 1);
+
+    assert_eq!(state.active_document_id.get_untracked().as_deref(), Some("doc-session-B"));
+    assert!(!state.is_dirty.get_untracked());
+
+    // 3. Chọn A bên trong iframe & 4. Thực hiện chỉnh sửa trên A
+    // Tín hiệu bridge mang danh tính chính xác name: "A.xlsx".
+    // Lưu ý: Host's active_document_id VẪN ĐANG LÀ B!
+    // BẤT BIẾN P1 #4680342546: TUYỆT ĐỐI KHÔNG đoán mò hay quy gán thay đổi của A vào B!
+    state.bump_edit_revision("A.xlsx");
+
+    // Xác minh: A dirty, B không dirty!
+    let sess_a = state.get_session_for_document("doc-session-A").expect("session A");
+    let sess_b = state.get_session_for_document("doc-session-B").expect("session B");
+    assert!(sess_a.is_dirty, "Workbook A bắt buộc phải dirty!");
+    assert_eq!(sess_a.edit_revision, 1, "Workbook A edit revision phải tăng lên 1!");
+    assert!(!sess_b.is_dirty, "Workbook B KHÔNG ĐƯỢC dirty!");
+    assert_eq!(sess_b.edit_revision, 0, "Workbook B edit revision phải giữ nguyên 0!");
+    assert!(state.is_dirty.get_untracked(), "Aggregate workspace state bắt buộc phải dirty!");
+
+    // 5. Chọn và lưu Workbook B
+    let b_bytes = b"PK\x03\x04_SAVED_B";
+    let save_outcome_b = office_utility_vn_ui::micro_apps::gridcraft::workspace::DevSaveResult::Saved {
+        dest_path: "/workbooks/B.xlsx".into(),
+        new_doc_id: "doc-session-B".into(),
+        committed_rev: 2,
+    };
+
+    close_manager.handle_native_close_requested("req-close-test".into(), true, "Unsaved changes exist");
+    state.pending_close_request_id.set(Some("req-close-test".into()));
+
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(save_outcome_b),
+        SaveOperationIntent::Save,
+        "B.xlsx",
+        "save-req-B-1",
+        b_bytes,
+        0,
+        Some(close_manager),
+        Some(app_state),
+    );
+
+    // 6. Thử đóng ứng dụng (Save & Exit)
+    // BẤT BIẾN P1 #4680342546:
+    // - Việc lưu B KHÔNG ĐƯỢC làm mất thay đổi chưa lưu của A!
+    // - Session A bắt buộc phải giữ is_dirty = true!
+    // - Aggregate workspace dirty bắt buộc vẫn là true!
+    // - Yêu cầu đóng cửa sổ BẮT BUỘC BỊ HỦY (CANCELED), KHÔNG ĐƯỢC PHÉP ĐÓNG ỨNG DỤNG!
+    let sess_a_after = state.get_session_for_document("doc-session-A").expect("session A sau khi lưu B");
+    assert!(sess_a_after.is_dirty, "Workbook A BẮT BUỘC VẪN DIRTY sau khi lưu B!");
+    assert_eq!(sess_a_after.edit_revision, 1, "Các sửa đổi của A không được phép bị mất!");
+
+    assert!(state.is_dirty.get_untracked(), "Workspace is_dirty BẮT BUỘC VẪN LÀ TRUE!");
+    assert!(
+        close_manager.is_cancelled.get_untracked(),
+        "Yêu cầu đóng cửa sổ BẮT BUỘC BỊ HỦY vì Workbook A vẫn còn thay đổi chưa lưu!"
+    );
+    assert!(
+        !close_manager.is_authorized.get_untracked(),
+        "Cấm ủy quyền đóng cửa sổ khi vẫn còn tài liệu chứa thay đổi chưa lưu!"
+    );
+}
+
 
 
 

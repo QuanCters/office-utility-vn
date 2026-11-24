@@ -1688,6 +1688,103 @@ fn test_pdf_remove_unrelated_file_preserves_active_file_unsaved_dirty_state() {
     );
 }
 
+#[test]
+fn test_p1_4680342554_pdf_save_as_completion_when_newer_edits_exist() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{apply_save_outcome, SaveOutcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let state = PdfStudioState::new();
+
+    // 1. Mở A.pdf
+    state.add_file("/documents/doc_A.pdf");
+    state.set_active_document_session(Some("session-doc-A".into()), 1);
+    assert_eq!(state.active_file_path().as_deref(), Some("/documents/doc_A.pdf"));
+    assert!(!state.has_unsaved_changes());
+
+    // 2. Chỉnh sửa A.pdf (generation = 1)
+    state.set_unsaved_changes(true);
+    let gen_after_first_edit = state.edit_generation.get_untracked();
+    assert_eq!(gen_after_first_edit, 1);
+    assert!(state.has_unsaved_changes());
+
+    // 3. Khởi tạo tác vụ Save As sang B.pdf
+    let snapshot_v1_bytes = b"%PDF-1.7 Snapshot 1 content".to_vec();
+    let ctx = SaveRequestContext {
+        request_id: "req-save-as-ab-1".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("session-doc-A".into()),
+        originating_path: Some("/documents/doc_A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_after_first_edit,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-v1".into(),
+        authorized_dest_path: Some("/documents/doc_B.pdf".into()),
+    };
+    state.register_pending_save("req-save-as-ab-1".into(), ctx.clone());
+
+    // 4. Trong lúc tác vụ lưu đang pending, người dùng tạo thêm một sửa đổi mới (generation = 2)
+    state.set_unsaved_changes(true);
+    let live_gen_after_newer_edit = state.edit_generation.get_untracked();
+    assert_eq!(live_gen_after_newer_edit, 2);
+    assert!(live_gen_after_newer_edit > ctx.snapshot_edit_generation);
+
+    // 5. Hoàn tất tác vụ Save As trước đó (lưu snapshot 1 sang doc_B.pdf)
+    let save_as_outcome = SaveOutcome::Saved {
+        dest_path: "/documents/doc_B.pdf".into(),
+        committed_revision: 1,
+        new_document_id: Some("session-doc-B".into()),
+    };
+    apply_save_outcome(&state, Ok(save_as_outcome), &ctx, &snapshot_v1_bytes);
+
+    // 6. BẤT BIẾN P1 #4680342554:
+    // - Active document đã chuyển sang B.pdf
+    assert_eq!(state.active_file_path().as_deref(), Some("/documents/doc_B.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("session-doc-B"));
+    assert_eq!(state.active_revision(), 1);
+
+    // - Thế hệ chỉnh sửa mới hơn (generation = 2) BẮT BUỘC ĐƯỢC BẢO TOÀN
+    assert_eq!(state.edit_generation.get_untracked(), 2, "Live edit generation bắt buộc phải là 2!");
+
+    // - Trạng thái dirty BẮT BUỘC LÀ TRUE vì các chỉnh sửa mới hơn chưa được lưu đĩa!
+    assert!(
+        state.has_unsaved_changes(),
+        "has_unsaved_changes BẮT BUỘC VẪN LÀ TRUE vì tồn tại chỉnh sửa mới hơn snapshot đã lưu!"
+    );
+
+    // - Phiên tài liệu B trong document_sessions bắt buộc phải dirty
+    let sess_b = state.get_document_session("/documents/doc_B.pdf").expect("session B");
+    assert!(sess_b.is_dirty, "Session B bắt buộc phải dirty!");
+    assert_eq!(sess_b.edit_generation, 2, "Session B edit generation phải là 2!");
+
+    // 7. Lưu lần 2 (Lưu thông thường B với các chỉnh sửa mới hơn v2)
+    let newer_v2_bytes = b"%PDF-1.7 Snapshot 2 with newer edits".to_vec();
+    let ctx2 = SaveRequestContext {
+        request_id: "req-save-b-ord-2".into(),
+        operation_intent: SaveOperationIntent::Save,
+        originating_document_id: Some("session-doc-B".into()),
+        originating_path: Some("/documents/doc_B.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 2,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-v2".into(),
+        authorized_dest_path: Some("/documents/doc_B.pdf".into()),
+    };
+    let save_b_outcome = SaveOutcome::Saved {
+        dest_path: "/documents/doc_B.pdf".into(),
+        committed_revision: 2,
+        new_document_id: Some("session-doc-B".into()),
+    };
+    apply_save_outcome(&state, Ok(save_b_outcome), &ctx2, &newer_v2_bytes);
+
+    // Bây giờ B đã sạch hoàn toàn và revision tiến lên 2
+    assert_eq!(state.active_revision(), 2);
+    assert!(!state.has_unsaved_changes(), "B phải sạch sau khi lưu đầy đủ các thay đổi mới!");
+    let sess_b_final = state.get_document_session("/documents/doc_B.pdf").expect("session B final");
+    assert!(!sess_b_final.is_dirty);
+    assert_eq!(sess_b_final.revision, 2);
+}
+
 
 
 

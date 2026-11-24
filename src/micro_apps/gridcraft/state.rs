@@ -150,20 +150,27 @@ impl GridCraftState {
             s.is_dirty = dirty;
             matched = true;
         } else {
-            for s in sessions.values_mut() {
-                if s.file_path == doc_id_or_name || s.file_name == doc_id_or_name {
+            let matches: Vec<String> = sessions
+                .values()
+                .filter(|s| s.file_name == doc_id_or_name || s.file_path == doc_id_or_name)
+                .map(|s| s.document_id.clone())
+                .collect();
+            if matches.len() == 1 {
+                if let Some(s) = sessions.get_mut(&matches[0]) {
                     s.is_dirty = dirty;
                     matched = true;
-                    break;
                 }
             }
         }
         if !matched {
-            if let Some(active_id) = self.active_document_id.get_untracked() {
-                if let Some(s) = sessions.get_mut(&active_id) {
-                    s.is_dirty = dirty;
-                }
+            // P1 #4680342546: Do NOT infer the edited workbook from active_document_id!
+            // Unknown or ambiguous identity fails closed:
+            // If dirty is true, ensure workspace aggregate dirty is set,
+            // but NEVER overwrite or modify an unrelated active_document_id's session.
+            if dirty {
+                self.is_dirty.set(true);
             }
+            return;
         }
         self.document_sessions.set(sessions);
         self.recompute_aggregate_dirty();
@@ -180,28 +187,29 @@ impl GridCraftState {
             target_rev = s.edit_revision;
             matched = true;
         } else {
-            for s in sessions.values_mut() {
-                if s.file_path == doc_id_or_name || s.file_name == doc_id_or_name {
+            let matches: Vec<String> = sessions
+                .values()
+                .filter(|s| s.file_name == doc_id_or_name || s.file_path == doc_id_or_name)
+                .map(|s| s.document_id.clone())
+                .collect();
+            if matches.len() == 1 {
+                if let Some(s) = sessions.get_mut(&matches[0]) {
                     s.edit_revision = s.edit_revision.wrapping_add(1);
                     s.is_dirty = true;
                     target_rev = s.edit_revision;
                     matched = true;
-                    break;
                 }
             }
         }
         if !matched {
-            if let Some(active_id) = self.active_document_id.get_untracked() {
-                if let Some(s) = sessions.get_mut(&active_id) {
-                    s.edit_revision = s.edit_revision.wrapping_add(1);
-                    s.is_dirty = true;
-                    target_rev = s.edit_revision;
-                }
-            }
+            // P1 #4680342546: Fail closed: do NOT guess from active_document_id!
+            self.edit_revision.update(|r| *r = r.wrapping_add(1));
+            self.is_dirty.set(true);
+            return self.edit_revision.get_untracked();
         }
         self.document_sessions.set(sessions);
         self.edit_revision.update(|r| *r = r.wrapping_add(1));
-        self.is_dirty.set(true);
+        self.recompute_aggregate_dirty();
         target_rev
     }
 

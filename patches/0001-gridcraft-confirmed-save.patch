@@ -1,5 +1,6 @@
---- a/apps/gridcraft-web/src/host.rs
-+++ b/apps/gridcraft-web/src/host.rs
+diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs b/apps/gridcraft-web/src/host.rs
+--- a/apps/gridcraft-web/src/host.rs	2026-11-24 15:57:36.862007206 +0000
++++ b/apps/gridcraft-web/src/host.rs	2026-11-24 15:57:46.519296997 +0000
 @@ -23,11 +23,16 @@
  //! exports are handed to the page rather than downloaded, and `?author=` names the user for new
  //! notes and comments.
@@ -89,6 +90,15 @@
      }
  
      /// Send saved and exported files to the host instead of downloading them, and hear files
+@@ -152,7 +206,7 @@
+                     doc.title = name.clone();
+                 }
+             }
+-            self.host.post_dirty(app.session.documents().iter().any(|d| d.is_dirty()));
++            self.post_dirty_state(app);
+             return;
+         }
+ 
 @@ -250,10 +304,10 @@
              }
          }
@@ -134,7 +144,7 @@
                                  }
                              }
                              app.session.set_active(cur);
-@@ -319,12 +383,13 @@
+@@ -319,16 +383,74 @@
                      });
                  } else {
                      log::warn!(
@@ -150,7 +160,69 @@
              }
          }
  
-@@ -361,7 +426,8 @@
+-        self.host.post_dirty(app.session.documents().iter().any(|d| d.is_dirty()));
++        self.post_dirty_state(app);
++    }
++
++    fn post_dirty_state(&self, app: &SheetApp) {
++        let any_dirty = app.session.documents().iter().any(|d| d.is_dirty());
++        self.host.post_dirty(any_dirty);
++
++        if let Some(w) = web_sys::window() {
++            let parent = w.parent().ok().flatten().unwrap_or(w);
++            let obj = js_sys::Object::new();
++            let _ = js_sys::Reflect::set(
++                &obj,
++                &wasm_bindgen::JsValue::from_str("type"),
++                &wasm_bindgen::JsValue::from_str("gridcraft:dirty"),
++            );
++            let _ = js_sys::Reflect::set(
++                &obj,
++                &wasm_bindgen::JsValue::from_str("dirty"),
++                &wasm_bindgen::JsValue::from_bool(any_dirty),
++            );
++
++            if let Some(active_doc) = app.session.active() {
++                let name = active_doc.display_title();
++                let _ = js_sys::Reflect::set(
++                    &obj,
++                    &wasm_bindgen::JsValue::from_str("name"),
++                    &wasm_bindgen::JsValue::from_str(&name),
++                );
++                let _ = js_sys::Reflect::set(
++                    &obj,
++                    &wasm_bindgen::JsValue::from_str("doc_dirty"),
++                    &wasm_bindgen::JsValue::from_bool(active_doc.is_dirty()),
++                );
++            }
++
++            let docs_arr = js_sys::Array::new();
++            for doc in app.session.documents() {
++                let doc_obj = js_sys::Object::new();
++                let _ = js_sys::Reflect::set(
++                    &doc_obj,
++                    &wasm_bindgen::JsValue::from_str("name"),
++                    &wasm_bindgen::JsValue::from_str(&doc.display_title()),
++                );
++                let _ = js_sys::Reflect::set(
++                    &doc_obj,
++                    &wasm_bindgen::JsValue::from_str("dirty"),
++                    &wasm_bindgen::JsValue::from_bool(doc.is_dirty()),
++                );
++                docs_arr.push(&doc_obj);
++            }
++            let _ = js_sys::Reflect::set(
++                &obj,
++                &wasm_bindgen::JsValue::from_str("documents"),
++                &docs_arr,
++            );
++
++            let _ = parent.post_message(&obj, "*");
++        }
+     }
+ 
+     fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
+@@ -361,7 +483,8 @@
  
      fn listen(&self, inbox: Inbox, ctx: egui::Context) {
          let confirmed = self.confirmed;
@@ -160,7 +232,7 @@
          let pending_saves_for_fail = self.pending_saves.clone();
          let app_ctx_for_open = ctx.clone();
          let app_ctx_for_saved = ctx.clone();
-@@ -373,7 +439,15 @@
+@@ -373,7 +496,15 @@
              }
              Message::Saved { id } => {
                  if confirmed {
@@ -177,7 +249,7 @@
                      app_ctx_for_saved.request_repaint();
                  }
              }
-@@ -428,6 +502,35 @@
+@@ -428,6 +559,35 @@
                                  save_as,
                              });
                              app_ctx_for_intents.request_repaint();
@@ -213,582 +285,3 @@
                          }
                      }
                  },
---- a/crates/ui-egui/src/app/commands.rs
-+++ b/crates/ui-egui/src/app/commands.rs
-@@ -23,6 +23,19 @@
-         if id.starts_with("file.") || switches_window {
-             self.settle_drafts()?;
-         }
-+        // Stage 4C-0 Data-Loss Guard: Trong chế độ hosted (services.open_async có giá trị),
-+        // khi tài liệu hiện tại đang có thay đổi chưa lưu (is_dirty),
-+        // thao tác tạo mới tệp (file.new) BẮT BUỘC hiển thị hộp thoại xác nhận lưu (saveChanges)
-+        // để người dùng quyết định: Lưu, Không Lưu (Discard), hoặc Hủy (Cancel/Stay).
-+        if id == "file.new"
-+            && self.services.open_async.is_some()
-+            && params.get("force").and_then(Json::as_bool) != Some(true)
-+            && self.session.active().is_some_and(|d| d.is_dirty())
-+        {
-+            let title = self.session.active().map(|d| d.display_title()).unwrap_or_default();
-+            self.open_dialog("saveChanges", json!({"title": title, "new_after": true, "params": params}));
-+            return Ok(json!({"dialog": "saveChanges"}));
-+        }
-         if matches!(id, "file.save" | "file.saveAs" | "file.saveBytes") {
-             self.store_view_state();
-         }
-@@ -407,6 +420,15 @@
-         }
-         match name {
-             "open" => {
-+                // Stage 4C-0 Data-Loss Guard: Trong chế độ hosted (services.open_async có giá trị),
-+                // khi tài liệu hiện tại đang có thay đổi chưa lưu (is_dirty),
-+                // việc mở tệp mới (file.open) BẮT BUỘC hiển thị hộp thoại xác nhận lưu (saveChanges)
-+                // để bảo đảm không âm thầm hủy hoại hoặc chôn vùi dữ liệu chưa lưu.
-+                if self.services.open_async.is_some() && self.session.active().is_some_and(|d| d.is_dirty()) {
-+                    let title = self.session.active().map(|d| d.display_title()).unwrap_or_default();
-+                    self.open_dialog("saveChanges", json!({"title": title, "open_after": true}));
-+                    return;
-+                }
-                 if let Some(start) = &self.services.open_async {
-                     start();
-                 } else if let Some(pick) = &self.services.pick_open
---- a/crates/ui-egui/src/app/files.rs
-+++ b/crates/ui-egui/src/app/files.rs
-@@ -90,12 +90,21 @@
-                 Ok(r) => {
-                     self.backstage = None;
-                     self.show_open_warnings(&r);
-+                    if let Some(cb) = &self.services.open_succeeded {
-+                        cb(&name);
-+                    }
-                 }
-                 Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => {
-                     self.backstage = None;
-                     self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
-                 }
--                Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
-+                Err(e) => {
-+                    let err = clean_error(&e);
-+                    self.message = Some(("GridCraft".into(), err.clone()));
-+                    if let Some(cb) = &self.services.open_failed {
-+                        cb(&name, &err);
-+                    }
-+                }
-             }
-             self.after_engine();
-         }
---- a/crates/ui-egui/src/app/quit.rs
-+++ b/crates/ui-egui/src/app/quit.rs
-@@ -1,4 +1,4 @@
--use super::{SaveAnswer, SheetApp, json};
-+use super::{Json, SaveAnswer, SheetApp, json};
- 
- impl SheetApp {
-     /// Holds back a window close (the close button, Alt+F4, the OS quitting the app) while a
-@@ -46,6 +46,9 @@
-             }
-             None => {
-                 self.allow_close = true;
-+                if let Some(cb) = &self.services.close_confirmed {
-+                    cb();
-+                }
-                 ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
-             }
-         }
-@@ -56,12 +59,39 @@
-     /// Returns whether the question is settled: Save keeps it open when the cell being edited
-     /// can't be entered.
-     pub fn answer_save_changes(&mut self, answer: SaveAnswer, quitting: bool, ctx: &egui::Context) -> bool {
-+        self.answer_save_changes_with_next(answer, quitting, false, &json!({}), false, ctx)
-+    }
-+
-+    /// Answers the Save Changes question with optional next action (file.new or file.open).
-+    pub fn answer_save_changes_with_next(
-+        &mut self,
-+        answer: SaveAnswer,
-+        quitting: bool,
-+        new_after: bool,
-+        new_params: &Json,
-+        open_after: bool,
-+        ctx: &egui::Context,
-+    ) -> bool {
-         match answer {
--            SaveAnswer::Cancel => {}
-+            SaveAnswer::Cancel => {
-+                if quitting {
-+                    if let Some(cb) = &self.services.close_cancelled {
-+                        cb();
-+                    }
-+                }
-+            }
-             SaveAnswer::DontSave => {
-                 self.run_or_alert("file.close", json!({"force": true, "document": true}));
-                 if quitting {
-                     self.continue_quit(ctx);
-+                } else if open_after {
-+                    if let Some(start) = &self.services.open_async {
-+                        start();
-+                    }
-+                } else if new_after || self.session.documents().is_empty() {
-+                    let mut p = new_params.clone();
-+                    p["force"] = json!(true);
-+                    self.run_or_alert("file.new", p);
-                 }
-             }
-             SaveAnswer::Save => {
-@@ -69,11 +99,26 @@
-                 if !self.commit_edit(0, 0, false, false) {
-                     return false;
-                 }
-+                if new_after || open_after || quitting {
-+                    if let Some(doc) = self.session.active() {
-+                        let intent = if open_after {
-+                            crate::state::DeferredActionIntent::Open
-+                        } else if new_after {
-+                            crate::state::DeferredActionIntent::New { params: new_params.clone() }
-+                        } else {
-+                            crate::state::DeferredActionIntent::Close
-+                        };
-+                        self.pending_deferred_action = Some(crate::state::PendingDeferredAction {
-+                            doc_uid: doc.uid,
-+                            intent,
-+                            snapshot: doc.wb.clone(),
-+                        });
-+                    }
-+                }
-                 self.run_or_alert("file.save", json!({}));
-                 if self.session.active().is_some_and(|x| !x.is_dirty()) {
--                    self.run_or_alert("file.close", json!({"force": true, "document": true}));
--                    if quitting {
--                        self.continue_quit(ctx);
-+                    if let Some(action) = self.pending_deferred_action.take() {
-+                        self.execute_deferred_action(action, ctx);
-                     }
-                 }
-             }
-@@ -81,6 +126,46 @@
-         true
-     }
- 
-+    /// Executes an authorized deferred intent (New, Open, Close) after save.
-+    pub fn execute_deferred_action(&mut self, action: crate::state::PendingDeferredAction, ctx: &egui::Context) {
-+        if let Some(doc) = self.session.active() {
-+            if doc.uid == action.doc_uid && !std::sync::Arc::ptr_eq(&doc.wb, &action.snapshot) {
-+                return;
-+            }
-+        }
-+        match action.intent {
-+            crate::state::DeferredActionIntent::Close => {
-+                self.run_or_alert("file.close", json!({"force": true, "document": true}));
-+                self.continue_quit(ctx);
-+            }
-+            crate::state::DeferredActionIntent::Open => {
-+                self.run_or_alert("file.close", json!({"force": true, "document": true}));
-+                if let Some(start) = &self.services.open_async {
-+                    start();
-+                }
-+            }
-+            crate::state::DeferredActionIntent::New { params } => {
-+                self.run_or_alert("file.close", json!({"force": true, "document": true}));
-+                let mut p = params.clone();
-+                p["force"] = json!(true);
-+                self.run_or_alert("file.new", p);
-+            }
-+        }
-+    }
-+
-+    /// Authorizes and executes pending deferred action when native persistence confirms.
-+    pub fn on_save_confirmed(&mut self, doc_uid: u64, snapshot: &std::sync::Arc<gridcraft_engine::model::Workbook>, ctx: &egui::Context) {
-+        if let Some(action) = self.pending_deferred_action.take() {
-+            if action.doc_uid == doc_uid {
-+                if let Some(active_doc) = self.session.active() {
-+                    if active_doc.uid == doc_uid && std::sync::Arc::ptr_eq(&active_doc.wb, snapshot) {
-+                        self.execute_deferred_action(action, ctx);
-+                    }
-+                }
-+            }
-+        }
-+    }
-+
-     /// Quit (the macOS app menu, ⌘Q): commits every window's cell draft as Enter would, lets the
-     /// macro step editor ask about its unsaved steps, then asks about each unsaved workbook in its
-     /// window; Cancel on any of them stops the quit. A draft its
---- a/crates/ui-egui/src/app.rs
-+++ b/crates/ui-egui/src/app.rs
-@@ -41,6 +41,7 @@
-             toast: None,
-             notice: None,
-             services,
-+            pending_deferred_action: None,
-             printing: Default::default(),
-             print_feedback_seen: None,
-             synthetic: Default::default(),
---- a/crates/ui-egui/src/dialogs/show.rs
-+++ b/crates/ui-egui/src/dialogs/show.rs
-@@ -340,11 +340,14 @@
-                 "saveChanges" => {
-                     ui.label(format!("Do you want to save the changes you made to {}?", d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook")));
-                     let quitting = d.values.get("quit").and_then(Json::as_bool) == Some(true);
-+                    let new_after = d.values.get("new_after").and_then(Json::as_bool) == Some(true);
-+                    let new_params = d.values.get("params").cloned().unwrap_or_else(|| json!({}));
-+                    let open_after = d.values.get("open_after").and_then(Json::as_bool) == Some(true);
-                     ui.horizontal(|ui| {
-                         for (label, answer) in
-                             [("Don't Save", crate::SaveAnswer::DontSave), ("Cancel", crate::SaveAnswer::Cancel), ("Save", crate::SaveAnswer::Save)]
-                         {
--                            if ui.button(label).clicked() && app.answer_save_changes(answer, quitting, ui.ctx()) {
-+                            if ui.button(label).clicked() && app.answer_save_changes_with_next(answer, quitting, new_after, &new_params, open_after, ui.ctx()) {
-                                 open = false;
-                             }
-                         }
---- a/crates/ui-egui/src/lib.rs
-+++ b/crates/ui-egui/src/lib.rs
-@@ -80,7 +80,7 @@
- 
- pub use clock::{monotonic_ms, now_ms};
- pub use services::{Chrome, Inbox, Services};
--pub use state::{NoticeKind, OpenWindow, SaveAnswer, SheetView};
-+pub use state::{DeferredActionIntent, NoticeKind, OpenWindow, PendingDeferredAction, SaveAnswer, SheetView};
- pub mod desktop_theme;
- 
- fn parse_resize_direction(value: &str) -> Option<egui::ResizeDirection> {
-@@ -252,6 +252,7 @@
-     /// Dismissible info bar under the ribbon (open-time notices).
-     pub notice: Option<Notice>,
-     pub services: Services,
-+    pub pending_deferred_action: Option<PendingDeferredAction>,
-     pub printing: printing::State,
-     print_feedback_seen: Option<printing::Feedback>,
-     /// Synthetic input from agents, one batch per step (drags need several steps).
---- a/crates/ui-egui/src/services.rs
-+++ b/crates/ui-egui/src/services.rs
-@@ -44,6 +44,14 @@
-     /// Web: hand PDF bytes to the browser's print flow directly (no download,
-     /// no intermediate file) — opens the system print dialog on that PDF.
-     pub print: Option<PrintPdf>,
-+    /// Web: callback signaled when an asynchronous file open succeeds and parses into the editor.
-+    pub open_succeeded: Option<Box<dyn Fn(&str)>>,
-+    /// Web: callback signaled when an asynchronous file open fails.
-+    pub open_failed: Option<Box<dyn Fn(&str, &str)>>,
-+    /// Web: callback signaled when a quit/close sequence is confirmed and all workbooks are safely closed.
-+    pub close_confirmed: Option<Box<dyn Fn()>>,
-+    /// Web: callback signaled when a quit/close sequence is cancelled by the user.
-+    pub close_cancelled: Option<Box<dyn Fn()>>,
- }
- 
- /// Shared queue of files read asynchronously (browser file picker, drag and drop).
---- a/crates/ui-egui/src/state.rs
-+++ b/crates/ui-egui/src/state.rs
-@@ -38,3 +38,19 @@
-         if self.dirty { format!("{} •", self.title) } else { self.title.clone() }
-     }
- }
-+
-+/// Target action to execute once asynchronous persistence confirms.
-+#[derive(Clone, Debug, PartialEq)]
-+pub enum DeferredActionIntent {
-+    New { params: serde_json::Value },
-+    Open,
-+    Close,
-+}
-+
-+/// An authorized intent awaiting confirmed save.
-+#[derive(Clone, Debug)]
-+pub struct PendingDeferredAction {
-+    pub doc_uid: u64,
-+    pub intent: DeferredActionIntent,
-+    pub snapshot: std::sync::Arc<gridcraft_engine::model::Workbook>,
-+}
---- a/crates/ui-egui/tests/it/file_menu.rs
-+++ b/crates/ui-egui/tests/it/file_menu.rs
-@@ -715,3 +715,291 @@
-     let r = call(&mut h, "engine.execute", serde_json::json!({"command": "cell.get", "params": {"cell": "A1"}, "window": 999}));
-     assert_eq!(r["ok"], false, "{r}");
- }
-+
-+#[test]
-+fn test_stage4c0_hosted_file_new_while_dirty_shows_save_changes_and_cancel_preserves_workbook() {
-+    let open_called = Arc::new(Mutex::new(false));
-+    let open_flag = open_called.clone();
-+    let services = Services {
-+        open_async: Some(Box::new(move || {
-+            *open_flag.lock().unwrap() = true;
-+        })),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook để trở nên dirty
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Original Unsaved Edits"})).unwrap();
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+    assert_eq!(a1(&h, 0), Value::text("Original Unsaved Edits"));
-+
-+    // 2. Gọi file.new khi tài liệu đang dirty trong chế độ hosted
-+    let res = h.state_mut().run("file.new", serde_json::json!({})).unwrap();
-+    assert_eq!(res["dialog"], "saveChanges");
-+
-+    // 3. Hộp thoại saveChanges phải được mở trên UI gốc của GridCraft
-+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("saveChanges"));
-+    assert_eq!(h.state().session.documents().len(), 1, "Chưa tạo thêm tài liệu khi chưa xác nhận");
-+
-+    // 4. Người dùng chọn CANCEL / STAY: Hộp thoại đóng lại, tài liệu và thay đổi nguyên vẹn 100%
-+    let ctx = h.ctx.clone();
-+    let settled = h.state_mut().answer_save_changes(gridcraft_ui_egui::SaveAnswer::Cancel, false, &ctx);
-+    assert!(settled);
-+    h.state_mut().dialog = None;
-+
-+    assert_eq!(h.state().session.documents().len(), 1);
-+    assert!(h.state().session.active().unwrap().is_dirty(), "Tài liệu BẮT BUỘC tiếp tục dirty sau khi Cancel");
-+    assert_eq!(a1(&h, 0), Value::text("Original Unsaved Edits"), "Dữ liệu chưa lưu BẮT BUỘC được bảo tồn sau khi Cancel");
-+}
-+
-+#[test]
-+fn test_stage4c0_hosted_file_new_while_dirty_dont_save_discards_and_opens_new_workbook() {
-+    let open_called = Arc::new(Mutex::new(false));
-+    let open_flag = open_called.clone();
-+    let services = Services {
-+        open_async: Some(Box::new(move || {
-+            *open_flag.lock().unwrap() = true;
-+        })),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook A
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Workbook A Edits"})).unwrap();
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+
-+    // 2. Gọi file.new
-+    let res = h.state_mut().run("file.new", serde_json::json!({})).unwrap();
-+    assert_eq!(res["dialog"], "saveChanges");
-+
-+    // 3. Người dùng chọn DONT SAVE (Discard): Đóng tài liệu cũ và mở workbook trắng mới
-+    let ctx = h.ctx.clone();
-+    let settled = h.state_mut().answer_save_changes_with_next(
-+        gridcraft_ui_egui::SaveAnswer::DontSave,
-+        false,
-+        true,
-+        &serde_json::json!({}),
-+        false,
-+        &ctx,
-+    );
-+    assert!(settled);
-+
-+    // Xác nhận: Tài liệu mới xuất hiện, sạch sẽ và trắng tinh
-+    assert_eq!(h.state().session.documents().len(), 1);
-+    assert!(!h.state().session.active().unwrap().is_dirty(), "Workbook mới phải ở trạng thái Clean");
-+    assert_eq!(a1(&h, 0), Value::Empty, "Workbook mới không được chứa dữ liệu của Workbook cũ");
-+}
-+
-+#[test]
-+fn test_stage4c0_hosted_file_open_while_dirty_shows_save_changes_and_cancel_preserves_workbook() {
-+    let open_called = Arc::new(Mutex::new(false));
-+    let open_flag = open_called.clone();
-+    let services = Services {
-+        open_async: Some(Box::new(move || {
-+            *open_flag.lock().unwrap() = true;
-+        })),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook A
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Precious Unsaved Data"})).unwrap();
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+
-+    // 2. Kích hoạt File -> Open
-+    h.state_mut().open_dialog("open", serde_json::json!({}));
-+
-+    // 3. Phải hiển thị saveChanges dialog thay vì gọi open_async ngay lập tức
-+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("saveChanges"));
-+    assert!(!*open_called.lock().unwrap(), "Chưa được gọi open_async khi chưa giải quyết saveChanges");
-+
-+    // 4. Chọn CANCEL: Giữ nguyên tài liệu cũ
-+    let ctx = h.ctx.clone();
-+    h.state_mut().answer_save_changes_with_next(
-+        gridcraft_ui_egui::SaveAnswer::Cancel,
-+        false,
-+        false,
-+        &serde_json::json!({}),
-+        true,
-+        &ctx,
-+    );
-+    h.state_mut().dialog = None;
-+
-+    assert!(!*open_called.lock().unwrap(), "Hủy bỏ không được kích hoạt open_async");
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+    assert_eq!(a1(&h, 0), Value::text("Precious Unsaved Data"));
-+}
-+
-+#[test]
-+fn test_stage4c0_hosted_file_open_while_dirty_dont_save_triggers_open_async() {
-+    let open_called = Arc::new(Mutex::new(false));
-+    let open_flag = open_called.clone();
-+    let services = Services {
-+        open_async: Some(Box::new(move || {
-+            *open_flag.lock().unwrap() = true;
-+        })),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook A
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Discardable Data"})).unwrap();
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+
-+    // 2. Kích hoạt File -> Open
-+    h.state_mut().open_dialog("open", serde_json::json!({}));
-+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("saveChanges"));
-+
-+    // 3. Chọn DONT SAVE: Phải kích hoạt open_async
-+    let ctx = h.ctx.clone();
-+    h.state_mut().answer_save_changes_with_next(
-+        gridcraft_ui_egui::SaveAnswer::DontSave,
-+        false,
-+        false,
-+        &serde_json::json!({}),
-+        true,
-+        &ctx,
-+    );
-+
-+    assert!(*open_called.lock().unwrap(), "open_async BẮT BUỘC được gọi sau khi người dùng xác nhận Don't Save");
-+}
-+
-+#[test]
-+fn test_stage4c0b_reproduce_defect1_hosted_save_changes_save_stalls_deferred_open() {
-+    let open_called = Arc::new(Mutex::new(false));
-+    let open_flag = open_called.clone();
-+    let download_called = Arc::new(Mutex::new(false));
-+    let dl_flag = download_called.clone();
-+    let services = Services {
-+        open_async: Some(Box::new(move || {
-+            *open_flag.lock().unwrap() = true;
-+        })),
-+        download: Some(Box::new(move |_name, _bytes| {
-+            *dl_flag.lock().unwrap() = true;
-+        })),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook A
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Precious Data"})).unwrap();
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+    let active_uid = h.state().session.active().unwrap().uid;
-+    let saved_snapshot = h.state().session.active().unwrap().wb.clone();
-+
-+    // 2. Kích hoạt File -> Open
-+    h.state_mut().open_dialog("open", serde_json::json!({}));
-+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("saveChanges"));
-+
-+    // 3. Người dùng chọn SAVE:
-+    let ctx = h.ctx.clone();
-+    h.state_mut().answer_save_changes_with_next(
-+        gridcraft_ui_egui::SaveAnswer::Save,
-+        false,
-+        false,
-+        &serde_json::json!({}),
-+        true, // open_after
-+        &ctx,
-+    );
-+
-+    // Lưu đã được kích hoạt:
-+    assert!(*download_called.lock().unwrap(), "Download/Save must have been triggered");
-+
-+    // Và pending_deferred_action đã được ghi nhận:
-+    assert!(h.state().pending_deferred_action.is_some(), "Pending action must be queued");
-+
-+    // 4. Khi Save ACK xác nhận ghi thành công (gọi on_save_confirmed):
-+    h.state_mut().on_save_confirmed(active_uid, &saved_snapshot, &ctx);
-+
-+    // open_async PHẢI được gọi sau khi lưu hoàn tất!
-+    assert!(*open_called.lock().unwrap(), "open_async MUST be called after save confirmation!");
-+    assert!(h.state().pending_deferred_action.is_none(), "Pending action must be cleared after execution");
-+}
-+
-+#[test]
-+fn test_stage4c0b_hosted_save_changes_save_resumes_deferred_new() {
-+    let download_called = Arc::new(Mutex::new(false));
-+    let dl_flag = download_called.clone();
-+    let services = Services {
-+        open_async: Some(Box::new(|| {})), // Marks as hosted mode
-+        download: Some(Box::new(move |_name, _bytes| {
-+            *dl_flag.lock().unwrap() = true;
-+        })),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook A
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Workbook A Data"})).unwrap();
-+    assert!(h.state().session.active().unwrap().is_dirty());
-+    let active_uid = h.state().session.active().unwrap().uid;
-+    let saved_snapshot = h.state().session.active().unwrap().wb.clone();
-+
-+    // 2. Kích hoạt File -> New
-+    h.state_mut().run("file.new", serde_json::json!({})).unwrap();
-+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("saveChanges"));
-+
-+    // 3. Người dùng chọn SAVE:
-+    let ctx = h.ctx.clone();
-+    h.state_mut().answer_save_changes_with_next(
-+        gridcraft_ui_egui::SaveAnswer::Save,
-+        false,
-+        true, // new_after
-+        &serde_json::json!({}),
-+        false,
-+        &ctx,
-+    );
-+
-+    assert!(*download_called.lock().unwrap(), "Download/Save must have been triggered");
-+    assert!(h.state().pending_deferred_action.is_some(), "Deferred new must be pending");
-+
-+    // 4. Khi Save ACK xác nhận:
-+    h.state_mut().on_save_confirmed(active_uid, &saved_snapshot, &ctx);
-+
-+    // Workbook A phải được đóng và workbook mới được tạo!
-+    assert!(h.state().pending_deferred_action.is_none());
-+    assert_eq!(a1(&h, 0), Value::Empty, "Workbook mới phải trống rỗng sau khi tạo");
-+}
-+
-+#[test]
-+fn test_stage4c0b_hosted_save_changes_edit_during_save_aborts_deferred_action() {
-+    let services = Services {
-+        open_async: Some(Box::new(|| {})),
-+        download: Some(Box::new(|_, _| {})),
-+        ..Default::default()
-+    };
-+    let mut h = harness(services);
-+
-+    // 1. Chỉnh sửa Workbook A (Snapshot A)
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Initial Value"})).unwrap();
-+    let active_uid = h.state().session.active().unwrap().uid;
-+    let snapshot_a = h.state().session.active().unwrap().wb.clone();
-+
-+    // 2. Kích hoạt File -> New và chọn Save
-+    h.state_mut().run("file.new", serde_json::json!({})).unwrap();
-+    let ctx = h.ctx.clone();
-+    h.state_mut().answer_save_changes_with_next(
-+        gridcraft_ui_egui::SaveAnswer::Save,
-+        false,
-+        true, // new_after
-+        &serde_json::json!({}),
-+        false,
-+        &ctx,
-+    );
-+    assert!(h.state().pending_deferred_action.is_some());
-+
-+    // 3. Người dùng gõ tiếp trong lúc lưu đang chạy (Tạo Snapshot B):
-+    h.state_mut().run("cell.set", serde_json::json!({"cell": "B1", "input": "Edit During Save"})).unwrap();
-+
-+    // 4. Save ACK của Snapshot A đến:
-+    h.state_mut().on_save_confirmed(active_uid, &snapshot_a, &ctx);
-+
-+    // Bất biến: Vì có chỉnh sửa mới (B1), Deferred New BẮT BUỘC BỊ HỦY BỎ!
-+    // Không được âm thầm hủy hoại thay đổi B1!
-+    assert!(h.state().session.active().unwrap().is_dirty(), "Workbook phải tiếp tục Dirty vì có chỉnh sửa B1");
-+    assert_eq!(
-+        h.state().session.active().unwrap().wb.active().unwrap().value(CellRef::new(0, 1)),
-+        Value::text("Edit During Save"),
-+        "Dữ liệu B1 phải được bảo toàn 100%"
-+    );
-+}
