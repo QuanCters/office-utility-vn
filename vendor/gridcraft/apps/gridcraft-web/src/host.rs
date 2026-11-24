@@ -258,6 +258,17 @@ impl Bridge {
                     if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                         log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                     }
+                    if let Some(w) = web_sys::window()
+                        && let Ok(Some(parent)) = w.parent()
+                    {
+                        let meta_obj = js_sys::Object::new();
+                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:save_metadata"));
+                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(&id));
+                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("doc_uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
+                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
+                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
+                        let _ = parent.post_message(&meta_obj, "*");
+                    }
                 }
             }
         }
@@ -298,6 +309,17 @@ impl Bridge {
                 );
                 if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                     log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
+                }
+                if let Some(w) = web_sys::window()
+                    && let Ok(Some(parent)) = w.parent()
+                {
+                    let meta_obj = js_sys::Object::new();
+                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:save_metadata"));
+                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(&id));
+                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("doc_uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
+                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
+                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
+                    let _ = parent.post_message(&meta_obj, "*");
                 }
             } else if let Err(e) = self.post_export(&name, &downloaded_bytes) {
                 log::error!("couldn't hand export {name} to the page: {e}");
@@ -426,6 +448,21 @@ impl Bridge {
                     &wasm_bindgen::JsValue::from_str("doc_dirty"),
                     &wasm_bindgen::JsValue::from_bool(active_doc.is_dirty()),
                 );
+                let _ = js_sys::Reflect::set(
+                    &obj,
+                    &wasm_bindgen::JsValue::from_str("doc_uid"),
+                    &wasm_bindgen::JsValue::from_f64(active_doc.uid as f64),
+                );
+                let _ = js_sys::Reflect::set(
+                    &obj,
+                    &wasm_bindgen::JsValue::from_str("uid"),
+                    &wasm_bindgen::JsValue::from_f64(active_doc.uid as f64),
+                );
+                let _ = js_sys::Reflect::set(
+                    &obj,
+                    &wasm_bindgen::JsValue::from_str("revision"),
+                    &wasm_bindgen::JsValue::from_f64(active_doc.revision as f64),
+                );
             }
 
             let docs_arr = js_sys::Array::new();
@@ -440,6 +477,21 @@ impl Bridge {
                     &doc_obj,
                     &wasm_bindgen::JsValue::from_str("dirty"),
                     &wasm_bindgen::JsValue::from_bool(doc.is_dirty()),
+                );
+                let _ = js_sys::Reflect::set(
+                    &doc_obj,
+                    &wasm_bindgen::JsValue::from_str("doc_uid"),
+                    &wasm_bindgen::JsValue::from_f64(doc.uid as f64),
+                );
+                let _ = js_sys::Reflect::set(
+                    &doc_obj,
+                    &wasm_bindgen::JsValue::from_str("uid"),
+                    &wasm_bindgen::JsValue::from_f64(doc.uid as f64),
+                );
+                let _ = js_sys::Reflect::set(
+                    &doc_obj,
+                    &wasm_bindgen::JsValue::from_str("revision"),
+                    &wasm_bindgen::JsValue::from_f64(doc.revision as f64),
                 );
                 docs_arr.push(&doc_obj);
             }

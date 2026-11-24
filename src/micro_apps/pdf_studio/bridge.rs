@@ -556,6 +556,8 @@ pub fn apply_save_outcome(
                 s.active_revision.set(committed_revision);
                 s.edit_generation.set(dest_gen);
                 s.has_unsaved_changes.set(dest_is_dirty);
+                // P1 #4680342554: Ràng buộc danh tính canvas sang dest_path để canvas_frame không nạp lại snapshot cũ từ đĩa
+                s.canvas_bound_path.set(Some(dest_path.clone()));
             } else {
                 // Người dùng đã chuyển sang tài liệu khác trong khi lưu!
                 // Giữ nguyên active state của tài liệu đang chọn.
@@ -695,6 +697,7 @@ pub async fn open_file_into_pdf_studio(
                 state.cache_document_bytes(&file_path, bytes.clone());
                 state.add_file(&file_path);
                 state.set_active_document_session(doc_id, rev);
+                state.canvas_bound_path.set(Some(file_path.clone()));
                 if !bytes.is_empty() {
                     let _ = send_open_file(iframe_id, &file_name, &bytes);
                 }

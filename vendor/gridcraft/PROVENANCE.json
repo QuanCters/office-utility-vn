@@ -13,11 +13,11 @@
     "upstream_repository": "https://github.com/storytold/gridcraft.git",
     "upstream_commit": "d60709a1738d4f02c7f507848441306c0aacf692",
     "version": "0.19.1",
-    "source_tree_sha256": "7e30c2386118e6791f4e03d0c9659c15639cccfe60ffca31d0d5392ec5692117",
+    "source_tree_sha256": "f024a8bdd9f803ae23a31e1a5c933a2f5c5da4636d593686e0ca2230212f7928",
     "lockfile_path": "vendor/gridcraft/Cargo.lock",
     "lockfile_sha256": "cbde97ae234e836a04517681b93e44add4bea1458b14a652e01c5cbfe26d94ef",
     "patch_file": "patches/0001-gridcraft-confirmed-save.patch",
-    "patch_sha256": "a0c220cf227e5e84cf8ea5310d6a8893941bfe81c443e5d6b35bcd216d4bb31b"
+    "patch_sha256": "f5f24d6ad4fd14f29a5f167dfd233259859d6a3badf9ab38dd110ef8738542d2"
   },
   "artifacts": [
     {
@@ -30,17 +30,17 @@
     },
     {
       "name": "wasm",
-      "path": "public/gridcraft/gridcraft-web-9acb722ce6b9b3fa_bg.wasm",
-      "dist_path": "dist/gridcraft/gridcraft-web-9acb722ce6b9b3fa_bg.wasm",
-      "sha256": "0441324b829eb1ebe9fb34880ecf17bec2032920f7bd53e6becea9319d05a9fe",
-      "size": 27377808,
+      "path": "public/gridcraft/gridcraft-web-264c10a7b4f20d5a_bg.wasm",
+      "dist_path": "dist/gridcraft/gridcraft-web-264c10a7b4f20d5a_bg.wasm",
+      "sha256": "4156c67a1890a692fce3095bb1d89dd3410c77ce36d5d619d205aa1df246c1ae",
+      "size": 27380283,
       "required": true
     },
     {
       "name": "js",
-      "path": "public/gridcraft/gridcraft-web-ed020013f72b6939.js",
-      "dist_path": "dist/gridcraft/gridcraft-web-ed020013f72b6939.js",
-      "sha256": "700afedd45b1fc3729c84753a47cc8fc3242e455cb0a3c77c74b9ae25d3f69f5",
+      "path": "public/gridcraft/gridcraft-web-906f4a5d96c4c7c3.js",
+      "dist_path": "dist/gridcraft/gridcraft-web-906f4a5d96c4c7c3.js",
+      "sha256": "49f3412d7b3241799f6cdd85234f5a24c1098d07cae3116e72f46833c4e59a87",
       "size": 174912,
       "required": true
     },
@@ -48,7 +48,7 @@
       "name": "html",
       "path": "public/gridcraft/index.html",
       "dist_path": "dist/gridcraft/index.html",
-      "sha256": "433952650a528ca918feb4f7bc61c3fe2a5631d9959625cf50d458a73afd53e6",
+      "sha256": "fca92ff7b5f3903ade44c6245d5d83e9bbb050a64a7433086e5f0f0668c8778b",
       "size": 1773,
       "required": true
     }

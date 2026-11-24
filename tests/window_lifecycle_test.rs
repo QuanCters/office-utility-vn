@@ -75,6 +75,10 @@ impl MockWindowCloseGuard {
             false
         }
     }
+
+    fn query_pending_close_request(&self) -> Option<String> {
+        self.active_request_id.clone()
+    }
 }
 
 // ==============================================================================
@@ -731,6 +735,48 @@ fn test_task8_11_close_request_before_frontend_listener_fail_closed() {
     let prevented = guard.on_close_requested();
     assert!(prevented, "Native guard mặc định BẮT BUỘC chặn đóng (Fail-closed)");
     assert_eq!(guard.close_count, 0, "Không được đóng cửa sổ khi chưa có xác nhận");
+}
+
+/// Acceptance Test 10: Close request before frontend readiness must remain deliverable (P2 #4683415016)
+#[test]
+fn test_acceptance_close_request_before_frontend_readiness_remains_deliverable() {
+    let mut guard = MockWindowCloseGuard::new();
+    let app_state = AppState::new();
+    let manager = WindowCloseManager::new();
+
+    // 1. Người dùng bấm đóng cửa sổ trước khi frontend kịp khởi chạy listener
+    let prevented = guard.on_close_requested();
+    assert!(prevented, "Cửa sổ bị chặn đóng ngay lập tức (Fail-closed)");
+    assert_eq!(guard.close_count, 0, "Không được đóng sớm");
+
+    // 2. Yêu cầu đóng được lưu trữ trong guard và không bị mất
+    let pending_req = guard.query_pending_close_request().expect("phải có pending request");
+    assert!(pending_req.starts_with("close-req-"));
+
+    // 3. Duplicate close request trước khi mount cũng không làm sinh ra duplicate request id mới
+    let (dup_req, is_new) = guard.begin_close_request();
+    assert!(!is_new, "Yêu cầu thứ 2 không được tạo id mới (Deduplication)");
+    assert_eq!(dup_req, pending_req);
+
+    // 4. Giả sử tài liệu dirty (GridCraft)
+    app_state.gridcraft_state.is_dirty.set(true);
+
+    // 5. Frontend mount xong và thực hiện handshake query_pending_close_request
+    let summary = app_state.unsaved_work_summary();
+    manager.handle_native_close_requested(pending_req.clone(), true, &summary);
+
+    // Hộp thoại Unsaved Changes bật lên an toàn!
+    assert!(manager.is_dialog_open.get_untracked());
+    assert_eq!(manager.active_request_id.get_untracked(), Some(pending_req.clone()));
+
+    // Cửa sổ vẫn chưa đóng
+    assert_eq!(guard.close_count, 0);
+
+    // 6. Người dùng chọn Hủy (Cancel)
+    manager.cancel_close(&pending_req);
+    guard.cancel(&pending_req);
+    assert!(!manager.is_dialog_open.get_untracked());
+    assert_eq!(guard.query_pending_close_request(), None);
 }
 
 /// TASK 8 - Test 12: Iframe bị đơ / không phản hồi → Không gây mất dữ liệu ngầm

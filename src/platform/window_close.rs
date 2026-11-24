@@ -348,6 +348,24 @@ pub fn register_window_close_listener(
     let unlisten_holder = unlisten_fn_holder;
     let closure_cell = closure_holder;
 
+    // P2 #4683415016: Frontend-ready handshake / query pending close request.
+    // Nếu native guard đã phát sinh close_requested trước khi listener kịp đăng ký,
+    // tái phân phối (redeliver) yêu cầu đóng ngay lập tức cho manager xử lý fail-closed.
+    let manager_startup = manager;
+    let app_state_startup = app_state;
+    wasm_bindgen_futures::spawn_local(async move {
+        let args = serde_wasm_bindgen::to_value(&serde_json::json!({})).unwrap_or(JsValue::NULL);
+        if let Ok(res) = invoke("query_pending_close_request", args).await {
+            if let Ok(Some(req_id)) = serde_wasm_bindgen::from_value::<Option<String>>(res) {
+                if !req_id.is_empty() {
+                    let has_dirty = app_state_startup.has_unsaved_work_or_running_task();
+                    let summary = app_state_startup.unsaved_work_summary();
+                    manager_startup.handle_native_close_requested(req_id, has_dirty, &summary);
+                }
+            }
+        }
+    });
+
     Some(WasmCleanupHandle::new(move || {
         unmount_flag.set(true);
         IS_WINDOW_CLOSE_LISTENER_REGISTERED.store(false, Ordering::SeqCst);

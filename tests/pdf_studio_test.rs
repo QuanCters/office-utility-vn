@@ -1746,6 +1746,14 @@ fn test_p1_4680342554_pdf_save_as_completion_when_newer_edits_exist() {
     // - Thế hệ chỉnh sửa mới hơn (generation = 2) BẮT BUỘC ĐƯỢC BẢO TOÀN
     assert_eq!(state.edit_generation.get_untracked(), 2, "Live edit generation bắt buộc phải là 2!");
 
+    // - P1 #4680342554: Canvas BẮT BUỘC được ràng buộc danh tính (Identity Rebinding) sang B.pdf
+    // để không bị effect trong canvas_frame nạp lại snapshot cũ v1 từ đĩa đè lên canvas
+    assert_eq!(
+        state.canvas_bound_path.get().as_deref(),
+        Some("/documents/doc_B.pdf"),
+        "Canvas bắt buộc phải được rebind sang doc_B.pdf để bảo toàn nét vẽ/nội dung mới!"
+    );
+
     // - Trạng thái dirty BẮT BUỘC LÀ TRUE vì các chỉnh sửa mới hơn chưa được lưu đĩa!
     assert!(
         state.has_unsaved_changes(),
@@ -1783,6 +1791,11 @@ fn test_p1_4680342554_pdf_save_as_completion_when_newer_edits_exist() {
     let sess_b_final = state.get_document_session("/documents/doc_B.pdf").expect("session B final");
     assert!(!sess_b_final.is_dirty);
     assert_eq!(sess_b_final.revision, 2);
+    assert_eq!(
+        state.get_cached_document_bytes("/documents/doc_B.pdf"),
+        Some(newer_v2_bytes),
+        "Nội dung nhị phân PDF được ghi nhận bắt buộc phải là v2 chứa các sửa đổi mới nhất!"
+    );
 }
 
 

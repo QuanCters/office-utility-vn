@@ -124,14 +124,38 @@ pub fn handle_gridcraft_save_outcome(
             let is_still_dirty = coordinator.map(|c| c.read_value().is_dirty()).unwrap_or(false)
                 || (live_edit_rev > snapshot_edit_rev);
             s.set_document_dirty(&new_doc_id, is_still_dirty);
-            s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
-                document_id: new_doc_id.clone(),
-                file_path: dest_path.clone(),
-                file_name: actual_file_name.clone(),
-                revision: committed_rev,
-                is_dirty: is_still_dirty,
-                edit_revision: live_edit_rev,
-            });
+
+            let originating_doc_id = s.active_document_id.get_untracked()
+                .or_else(|| s.get_session_for_document(name).map(|s| s.document_id));
+            let originating_uid = originating_doc_id.as_deref()
+                .and_then(|id| s.document_sessions.with_untracked(|m| m.get(id).and_then(|s| s.iframe_doc_uid)));
+
+            if intent == crate::platform::adapter::SaveOperationIntent::SaveAs {
+                // P1 #4683798594: Di chuyển phiên nguồn sang danh tính mới, không để lại ghost dirty session
+                let old_id = originating_doc_id.as_deref().unwrap_or(&new_doc_id);
+                s.migrate_document_session(
+                    old_id,
+                    crate::micro_apps::gridcraft::state::WorkbookSession {
+                        document_id: new_doc_id.clone(),
+                        file_path: dest_path.clone(),
+                        file_name: actual_file_name.clone(),
+                        revision: committed_rev,
+                        is_dirty: is_still_dirty,
+                        edit_revision: live_edit_rev,
+                        iframe_doc_uid: originating_uid,
+                    },
+                );
+            } else {
+                s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
+                    document_id: new_doc_id.clone(),
+                    file_path: dest_path.clone(),
+                    file_name: actual_file_name.clone(),
+                    revision: committed_rev,
+                    is_dirty: is_still_dirty,
+                    edit_revision: live_edit_rev,
+                    iframe_doc_uid: originating_uid,
+                });
+            }
             s.set_document_session(
                 Some(new_doc_id.clone()),
                 Some(dest_path.clone()),
@@ -192,6 +216,7 @@ pub fn handle_gridcraft_save_outcome(
             }
             let live_edit_rev = s.get_edit_revision(&new_doc_id);
             s.set_document_dirty(&new_doc_id, true);
+            let orig_uid = s.document_sessions.with_untracked(|m| m.get(&new_doc_id).and_then(|s| s.iframe_doc_uid));
             s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
                 document_id: new_doc_id.clone(),
                 file_path: dest_path.clone(),
@@ -199,6 +224,7 @@ pub fn handle_gridcraft_save_outcome(
                 revision: committed_rev,
                 is_dirty: true,
                 edit_revision: live_edit_rev,
+                iframe_doc_uid: orig_uid,
             });
             s.set_document_session(
                 Some(new_doc_id),
@@ -400,6 +426,7 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 .and_then(|v| v.dyn_into::<js_sys::Array>().ok());
 
                                 // 1. Đồng bộ trạng thái dirty chi tiết của từng workbook nếu mảng documents có mặt
+                                let mut live_uids: Vec<u64> = Vec::new();
                                 if let Some(docs) = documents {
                                     for i in 0..docs.length() {
                                         let item = docs.get(i);
@@ -408,46 +435,49 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                 .ok().and_then(|v| v.as_string());
                                             let d = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("dirty"))
                                                 .ok().and_then(|v| v.as_bool()).unwrap_or(false);
-                                            if let Some(doc_n) = n {
-                                                s.set_document_dirty(&doc_n, d);
+                                            let u = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("uid"))
+                                                .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
+                                                .or_else(|| {
+                                                    js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("doc_uid"))
+                                                        .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
+                                                });
+                                            let r = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("revision"))
+                                                .ok().and_then(|v| v.as_f64()).map(|v| v as u64);
+
+                                            if let Some(uid_val) = u {
+                                                live_uids.push(uid_val);
                                             }
+                                            s.sync_workbook_dirty_and_revision(n.as_deref(), u, d, r);
                                         }
                                     }
                                 }
 
-                                // 2. Quy gán chính xác edit revision cho workbook nguồn (P1 #4680342546)
-                                let target_key = doc_id.or(doc_name);
-                                if let Some(ref key) = target_key {
-                                    if dirty {
-                                        s.bump_edit_revision(key);
-                                        if coordinator.read_value().state()
-                                            == &crate::platform::coordinator::DocumentState::Unloaded
-                                        {
-                                            let cur_doc = s
-                                                .active_document_id
-                                                .get_untracked()
-                                                .unwrap_or_else(|| "gridcraft-doc".into());
-                                            let cur_path = s
-                                                .active_file_path
-                                                .get_untracked()
-                                                .unwrap_or_else(|| "workbook.xlsx".into());
-                                            coordinator.update_value(|c| {
-                                                c.on_document_opened(&cur_doc, &cur_path, "dirty-init");
-                                            });
-                                        }
-                                        coordinator.update_value(|c| c.on_user_edit());
-                                    } else {
-                                        s.set_document_dirty(key, false);
+                                // 2. Đối soát các workbook đã bị đóng/hủy trong iframe (P2 #4683038858)
+                                if !live_uids.is_empty() {
+                                    s.reconcile_closed_sessions(&live_uids);
+                                }
+
+                                // 3. Đồng bộ coordinator và aggregate dirty
+                                if dirty {
+                                    s.is_dirty.set(true);
+                                    if coordinator.read_value().state()
+                                        == &crate::platform::coordinator::DocumentState::Unloaded
+                                    {
+                                        let cur_doc = s
+                                            .active_document_id
+                                            .get_untracked()
+                                            .unwrap_or_else(|| "gridcraft-doc".into());
+                                        let cur_path = s
+                                            .active_file_path
+                                            .get_untracked()
+                                            .unwrap_or_else(|| "workbook.xlsx".into());
+                                        coordinator.update_value(|c| {
+                                            c.on_document_opened(&cur_doc, &cur_path, "dirty-init");
+                                        });
                                     }
+                                    coordinator.update_value(|c| c.on_user_edit());
                                 } else {
-                                    // Danh tính không rõ ràng: Fail closed mà TUYỆT ĐỐI không đoán mò active_document_id!
-                                    if dirty {
-                                        s.is_dirty.set(true);
-                                        s.edit_revision.update(|r| *r = r.wrapping_add(1));
-                                        coordinator.update_value(|c| c.on_user_edit());
-                                    } else {
-                                        s.recompute_aggregate_dirty();
-                                    }
+                                    s.recompute_aggregate_dirty();
                                 }
                             }
                             "gridcraft:save" | "gridcraft:export" => {
@@ -583,9 +613,30 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         }
                                     }
                                 } else {
-                                    // Finding 2 & P1 #4679604052: Phân giải chính xác phiên workbook đích bằng doc_id hoặc name để tránh ghi đè workbook khác
+                                    // Finding 2, P1 #4679604052 & P2 #4682914297: Phân giải chính xác phiên workbook đích bằng doc_uid, doc_id hoặc name
+                                    let incoming_uid = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("doc_uid"))
+                                        .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
+                                        .or_else(|| {
+                                            js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("uid"))
+                                                .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
+                                        })
+                                        .or_else(|| {
+                                            req_id.as_deref().and_then(|id| {
+                                                if id.starts_with("save-") {
+                                                    let parts: Vec<&str> = id.split('-').collect();
+                                                    if parts.len() >= 3 {
+                                                        parts[1].parse::<u64>().ok()
+                                                    } else {
+                                                        None
+                                                    }
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                        });
+
                                     let lookup_key = incoming_doc_id.as_deref().unwrap_or(&name);
-                                    let resolved_session = s.resolve_save_session(lookup_key);
+                                    let resolved_session = s.resolve_save_session_with_uid(lookup_key, incoming_uid);
                                     let (target_doc_id, target_path, target_rev) =
                                         if let Some(ref sess) = resolved_session {
                                             (

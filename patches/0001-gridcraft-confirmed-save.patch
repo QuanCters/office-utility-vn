@@ -1,6 +1,5 @@
-diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs b/apps/gridcraft-web/src/host.rs
---- a/apps/gridcraft-web/src/host.rs	2026-11-24 15:57:36.862007206 +0000
-+++ b/apps/gridcraft-web/src/host.rs	2026-11-24 15:57:46.519296997 +0000
+--- a/apps/gridcraft-web/src/host.rs	2026-11-24 18:24:17.742317023 +0000
++++ b/apps/gridcraft-web/src/host.rs	2026-11-24 18:24:17.742317023 +0000
 @@ -23,11 +23,16 @@
  //! exports are handed to the page rather than downloaded, and `?author=` names the user for new
  //! notes and comments.
@@ -99,7 +98,41 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
              return;
          }
  
-@@ -250,10 +304,10 @@
+@@ -204,6 +258,17 @@
+                     if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
+                         log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
+                     }
++                    if let Some(w) = web_sys::window()
++                        && let Ok(Some(parent)) = w.parent()
++                    {
++                        let meta_obj = js_sys::Object::new();
++                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:save_metadata"));
++                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(&id));
++                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("doc_uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
++                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
++                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
++                        let _ = parent.post_message(&meta_obj, "*");
++                    }
+                 }
+             }
+         }
+@@ -245,15 +310,26 @@
+                 if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
+                     log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
+                 }
++                if let Some(w) = web_sys::window()
++                    && let Ok(Some(parent)) = w.parent()
++                {
++                    let meta_obj = js_sys::Object::new();
++                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:save_metadata"));
++                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(&id));
++                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("doc_uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
++                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
++                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
++                    let _ = parent.post_message(&meta_obj, "*");
++                }
+             } else if let Err(e) = self.post_export(&name, &downloaded_bytes) {
+                 log::error!("couldn't hand export {name} to the page: {e}");
              }
          }
  
@@ -113,7 +146,7 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
                  let mut last_revs = self.last_saved_revisions.borrow_mut();
                  let last_rev = last_revs.get(&pending.doc_uid).copied().unwrap_or(0);
                  if pending.revision >= last_rev {
-@@ -263,16 +317,26 @@
+@@ -263,16 +339,26 @@
                          if cur == i {
                              if let Some(doc) = app.session.active_mut() {
                                  doc.saved = pending.snapshot.clone();
@@ -144,7 +177,7 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
                                  }
                              }
                              app.session.set_active(cur);
-@@ -319,16 +383,74 @@
+@@ -319,16 +405,104 @@
                      });
                  } else {
                      log::warn!(
@@ -194,6 +227,21 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
 +                    &wasm_bindgen::JsValue::from_str("doc_dirty"),
 +                    &wasm_bindgen::JsValue::from_bool(active_doc.is_dirty()),
 +                );
++                let _ = js_sys::Reflect::set(
++                    &obj,
++                    &wasm_bindgen::JsValue::from_str("doc_uid"),
++                    &wasm_bindgen::JsValue::from_f64(active_doc.uid as f64),
++                );
++                let _ = js_sys::Reflect::set(
++                    &obj,
++                    &wasm_bindgen::JsValue::from_str("uid"),
++                    &wasm_bindgen::JsValue::from_f64(active_doc.uid as f64),
++                );
++                let _ = js_sys::Reflect::set(
++                    &obj,
++                    &wasm_bindgen::JsValue::from_str("revision"),
++                    &wasm_bindgen::JsValue::from_f64(active_doc.revision as f64),
++                );
 +            }
 +
 +            let docs_arr = js_sys::Array::new();
@@ -209,6 +257,21 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
 +                    &wasm_bindgen::JsValue::from_str("dirty"),
 +                    &wasm_bindgen::JsValue::from_bool(doc.is_dirty()),
 +                );
++                let _ = js_sys::Reflect::set(
++                    &doc_obj,
++                    &wasm_bindgen::JsValue::from_str("doc_uid"),
++                    &wasm_bindgen::JsValue::from_f64(doc.uid as f64),
++                );
++                let _ = js_sys::Reflect::set(
++                    &doc_obj,
++                    &wasm_bindgen::JsValue::from_str("uid"),
++                    &wasm_bindgen::JsValue::from_f64(doc.uid as f64),
++                );
++                let _ = js_sys::Reflect::set(
++                    &doc_obj,
++                    &wasm_bindgen::JsValue::from_str("revision"),
++                    &wasm_bindgen::JsValue::from_f64(doc.revision as f64),
++                );
 +                docs_arr.push(&doc_obj);
 +            }
 +            let _ = js_sys::Reflect::set(
@@ -222,7 +285,7 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
      }
  
      fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
-@@ -361,7 +483,8 @@
+@@ -361,7 +535,8 @@
  
      fn listen(&self, inbox: Inbox, ctx: egui::Context) {
          let confirmed = self.confirmed;
@@ -232,7 +295,7 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
          let pending_saves_for_fail = self.pending_saves.clone();
          let app_ctx_for_open = ctx.clone();
          let app_ctx_for_saved = ctx.clone();
-@@ -373,7 +496,15 @@
+@@ -373,7 +548,15 @@
              }
              Message::Saved { id } => {
                  if confirmed {
@@ -249,7 +312,7 @@ diff -urN '--exclude=.git*' '--exclude=target' a/apps/gridcraft-web/src/host.rs 
                      app_ctx_for_saved.request_repaint();
                  }
              }
-@@ -428,6 +559,35 @@
+@@ -428,6 +611,35 @@
                                  save_as,
                              });
                              app_ctx_for_intents.request_repaint();

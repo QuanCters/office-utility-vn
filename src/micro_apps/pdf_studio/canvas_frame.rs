@@ -27,13 +27,15 @@ pub fn PdfCraftCanvasFrame(
             );
 
             // Theo dõi tệp đang chọn và tự động nạp vào canvas khi iframe đã sẵn sàng
-            let last_opened = StoredValue::new(None::<String>);
+            // P1 #4680342554: Ràng buộc danh tính (Identity Rebinding) với s.canvas_bound_path
+            // Tuyệt đối không nạp lại snapshot cũ từ đĩa đè lên canvas nếu canvas đang biên tập tài liệu này
             Effect::new(move |_| {
                 let is_ready = s.is_canvas_ready.get();
                 if is_ready {
                     if let Some(path) = s.active_file_path() {
-                        if last_opened.get_value().as_deref() != Some(&path) {
-                            last_opened.set_value(Some(path.clone()));
+                        let bound = s.canvas_bound_path.get();
+                        if bound.as_deref() != Some(&path) {
+                            s.canvas_bound_path.set(Some(path.clone()));
                             wasm_bindgen_futures::spawn_local(async move {
                                 let _ = crate::micro_apps::pdf_studio::bridge::open_file_into_canvas(
                                     "pdfcraft-frame",

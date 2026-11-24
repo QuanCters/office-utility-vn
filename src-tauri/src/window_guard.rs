@@ -128,6 +128,16 @@ pub async fn cancel_window_close(
     }
 }
 
+/// Lệnh IPC Tauri: Frontend kiểm tra yêu cầu đóng cửa sổ đang chờ xử lý (P2 #4683415016 Startup Safety).
+/// Trả về mã request_id nếu có yêu cầu đóng phát sinh trước khi frontend kịp mount và đăng ký listener.
+#[tauri::command]
+pub async fn query_pending_close_request(
+    guard: tauri::State<'_, WindowCloseGuard>,
+) -> Result<Option<String>, String> {
+    let state = guard.state.lock().unwrap();
+    Ok(state.active_request_id.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

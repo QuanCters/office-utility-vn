@@ -3,7 +3,11 @@ use office_utility_vn_ui::micro_apps::gridcraft::{
     GRIDCRAFT_IFRAME_SRC, GridCraftApp, GridCraftState, is_gridcraft_dev_workspace_enabled,
 };
 use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
-use office_utility_vn_ui::platform::adapter::{GridCraftAdapter, MicroAppAdapter};
+use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+    handle_gridcraft_save_outcome, DevSaveResult,
+};
+use office_utility_vn_ui::platform::adapter::{GridCraftAdapter, MicroAppAdapter, SaveOperationIntent};
+use office_utility_vn_ui::platform::coordinator::HostDocumentCoordinator;
 
 #[test]
 fn test_gridcraft_dev_gate_enabled_in_debug() {
@@ -361,6 +365,7 @@ fn test_p1_finding2_multi_workbook_save_isolation_prevents_wrong_workbook_overwr
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some("doc-A".into()), Some("/data/A.xlsx".into()), 1);
     state.active_file_name.set(Some("A.xlsx".into()));
@@ -373,6 +378,7 @@ fn test_p1_finding2_multi_workbook_save_isolation_prevents_wrong_workbook_overwr
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some("doc-B".into()), Some("/data/B.xlsx".into()), 1);
     state.active_file_name.set(Some("B.xlsx".into()));
@@ -488,6 +494,7 @@ fn test_p1_filesystem_workbook_preservation_real_fixtures() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.register_document_session(WorkbookSession {
         document_id: "doc-bud-2026".into(),
@@ -496,6 +503,7 @@ fn test_p1_filesystem_workbook_preservation_real_fixtures() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
 
     // Active file is set to B:
@@ -567,6 +575,7 @@ fn test_gridcraft_multi_workbook_aggregate_dirty_preservation() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     assert!(!state.is_dirty.get_untracked());
 
@@ -583,6 +592,7 @@ fn test_gridcraft_multi_workbook_aggregate_dirty_preservation() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.recompute_aggregate_dirty();
     assert!(
@@ -643,6 +653,7 @@ fn test_gridcraft_resolve_save_session_disambiguation() {
         revision: 1,
         is_dirty: true,
         edit_revision: 1,
+        iframe_doc_uid: None,
     });
     state.register_document_session(WorkbookSession {
         document_id: "doc-budget-q2".into(),
@@ -651,6 +662,7 @@ fn test_gridcraft_resolve_save_session_disambiguation() {
         revision: 1,
         is_dirty: true,
         edit_revision: 1,
+        iframe_doc_uid: None,
     });
 
     // 1. Phân giải bằng document_id rõ ràng PHẢI luôn thành công và trỏ đúng session tương ứng
@@ -715,6 +727,7 @@ fn test_gridcraft_inflight_edit_preserves_dirty_and_blocks_close() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(
         Some("doc-wb-inflight".into()),
@@ -826,6 +839,7 @@ fn test_gridcraft_discard_and_exit_clears_dirty_and_enables_close() {
         revision: 1,
         is_dirty: true,
         edit_revision: 5,
+        iframe_doc_uid: None,
     });
     state.active_document_id.set(Some("doc-discard-test".into()));
     state.is_dirty.set(true);
@@ -915,6 +929,7 @@ fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
         revision: 2,
         is_dirty: true,
         edit_revision: 5,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 2);
     state.active_file_name.set(Some("finance_q4.xlsx".to_string()));
@@ -1016,6 +1031,7 @@ fn test_gridcraft_export_failure_and_ambiguous_commit_do_not_replace_workbook_id
         revision: 3,
         is_dirty: true,
         edit_revision: 7,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 3);
     state.active_file_name.set(Some("quarterly_audit.xlsx".to_string()));
@@ -1109,6 +1125,7 @@ fn test_gridcraft_ordinary_save_continues_functioning_after_export() {
         revision: 1,
         is_dirty: true,
         edit_revision: 2,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 1);
     state.active_file_name.set(Some("financial_projection.xlsx".to_string()));
@@ -1206,6 +1223,7 @@ fn test_p2_gridcraft_ambiguous_commit_advances_revision_preserves_dirty_and_bloc
         revision: 1,
         is_dirty: true,
         edit_revision: 3,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 1);
     state.active_file_name.set(Some("balance_sheet.xlsx".to_string()));
@@ -1231,6 +1249,7 @@ fn test_p2_gridcraft_ambiguous_commit_advances_revision_preserves_dirty_and_bloc
             revision: committed_rev,
             is_dirty: true,
             edit_revision: live_edit_rev,
+            iframe_doc_uid: None,
         });
         state.set_document_session(Some(new_doc_id), Some(dest_path), committed_rev);
         state.is_dirty.set(true);
@@ -1339,6 +1358,7 @@ fn test_gridcraft_behavioral_packaged_workbook_save_and_exit_close_decision() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some(doc_id.to_string()), Some(file_path_str.clone()), 1);
 
@@ -1450,6 +1470,7 @@ fn test_p1_save_as_identity_rebinding_genuine_xlsx_fixtures() {
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(
         Some("doc-session-A".into()),
@@ -1590,6 +1611,7 @@ fn test_p1_4680342546_gridcraft_dirty_attribution_and_multi_workbook_close_preve
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some("doc-session-A".into()), Some("/workbooks/A.xlsx".into()), 1);
 
@@ -1601,6 +1623,7 @@ fn test_p1_4680342546_gridcraft_dirty_attribution_and_multi_workbook_close_preve
         revision: 1,
         is_dirty: false,
         edit_revision: 0,
+        iframe_doc_uid: None,
     });
     state.set_document_session(Some("doc-session-B".into()), Some("/workbooks/B.xlsx".into()), 1);
 
@@ -1665,6 +1688,241 @@ fn test_p1_4680342546_gridcraft_dirty_attribution_and_multi_workbook_close_preve
         !close_manager.is_authorized.get_untracked(),
         "Cấm ủy quyền đóng cửa sổ khi vẫn còn tài liệu chứa thay đổi chưa lưu!"
     );
+}
+
+/// Acceptance Test 1 & 7: Save As A to B, then ordinary Save to B; no ghost dirty origin session
+#[test]
+fn test_acceptance_01_save_as_a_to_b_then_ordinary_save_to_b_no_ghost_session() {
+    let coordinator = StoredValue::new(HostDocumentCoordinator::new());
+    let state = GridCraftState::new();
+
+    // 1. Khởi tạo workbook A
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-A".into(),
+        file_path: "/data/A.xlsx".into(),
+        file_name: "A.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(101),
+    });
+    state.set_document_session(Some("doc-A".into()), Some("/data/A.xlsx".into()), 1);
+    assert!(state.is_dirty.get_untracked());
+
+    // 2. Thực hiện Save As sang B.xlsx
+    let save_outcome_b = DevSaveResult::Saved {
+        dest_path: "/data/B.xlsx".into(),
+        new_doc_id: "doc-B".into(),
+        committed_rev: 1,
+    };
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(save_outcome_b),
+        SaveOperationIntent::SaveAs,
+        "A.xlsx",
+        "req-save-as-1",
+        b"PK\x03\x04_B_CONTENT",
+        1,
+        None,
+        None,
+    );
+
+    // BẤT BIẾN:
+    // - Active document chuyển sang B
+    assert_eq!(state.active_document_id.get_untracked().as_deref(), Some("doc-B"));
+    assert_eq!(state.active_file_path.get_untracked().as_deref(), Some("/data/B.xlsx"));
+    assert_eq!(state.active_file_name.get_untracked().as_deref(), Some("B.xlsx"));
+
+    // - Origin session doc-A BẮT BUỘC KHÔNG CÒN LÀ GHOST DIRTY SESSION (P1 #4683798594)
+    assert!(state.document_sessions.with_untracked(|m| !m.contains_key("doc-A")), "doc-A bắt buộc phải được di chuyển!");
+    let sess_b = state.document_sessions.with_untracked(|m| m.get("doc-B").cloned()).expect("session B");
+    assert!(!sess_b.is_dirty, "B phải clean sau khi save");
+    assert_eq!(sess_b.iframe_doc_uid, Some(101), "Iframe UID được bảo toàn cho B");
+    assert!(!state.is_dirty.get_untracked(), "Workspace clean hoàn toàn!");
+
+    // 3. Người dùng sửa đổi tiếp trên B (revision = 2)
+    state.sync_workbook_dirty_and_revision(Some("B.xlsx"), Some(101), true, Some(2));
+    assert!(state.is_dirty.get_untracked());
+    let sess_b_dirty = state.document_sessions.with_untracked(|m| m.get("doc-B").cloned()).unwrap();
+    assert!(sess_b_dirty.is_dirty);
+    assert_eq!(sess_b_dirty.edit_revision, 2);
+
+    // 4. Lưu thông thường (Ctrl+S) trên B
+    let resolved = state.resolve_save_session_with_uid("B.xlsx", Some(101)).expect("resolved B");
+    assert_eq!(resolved.document_id, "doc-B");
+    assert_eq!(resolved.file_path, "/data/B.xlsx");
+
+    let save_outcome_b2 = DevSaveResult::Saved {
+        dest_path: "/data/B.xlsx".into(),
+        new_doc_id: "doc-B".into(),
+        committed_rev: 2,
+    };
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(save_outcome_b2),
+        SaveOperationIntent::Save,
+        "B.xlsx",
+        "req-save-b-2",
+        b"PK\x03\x04_B2_CONTENT",
+        2,
+        None,
+        None,
+    );
+
+    assert_eq!(state.active_revision.get_untracked(), 2);
+    assert!(!state.is_dirty.get_untracked());
+}
+
+/// Acceptance Test 2 & 5: Repeated Ctrl+S and toolbar save; no false dirty revision without intervening edits
+#[test]
+fn test_acceptance_02_repeated_save_without_intervening_edits_no_false_dirty() {
+    let coordinator = StoredValue::new(HostDocumentCoordinator::new());
+    let state = GridCraftState::new();
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-rep".into(),
+        file_path: "/data/report.xlsx".into(),
+        file_name: "report.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 5,
+        iframe_doc_uid: Some(202),
+    });
+    state.set_document_session(Some("doc-rep".into()), Some("/data/report.xlsx".into()), 1);
+
+    // Giả sử nhận nhiều state snapshot từ iframe mà revision không đổi
+    state.sync_workbook_dirty_and_revision(Some("report.xlsx"), Some(202), false, Some(5));
+    state.sync_workbook_dirty_and_revision(Some("report.xlsx"), Some(202), false, Some(5));
+
+    let sess = state.get_session_for_document("doc-rep").unwrap();
+    assert_eq!(sess.edit_revision, 5, "Repeated snapshots không được tăng edit_revision");
+    assert!(!sess.is_dirty);
+    assert!(!state.is_dirty.get_untracked());
+
+    // Lưu lần 1 (Ctrl+S)
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/report.xlsx".into(),
+            new_doc_id: "doc-rep".into(),
+            committed_rev: 2,
+        }),
+        SaveOperationIntent::Save,
+        "report.xlsx",
+        "save-rep-1",
+        b"PK\x03\x04_CONTENT",
+        5,
+        None,
+        None,
+    );
+    assert_eq!(state.active_revision.get_untracked(), 2);
+    assert!(!state.is_dirty.get_untracked());
+
+    // Lưu lần 2 ngay sau đó không có edit trung gian (Toolbar Save)
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/report.xlsx".into(),
+            new_doc_id: "doc-rep".into(),
+            committed_rev: 2,
+        }),
+        SaveOperationIntent::Save,
+        "report.xlsx",
+        "save-rep-2",
+        b"PK\x03\x04_CONTENT",
+        5,
+        None,
+        None,
+    );
+    assert_eq!(state.active_revision.get_untracked(), 2);
+    assert!(!state.is_dirty.get_untracked(), "Lưu lặp lại không được tạo revision bẩn giả");
+}
+
+/// Acceptance Test 3: Open two same-named workbooks and modify only one
+#[test]
+fn test_acceptance_03_two_same_named_workbooks_modify_one_with_uids() {
+    let state = GridCraftState::new();
+
+    // 2 workbook cùng tên budget.xlsx ở 2 thư mục khác nhau
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-budget-1".into(),
+        file_path: "/dir1/budget.xlsx".into(),
+        file_name: "budget.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+        iframe_doc_uid: Some(301),
+    });
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-budget-2".into(),
+        file_path: "/dir2/budget.xlsx".into(),
+        file_name: "budget.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+        iframe_doc_uid: Some(302),
+    });
+
+    // Chỉ sửa đổi doc-budget-1 (uid: 301)
+    state.sync_workbook_dirty_and_revision(Some("budget.xlsx"), Some(301), true, Some(1));
+
+    let sess_1 = state.document_sessions.with_untracked(|m| m.get("doc-budget-1").cloned()).unwrap();
+    let sess_2 = state.document_sessions.with_untracked(|m| m.get("doc-budget-2").cloned()).unwrap();
+
+    assert!(sess_1.is_dirty, "Workbook 1 phải dirty");
+    assert_eq!(sess_1.edit_revision, 1);
+    assert!(!sess_2.is_dirty, "Workbook 2 KHÔNG ĐƯỢC dirty");
+    assert_eq!(sess_2.edit_revision, 0);
+
+    // Phân giải không có UID -> Ambiguous -> None (buộc Save As hoặc chỉ định đích)
+    let ambiguous = state.resolve_save_session("budget.xlsx");
+    assert!(ambiguous.is_none(), "Tên trùng lặp không có UID bắt buộc fail closed!");
+
+    // Phân giải có UID 301 -> Chính xác doc-budget-1!
+    let resolved = state.resolve_save_session_with_uid("budget.xlsx", Some(301)).expect("resolved 1");
+    assert_eq!(resolved.document_id, "doc-budget-1");
+    assert_eq!(resolved.file_path, "/dir1/budget.xlsx");
+}
+
+/// Acceptance Test 8: Discard and close A while B remains open
+#[test]
+fn test_acceptance_08_discard_and_close_a_while_b_remains_open() {
+    let state = GridCraftState::new();
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-A".into(),
+        file_path: "/data/A.xlsx".into(),
+        file_name: "A.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+        iframe_doc_uid: Some(401),
+    });
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-B".into(),
+        file_path: "/data/B.xlsx".into(),
+        file_name: "B.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(402),
+    });
+
+    assert_eq!(state.document_sessions.with_untracked(|m| m.len()), 2);
+    assert!(state.is_dirty.get_untracked());
+
+    // Iframe đóng A: live_uids bây giờ chỉ còn [402] (B)
+    state.reconcile_closed_sessions(&[402]);
+
+    // Session A được dọn dẹp sạch sẽ
+    assert!(state.document_sessions.with_untracked(|m| !m.contains_key("doc-A")));
+    // Session B vẫn còn nguyên và vẫn dirty
+    assert!(state.document_sessions.with_untracked(|m| m.contains_key("doc-B")));
+    assert!(state.is_dirty.get_untracked(), "B vẫn dirty nên workspace vẫn dirty");
 }
 
 

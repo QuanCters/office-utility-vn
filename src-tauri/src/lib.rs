@@ -72,15 +72,15 @@ pub fn run() {
                 let allow = guard.should_allow_close();
                 if !allow {
                     api.prevent_close();
-                    let (req_id, is_new) = guard.begin_close_request();
-                    if is_new {
-                        let _ = window.emit("native:close_requested", window_guard::CloseRequestedPayload {
-                            request_id: req_id.clone(),
-                        });
-                        let _ = window.app_handle().emit("native:close_requested", window_guard::CloseRequestedPayload {
-                            request_id: req_id,
-                        });
-                    }
+                    // P2 #4683415016: Tái phát (Redelivery) yêu cầu đóng với req_id hiện hành,
+                    // bảo toàn tính chống trùng lặp (deduplication) mà không bỏ sót sự kiện nếu frontend vừa mount
+                    let (req_id, _is_new) = guard.begin_close_request();
+                    let _ = window.emit("native:close_requested", window_guard::CloseRequestedPayload {
+                        request_id: req_id.clone(),
+                    });
+                    let _ = window.app_handle().emit("native:close_requested", window_guard::CloseRequestedPayload {
+                        request_id: req_id,
+                    });
                 }
             }
         })
@@ -116,9 +116,10 @@ pub fn run() {
             commands::native_dialog_open_file,
             commands::native_dialog_save_as,
             commands::request_save_grant,
-            // Lệnh bảo vệ đóng cửa sổ an toàn (Stage 4C-0B Task 5)
+            // Lệnh bảo vệ đóng cửa sổ an toàn (Stage 4C-0B Task 5 & P2 #4683415016)
             window_guard::authorize_window_close,
             window_guard::cancel_window_close,
+            window_guard::query_pending_close_request,
             // Lệnh cập nhật ứng dụng (Updater Lifecycle)
             commands::check_app_update,
             commands::install_app_update,

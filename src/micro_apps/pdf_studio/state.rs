@@ -173,6 +173,8 @@ pub struct PdfStudioState {
     pub pending_saves: RwSignal<std::collections::HashMap<String, PendingPdfSave>>,
     /// Danh mục lọc hiện tại trên trang chủ PDF Studio Hub (None = Tất cả).
     pub hub_active_category: RwSignal<Option<PdfCategory>>,
+    /// Đường dẫn tệp hiện đang được ràng buộc (bind) trực tiếp trên iframe canvas mà không cần nạp lại từ đĩa.
+    pub canvas_bound_path: RwSignal<Option<String>>,
 }
 
 impl Default for PdfStudioState {
@@ -214,6 +216,7 @@ impl PdfStudioState {
             document_sessions: RwSignal::new(std::collections::HashMap::new()),
             pending_saves: RwSignal::new(std::collections::HashMap::new()),
             hub_active_category: RwSignal::new(None),
+            canvas_bound_path: RwSignal::new(None),
         }
     }
 
