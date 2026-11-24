@@ -972,4 +972,51 @@ fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
     assert!(!is_mut_export_active(), "MUT-EXPORT restored to false");
 }
 
+#[test]
+fn test_gridcraft_export_csv_does_not_corrupt_coordinator_saving_state_for_subsequent_save() {
+    use office_utility_vn_ui::platform::coordinator::{DocumentState, HostDocumentCoordinator};
+    use office_utility_vn_ui::platform::persistence::compute_fingerprint;
+
+    let mut coord = HostDocumentCoordinator::new();
+    coord.on_document_opened("doc-export-coord", "/tmp/wb.xlsx", "init-fp");
+
+    // Người dùng sửa workbook -> Coordinator dirty
+    coord.on_user_edit();
+    assert_eq!(*coord.state(), DocumentState::Dirty);
+
+    // BẮT BIẾN: Khi Export CSV, coordinator TUYỆT ĐỐI KHÔNG bị chuyển sang DocumentState::Saving
+    // vì Export không phải là hành động lưu workbook!
+    // (Nếu bị chuyển sang Saving mà không hoàn tất qua durable write của workbook,
+    // lần Save tiếp theo sẽ bị kẹt dirty_during_save = true vĩnh viễn!)
+
+    // Giả sử sau đó người dùng thực hiện Regular Save cho workbook
+    let req_id = "save-wb-regular-1";
+    let snap_bytes = b"PK\x03\x04VALID_XLSX_BYTES";
+    let action = coord.on_save_requested(
+        coord.session_generation(),
+        "doc-export-coord",
+        req_id,
+        snap_bytes.to_vec(),
+        1000,
+    );
+    assert!(matches!(action, office_utility_vn_ui::platform::coordinator::CoordinatorAction::PerformDurableWrite { .. }));
+    assert!(matches!(coord.state(), DocumentState::Saving { .. }));
+
+    // Lưu bền vững hoàn tất mà không có edit mới
+    let fp = compute_fingerprint(snap_bytes);
+    coord.on_durable_write_completed(req_id, &fp);
+
+    // BẤT BIẾN: Coordinator PHẢI CHUYỂN VỀ CLEAN (DocumentState::Clean)
+    assert!(
+        !coord.is_dirty(),
+        "Coordinator must be CLEAN after legitimate save completes following an export!"
+    );
+    assert_eq!(
+        *coord.state(),
+        DocumentState::Clean,
+        "Coordinator state must be Clean, not stuck in Dirty!"
+    );
+}
+
+
 

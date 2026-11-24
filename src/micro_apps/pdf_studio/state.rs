@@ -374,9 +374,17 @@ impl PdfStudioState {
             return;
         }
 
+        let mut removed_path = String::new();
         self.loaded_files.update(|files| {
-            files.remove(index);
+            removed_path = files.remove(index);
         });
+
+        // Dọn dẹp session của tệp bị xóa nếu không còn pending save
+        if !self.has_pending_saves_for_file(&removed_path) {
+            self.document_sessions.update(|map| {
+                map.remove(&removed_path);
+            });
+        }
 
         let new_len = self.loaded_files.with(|f| f.len());
         if new_len == 0 {
@@ -386,7 +394,10 @@ impl PdfStudioState {
             self.has_unsaved_changes.set(false);
             self.edit_generation.set(0);
         } else {
+            let current_active = self.active_file_index.get_untracked();
+            let was_active_removed = current_active == Some(index);
             let mut next_idx = 0;
+
             self.active_file_index.update(|opt_idx| {
                 if let Some(active) = *opt_idx {
                     if active == index {
@@ -406,19 +417,22 @@ impl PdfStudioState {
                 }
             });
 
-            // P1 #4676016514: Đồng bộ hóa phiên tài liệu cho tệp mới được kích hoạt
-            let opt_new_path = self.loaded_files.with_untracked(|f| f.get(next_idx).cloned());
-            if let Some(new_path) = opt_new_path {
-                if let Some(sess) = self.get_document_session(&new_path) {
-                    self.active_document_id.set(sess.document_id);
-                    self.active_revision.set(sess.revision);
-                    self.has_unsaved_changes.set(sess.is_dirty);
-                    self.edit_generation.set(sess.edit_generation);
-                } else {
-                    self.active_document_id.set(None);
-                    self.active_revision.set(0);
-                    self.has_unsaved_changes.set(false);
-                    self.edit_generation.set(0);
+            // P1 #4676016514 Fix: CHỈ đồng bộ hóa phiên tài liệu nếu chính tệp đang active bị xóa!
+            // Nếu xóa tệp khác, TUYỆT ĐỐI KHÔNG chạm vào has_unsaved_changes hoặc edit_generation của tệp đang active.
+            if was_active_removed {
+                let opt_new_path = self.loaded_files.with_untracked(|f| f.get(next_idx).cloned());
+                if let Some(new_path) = opt_new_path {
+                    if let Some(sess) = self.get_document_session(&new_path) {
+                        self.active_document_id.set(sess.document_id);
+                        self.active_revision.set(sess.revision);
+                        self.has_unsaved_changes.set(sess.is_dirty);
+                        self.edit_generation.set(sess.edit_generation);
+                    } else {
+                        self.active_document_id.set(None);
+                        self.active_revision.set(0);
+                        self.has_unsaved_changes.set(false);
+                        self.edit_generation.set(0);
+                    }
                 }
             }
         }

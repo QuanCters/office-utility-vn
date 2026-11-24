@@ -1581,5 +1581,41 @@ fn test_p1_pdf_save_as_preserves_originating_context_throughout_lifecycle() {
     assert!(!is_mut_save_as_active(), "MUT-SAVE-AS restored to inactive");
 }
 
+#[test]
+fn test_pdf_remove_unrelated_file_preserves_active_file_unsaved_dirty_state() {
+    let state = PdfStudioState::new();
+    state.add_file("/documents/doc_a.pdf");
+    state.add_file("/documents/doc_b.pdf");
+
+    // Chọn file A (index 0) và thiết lập session
+    state.select_file(0);
+    state.set_active_document_session(Some("doc-session-a".into()), 1);
+
+    // Người dùng thực hiện sửa đổi file A
+    state.set_unsaved_changes(true);
+    assert!(state.has_unsaved_changes());
+    assert_eq!(state.edit_generation.get_untracked(), 1);
+    assert_eq!(state.active_file_path().as_deref(), Some("/documents/doc_a.pdf"));
+
+    // Người dùng xóa file B (index 1) khỏi danh sách
+    state.remove_file(1);
+
+    // BẤT BIẾN: File A VẪN PHẢI LÀ ACTIVE FILE, VẪN PHẢI DIRTY, GENERATION VẪN = 1!
+    // Tuyệt đối không được reset has_unsaved_changes về false hay edit_generation về 0!
+    assert_eq!(state.active_file_path().as_deref(), Some("/documents/doc_a.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-session-a"));
+    assert_eq!(state.active_revision(), 1);
+    assert!(
+        state.has_unsaved_changes(),
+        "Removing unrelated file B MUST NOT reset active file A's unsaved changes to false!"
+    );
+    assert_eq!(
+        state.edit_generation.get_untracked(),
+        1,
+        "Removing unrelated file B MUST NOT reset active file A's edit generation!"
+    );
+}
+
+
 
 

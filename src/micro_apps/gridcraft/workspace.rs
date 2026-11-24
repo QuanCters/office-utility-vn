@@ -379,43 +379,47 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     let bytes_clone = bytes.clone();
                                     let req_clone = req_id_str.clone();
 
-                                    let mut action =
-                                        crate::platform::coordinator::CoordinatorAction::None;
-                                    coordinator.update_value(|c| {
-                                        action = c.on_save_requested(
-                                            session_gen,
-                                            effective_doc_id,
-                                            &req_clone,
-                                            bytes_clone.clone(),
-                                            js_sys::Date::now() as u64,
-                                        );
-                                    });
+                                    let is_export_op = intent == crate::platform::adapter::SaveOperationIntent::Export;
 
-                                    // Finding 1: Nếu coordinator từ chối lưu (khác gen, sai doc ID), fail-closed ngay lập tức!
-                                    if matches!(
-                                        action,
-                                        crate::platform::coordinator::CoordinatorAction::None
-                                    ) {
-                                        s.save_blocked_detail.set(
-                                            "Yêu cầu lưu bị từ chối bởi bộ điều phối an toàn."
-                                                .into(),
-                                        );
-                                        s.is_save_blocked_alert.set(true);
-                                        send_save_failed_to_iframe(
-                                            GRIDCRAFT_IFRAME_ID,
-                                            "Yêu cầu lưu bị từ chối",
-                                            Some(&req_clone),
-                                        );
-                                        if let Some(close_req_id) =
-                                            s.pending_close_request_id.get_untracked()
-                                        {
-                                            s.pending_close_request_id.set(None);
-                                            if let Some(cm) = close_manager {
-                                                cm.cancel_close(&close_req_id);
-                                                cm.error_message.set(Some("Yêu cầu lưu bị từ chối bởi bộ điều phối an toàn.".into()));
+                                    if !is_export_op {
+                                        let mut action =
+                                            crate::platform::coordinator::CoordinatorAction::None;
+                                        coordinator.update_value(|c| {
+                                            action = c.on_save_requested(
+                                                session_gen,
+                                                effective_doc_id,
+                                                &req_clone,
+                                                bytes_clone.clone(),
+                                                js_sys::Date::now() as u64,
+                                            );
+                                        });
+
+                                        // Finding 1: Nếu coordinator từ chối lưu (khác gen, sai doc ID), fail-closed ngay lập tức!
+                                        if matches!(
+                                            action,
+                                            crate::platform::coordinator::CoordinatorAction::None
+                                        ) {
+                                            s.save_blocked_detail.set(
+                                                "Yêu cầu lưu bị từ chối bởi bộ điều phối an toàn."
+                                                    .into(),
+                                            );
+                                            s.is_save_blocked_alert.set(true);
+                                            send_save_failed_to_iframe(
+                                                GRIDCRAFT_IFRAME_ID,
+                                                "Yêu cầu lưu bị từ chối",
+                                                Some(&req_clone),
+                                            );
+                                            if let Some(close_req_id) =
+                                                s.pending_close_request_id.get_untracked()
+                                            {
+                                                s.pending_close_request_id.set(None);
+                                                if let Some(cm) = close_manager {
+                                                    cm.cancel_close(&close_req_id);
+                                                    cm.error_message.set(Some("Yêu cầu lưu bị từ chối bởi bộ điều phối an toàn.".into()));
+                                                }
                                             }
+                                            return;
                                         }
-                                        return;
                                     }
 
                                     // Finding 2: Chụp lại edit revision của tài liệu tại thời điểm serialize snapshot
@@ -929,47 +933,77 @@ pub async fn execute_gridcraft_save(
         }))
         .map_err(|e| format!("{e:?}"))?;
 
-        if let Ok(grant_val) = invoke("request_save_grant", grant_args).await {
-            if let Ok(grant) = serde_wasm_bindgen::from_value::<serde_json::Value>(grant_val) {
-                if let (Some(grant_id), Some(req)) = (
-                    grant.get("grant_id").and_then(|v| v.as_str()),
-                    grant.get("request_id").and_then(|v| v.as_str()),
-                ) {
-                    let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
-                        "grantId": grant_id,
-                        "requestId": req,
-                        "bytes": bytes,
-                    }))
-                    .map_err(|e| format!("{e:?}"))?;
+        let grant_val = match invoke("request_save_grant", grant_args).await {
+            Ok(val) => val,
+            Err(e) => {
+                return Ok(DevSaveResult::Failed(format!("Yêu cầu cấp phép ghi đĩa thất bại: {e:?}")));
+            }
+        };
 
-                    match invoke("secure_save_document", save_args).await {
-                        Ok(save_res) => {
-                            let (dest, rev) = if let Ok(resp) =
-                                serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
-                            {
-                                (
-                                    resp.get("dest_path")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or(_path)
-                                        .to_string(),
-                                    resp.get("committed_revision")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(expected_rev),
-                                )
-                            } else {
-                                (_path.to_string(), expected_rev)
-                            };
-                            return Ok(DevSaveResult::Saved {
-                                dest_path: dest,
-                                new_doc_id: doc_id.to_string(),
-                                committed_rev: rev,
-                            });
-                        }
-                        Err(e) => {
-                            return Ok(DevSaveResult::Failed(format!("Lỗi ghi đĩa: {e:?}")));
-                        }
-                    }
+        let grant: crate::micro_apps::pdf_studio::bridge::NativeSaveGrantDto =
+            match serde_wasm_bindgen::from_value(grant_val) {
+                Ok(g) => g,
+                Err(e) => {
+                    return Ok(DevSaveResult::Failed(format!(
+                        "Lỗi bất biến: Grant bị thiếu trường bắt buộc hoặc sai định dạng: {e:?}"
+                    )));
                 }
+            };
+
+        if grant.authorized_dest_path != _path {
+            return Ok(DevSaveResult::Failed(format!(
+                "Lỗi bất biến phiên tài liệu: Grant cấp cho {} nhưng tệp đang chọn là {}",
+                grant.authorized_dest_path, _path
+            )));
+        }
+        if grant.grant_id.trim().is_empty() {
+            return Ok(DevSaveResult::Failed("Lỗi bất biến: Grant ID rỗng".into()));
+        }
+        if grant.document_id != doc_id {
+            return Ok(DevSaveResult::Failed(format!(
+                "Lỗi bất biến: Grant document_id ({}) không khớp doc_id ({doc_id})",
+                grant.document_id
+            )));
+        }
+        if grant.expected_revision != expected_rev {
+            return Ok(DevSaveResult::Failed(format!(
+                "Lỗi bất biến: Grant expected_revision ({}) không khớp ({expected_rev})",
+                grant.expected_revision
+            )));
+        }
+
+        let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+            "grantId": grant.grant_id,
+            "requestId": grant.request_id,
+            "bytes": bytes,
+        }))
+        .map_err(|e| format!("{e:?}"))?;
+
+        match invoke("secure_save_document", save_args).await {
+            Ok(save_res) => {
+                let (dest, rev) = if let Ok(resp) =
+                    serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
+                {
+                    (
+                        resp.get("dest_path")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(_path)
+                            .to_string(),
+                        resp.get("committed_revision")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(expected_rev),
+                    )
+                } else {
+                    (_path.to_string(), expected_rev)
+                };
+                return Ok(DevSaveResult::Saved {
+                    dest_path: dest,
+                    new_doc_id: doc_id.to_string(),
+                    committed_rev: rev,
+                });
+            }
+            Err(e) => {
+                return Ok(DevSaveResult::Failed(format!("Lỗi ghi đĩa: {e:?}")));
             }
         }
     }
