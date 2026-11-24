@@ -17,6 +17,7 @@ pub enum DocumentState {
         dest_path: String,
         started_at_ms: u64,
         dirty_during_save: bool,
+        snapshot_edit_revision: u64,
     },
     /// Ghi đĩa thất bại (Permission Denied, Disk Full, IO error).
     SaveFailed {
@@ -77,6 +78,8 @@ pub struct HostDocumentCoordinator {
     dest_path: Option<String>,
     /// Mã băm SHA-256 của nội dung tệp lưu thành công gần nhất trên đĩa.
     last_persisted_fingerprint: Option<String>,
+    /// Số thứ tự edit revision của tài liệu (Finding 2: In-Flight Edit Preservation)
+    edit_revision: u64,
 }
 
 impl HostDocumentCoordinator {
@@ -88,6 +91,7 @@ impl HostDocumentCoordinator {
             active_document_id: None,
             dest_path: None,
             last_persisted_fingerprint: None,
+            edit_revision: 0,
         }
     }
 
@@ -142,11 +146,24 @@ impl HostDocumentCoordinator {
         self.dest_path = Some(p);
         let fp = initial_fingerprint.into();
         self.last_persisted_fingerprint = Some(fp);
+        self.edit_revision = 0;
         self.state = DocumentState::Clean;
+    }
+
+    /// Lấy edit revision hiện hành của tài liệu (Finding 2)
+    pub fn edit_revision(&self) -> u64 {
+        self.edit_revision
+    }
+
+    /// Tăng edit revision và ghi nhận thay đổi người dùng
+    pub fn bump_edit_revision(&mut self) -> u64 {
+        self.on_user_edit();
+        self.edit_revision
     }
 
     /// Được gọi khi editor thông báo có chỉnh sửa mới từ người dùng.
     pub fn on_user_edit(&mut self) {
+        self.edit_revision = self.edit_revision.wrapping_add(1);
         match &mut self.state {
             DocumentState::Clean => {
                 self.state = DocumentState::Dirty;
@@ -204,6 +221,7 @@ impl HostDocumentCoordinator {
             dest_path: path.clone(),
             started_at_ms: now_ms,
             dirty_during_save: dirty_flag,
+            snapshot_edit_revision: self.edit_revision,
         };
 
         CoordinatorAction::PerformDurableWrite {
@@ -219,14 +237,15 @@ impl HostDocumentCoordinator {
             request_id: cur_req,
             snapshot_fingerprint,
             dirty_during_save,
+            snapshot_edit_revision,
             ..
         } = &self.state
         {
             // Bất biến 4: Chỉ acknowledge đúng request_id đang chờ
             if cur_req == request_id && snapshot_fingerprint == written_fingerprint {
                 self.last_persisted_fingerprint = Some(written_fingerprint.to_string());
-                if *dirty_during_save {
-                    // Bất biến 3: Có chỉnh sửa xen ngang lúc lưu -> vẫn giữ dirty!
+                if *dirty_during_save || self.edit_revision > *snapshot_edit_revision {
+                    // Bất biến 3: Có chỉnh sửa xen ngang lúc lưu (hoặc revision live > snapshot) -> vẫn giữ dirty!
                     self.state = DocumentState::Dirty;
                 } else {
                     // Bất biến 1: Chỉ chuyển Clean khi đĩa đã ghi thành công

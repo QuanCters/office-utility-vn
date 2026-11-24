@@ -405,12 +405,13 @@ pub fn setup_bridge_listener(
                                 s.has_unsaved_changes.set(true);
                             }
                             let target_doc_id = new_document_id.or(doc_id);
-                            s.set_active_document_session(target_doc_id, committed_revision);
-                            cache_authorized_pdf_bytes(&dest_path, bytes_clone.clone());
-                            s.cache_document_bytes(&dest_path, bytes_clone);
                             if save_as || active_path.is_none() {
                                 s.add_file(&dest_path);
                             }
+                            s.register_document_session(&dest_path, target_doc_id.clone(), committed_revision);
+                            s.set_active_document_session(target_doc_id, committed_revision);
+                            cache_authorized_pdf_bytes(&dest_path, bytes_clone.clone());
+                            s.cache_document_bytes(&dest_path, bytes_clone);
                             s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
                         }
                         Ok(SaveOutcome::Canceled) => {
@@ -597,6 +598,15 @@ pub async fn save_file_to_disk_or_download(
                         grant.get("grant_id").and_then(|v| v.as_str()),
                         grant.get("request_id").and_then(|v| v.as_str()),
                     ) {
+                        // Finding 1 Hard Guard: Xác thực grant destination_path phải khớp chính xác với file_path đang chọn
+                        if let Some(dest_p) = grant.get("destination_path").and_then(|v| v.as_str()) {
+                            if dest_p != _path {
+                                return Ok(SaveOutcome::Failed(format!(
+                                    "Lỗi bất biến phiên tài liệu: Grant cấp cho {dest_p} nhưng tệp đang chọn là {_path}"
+                                )));
+                            }
+                        }
+
                         let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
                             "grantId": grant_id,
                             "requestId": req,

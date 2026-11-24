@@ -162,12 +162,13 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 .ok()
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(false);
-                                if let Some(active_id) = s.active_document_id.get_untracked() {
-                                    s.set_document_dirty(&active_id, dirty);
-                                } else {
-                                    s.is_dirty.set(dirty);
-                                }
                                 if dirty {
+                                    if let Some(active_id) = s.active_document_id.get_untracked() {
+                                        s.bump_edit_revision(&active_id);
+                                    } else {
+                                        s.edit_revision.update(|r| *r = r.wrapping_add(1));
+                                        s.is_dirty.set(true);
+                                    }
                                     if coordinator.read_value().state()
                                         == &crate::platform::coordinator::DocumentState::Unloaded
                                     {
@@ -184,6 +185,12 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         });
                                     }
                                     coordinator.update_value(|c| c.on_user_edit());
+                                } else {
+                                    if let Some(active_id) = s.active_document_id.get_untracked() {
+                                        s.set_document_dirty(&active_id, false);
+                                    } else {
+                                        s.is_dirty.set(false);
+                                    }
                                 }
                             }
                             "gridcraft:save" => {
@@ -339,6 +346,9 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         return;
                                     }
 
+                                    // Finding 2: Chụp lại edit revision của tài liệu tại thời điểm serialize snapshot
+                                    let snapshot_edit_rev = s.get_edit_revision(effective_doc_id);
+
                                     wasm_bindgen_futures::spawn_local(async move {
                                         let outcome = execute_gridcraft_save(
                                             &name_clone,
@@ -359,11 +369,12 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                 committed_rev,
                                             }) => {
                                                 coordinator.update_value(|c| {
-                                                let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
-                                                c.on_durable_write_completed(&req_clone, &fp);
-                                            });
+                                                    let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
+                                                    c.on_durable_write_completed(&req_clone, &fp);
+                                                });
+                                                let live_edit_rev = s.get_edit_revision(&new_doc_id);
                                                 let is_still_dirty =
-                                                    coordinator.read_value().is_dirty();
+                                                    coordinator.read_value().is_dirty() || (live_edit_rev > snapshot_edit_rev);
                                                 s.set_document_dirty(&new_doc_id, is_still_dirty);
                                                 s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
                                                     document_id: new_doc_id.clone(),
@@ -371,6 +382,7 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                     file_name: name_clone.clone(),
                                                     revision: committed_rev,
                                                     is_dirty: is_still_dirty,
+                                                    edit_revision: live_edit_rev,
                                                 });
                                                 s.set_document_session(
                                                     Some(new_doc_id),
@@ -707,8 +719,9 @@ pub fn send_saved_to_iframe(iframe_id: &str, req_id: &str) {
 pub fn send_saved_to_iframe(_iframe_id: &str, _req_id: &str) {}
 
 /// Gửi thông điệp yêu cầu iframe GridCraft tuần tự hóa và lưu tệp chủ động (Stage 4C-0C Task 1)
+/// Trả về true nếu đã gửi thành công tới iframe, false nếu iframe không tồn tại trong DOM (Finding 4)
 #[cfg(target_arch = "wasm32")]
-pub fn send_request_save_to_iframe(iframe_id: &str, req_id: Option<&str>, save_as: bool) {
+pub fn send_request_save_to_iframe(iframe_id: &str, req_id: Option<&str>, save_as: bool) -> bool {
     use web_sys::window;
     if let Some(win) = window() {
         if let Some(doc) = win.document() {
@@ -739,15 +752,27 @@ pub fn send_request_save_to_iframe(iframe_id: &str, req_id: Option<&str>, save_a
                             &wasm_bindgen::JsValue::from_bool(save_as),
                         );
                         let _ = cw.post_message(&obj, "*");
+                        return true;
                     }
                 }
             }
         }
     }
+    false
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn send_request_save_to_iframe(_iframe_id: &str, _req_id: Option<&str>, _save_as: bool) {}
+static MOCK_IFRAME_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn set_mock_iframe_available(available: bool) {
+    MOCK_IFRAME_AVAILABLE.store(available, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn send_request_save_to_iframe(_iframe_id: &str, _req_id: Option<&str>, _save_as: bool) -> bool {
+    MOCK_IFRAME_AVAILABLE.load(std::sync::atomic::Ordering::SeqCst)
+}
 
 /// Gửi thông điệp nạp tài liệu workbook vào GridCraft iframe
 #[cfg(target_arch = "wasm32")]
@@ -862,13 +887,20 @@ pub async fn execute_gridcraft_save(
     }
 
     // 2. Save As (hoặc Lưu lần đầu) thông qua Native Dialog
+    // Finding 3: Giới hạn định dạng hộp thoại Save As nghiêm ngặt theo chữ ký dữ liệu đã serialize
+    let (filter_name, extensions) = if bytes.starts_with(b"PK\x03\x04") {
+        ("Bảng tính Excel (*.xlsx)", vec!["xlsx"])
+    } else {
+        ("Tệp CSV (*.csv)", vec!["csv"])
+    };
+
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "documentId": document_id,
         "appInstanceId": "gridcraft-workspace-instance",
         "sessionGeneration": session_gen,
         "defaultName": name,
-        "filterName": "Bảng tính Excel (*.xlsx)",
-        "extensions": ["xlsx", "xlsm", "xls", "ods", "csv"],
+        "filterName": filter_name,
+        "extensions": extensions,
     }))
     .unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
 
@@ -882,6 +914,17 @@ pub async fn execute_gridcraft_save(
                         grant.get("grant_id").and_then(|v| v.as_str()),
                         grant.get("request_id").and_then(|v| v.as_str()),
                     ) {
+                        let dest_path = handle
+                            .get("file_path")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(name)
+                            .to_string();
+
+                        // Finding 3: Xác thực định dạng đích tương thích chữ ký nhị phân
+                        if let Err(err) = validate_save_as_format_compatibility(&dest_path, bytes) {
+                            return Ok(DevSaveResult::Failed(err));
+                        }
+
                         let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
                             "grantId": grant_id,
                             "requestId": g_req_id,
@@ -900,11 +943,6 @@ pub async fn execute_gridcraft_save(
                                 } else {
                                     1
                                 };
-                                let dest_path = handle
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(name)
-                                    .to_string();
                                 let new_doc_id = handle
                                     .get("document_id")
                                     .and_then(|v| v.as_str())
@@ -934,6 +972,27 @@ pub async fn execute_gridcraft_save(
         }
         Err(e) => Ok(DevSaveResult::Failed(format!("Lỗi hộp thoại: {e:?}"))),
     }
+}
+
+/// Xác thực tính tương thích giữa định dạng phần mở rộng của đường dẫn đích và nội dung nhị phân (Finding 3: Save As Format)
+pub fn validate_save_as_format_compatibility(dest_path: &str, bytes: &[u8]) -> Result<(), String> {
+    let dest_lower = dest_path.to_lowercase();
+    let is_zip_xlsx = bytes.starts_with(b"PK\x03\x04");
+
+    if is_zip_xlsx {
+        if !dest_lower.ends_with(".xlsx") && !dest_lower.ends_with(".xlsm") {
+            return Err(format!(
+                "Xung đột định dạng tệp: Dữ liệu nhị phân là Excel ZIP/OpenXML nhưng tệp đích là '{dest_path}'. Bị từ chối để tránh hỏng dữ liệu."
+            ));
+        }
+    } else {
+        if dest_lower.ends_with(".xlsx") || dest_lower.ends_with(".xlsm") {
+            return Err(format!(
+                "Xung đột định dạng tệp: Tệp đích là Excel '{dest_path}' nhưng dữ liệu nhị phân không chứa chữ ký PK ZIP hợp lệ."
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Giữ bí danh tương thích cho môi trường dev và kiểm thử tự động

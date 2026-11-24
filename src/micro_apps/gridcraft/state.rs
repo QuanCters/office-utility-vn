@@ -29,6 +29,8 @@ pub struct GridCraftState {
     pub provisional_open: RwSignal<Option<ProvisionalOpen>>,
     /// ID yêu cầu đóng cửa sổ đang chờ lưu tệp hoàn tất (Stage 4C-0C Task 3)
     pub pending_close_request_id: RwSignal<Option<String>>,
+    /// Số thứ tự edit revision hiện thời của workspace (Finding 2: In-Flight Edit Preservation)
+    pub edit_revision: RwSignal<u64>,
     /// Ánh xạ các phiên workbook theo ID hoặc tên tệp (Finding 2: Multi-Workbook Save Isolation)
     pub document_sessions: RwSignal<std::collections::HashMap<String, WorkbookSession>>,
 }
@@ -42,6 +44,8 @@ pub struct WorkbookSession {
     pub revision: u64,
     #[serde(default)]
     pub is_dirty: bool,
+    #[serde(default)]
+    pub edit_revision: u64,
 }
 
 /// Dữ liệu của một phiên mở tệp tạm thời đang chờ GridCraft giải mã
@@ -77,6 +81,7 @@ impl GridCraftState {
             is_exit_confirm_open: RwSignal::new(false),
             provisional_open: RwSignal::new(None),
             pending_close_request_id: RwSignal::new(None),
+            edit_revision: RwSignal::new(0),
             document_sessions: RwSignal::new(std::collections::HashMap::new()),
         }
     }
@@ -179,6 +184,72 @@ impl GridCraftState {
         self.recompute_aggregate_dirty();
     }
 
+    /// Tăng edit revision của tài liệu khi có thao tác chỉnh sửa từ người dùng (Finding 2)
+    pub fn bump_edit_revision(&self, doc_id_or_name: &str) -> u64 {
+        let mut sessions = self.document_sessions.get_untracked();
+        let mut target_rev = 1;
+        let mut matched = false;
+        if let Some(s) = sessions.get_mut(doc_id_or_name) {
+            s.edit_revision = s.edit_revision.wrapping_add(1);
+            s.is_dirty = true;
+            target_rev = s.edit_revision;
+            matched = true;
+        } else {
+            for s in sessions.values_mut() {
+                if s.file_path == doc_id_or_name || s.file_name == doc_id_or_name {
+                    s.edit_revision = s.edit_revision.wrapping_add(1);
+                    s.is_dirty = true;
+                    target_rev = s.edit_revision;
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if !matched {
+            if let Some(active_id) = self.active_document_id.get_untracked() {
+                if let Some(s) = sessions.get_mut(&active_id) {
+                    s.edit_revision = s.edit_revision.wrapping_add(1);
+                    s.is_dirty = true;
+                    target_rev = s.edit_revision;
+                }
+            }
+        }
+        self.document_sessions.set(sessions);
+        self.edit_revision.update(|r| *r = r.wrapping_add(1));
+        self.is_dirty.set(true);
+        target_rev
+    }
+
+    /// Lấy edit revision hiện tại của một tài liệu (Finding 2)
+    pub fn get_edit_revision(&self, doc_id_or_name: &str) -> u64 {
+        self.document_sessions.with_untracked(|map| {
+            if let Some(s) = map.get(doc_id_or_name) {
+                s.edit_revision
+            } else if let Some(s) = map.values().find(|s| s.file_name == doc_id_or_name || s.file_path == doc_id_or_name) {
+                s.edit_revision
+            } else {
+                self.edit_revision.get_untracked()
+            }
+        })
+    }
+
+    /// Đặt lại toàn bộ trạng thái phiên làm việc khi người dùng chọn Hủy Thay đổi & Thoát (Finding 4)
+    pub fn reset_state(&self) {
+        self.is_dirty.set(false);
+        self.active_file_name.set(None);
+        self.active_file_path.set(None);
+        self.active_document_id.set(None);
+        self.active_revision.set(0);
+        self.edit_revision.set(0);
+        self.error_message.set(None);
+        self.is_save_blocked_alert.set(false);
+        self.save_blocked_detail.set(String::new());
+        self.is_exit_confirm_open.set(false);
+        self.provisional_open.set(None);
+        self.pending_close_request_id.set(None);
+        self.document_sessions.set(std::collections::HashMap::new());
+    }
+
     /// Tái tính toán trạng thái dirty tổng hợp của toàn bộ workspace từ mọi workbook đang mở
     pub fn recompute_aggregate_dirty(&self) {
         let sessions = self.document_sessions.get_untracked();
@@ -194,8 +265,8 @@ impl GridCraftState {
                 .and_then(|n| n.to_str())
                 .unwrap_or("workbook.xlsx")
                 .to_string();
-            let current_dirty = self.document_sessions.with(|map| {
-                map.get(d_id).map(|s| s.is_dirty).unwrap_or(false)
+            let (current_dirty, current_edit_rev) = self.document_sessions.with(|map| {
+                map.get(d_id).map(|s| (s.is_dirty, s.edit_revision)).unwrap_or((false, 0))
             });
             self.register_document_session(WorkbookSession {
                 document_id: d_id.clone(),
@@ -203,6 +274,7 @@ impl GridCraftState {
                 file_name: f_name,
                 revision: rev,
                 is_dirty: current_dirty,
+                edit_revision: current_edit_rev,
             });
         }
         self.active_document_id.set(doc_id);
@@ -250,6 +322,7 @@ impl GridCraftState {
                     file_name: prov.file_name.clone(),
                     revision: prov.revision,
                     is_dirty: false,
+                    edit_revision: 0,
                 });
                 self.set_document_session(
                     Some(prov.document_id),

@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use office_utility_vn_ui::micro_apps::gridcraft::{
     GRIDCRAFT_IFRAME_SRC, GridCraftApp, GridCraftState, is_gridcraft_dev_workspace_enabled,
 };
+use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
 use office_utility_vn_ui::platform::adapter::{GridCraftAdapter, MicroAppAdapter};
 
 #[test]
@@ -359,6 +360,7 @@ fn test_p1_finding2_multi_workbook_save_isolation_prevents_wrong_workbook_overwr
         file_name: "A.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
     state.set_document_session(Some("doc-A".into()), Some("/data/A.xlsx".into()), 1);
     state.active_file_name.set(Some("A.xlsx".into()));
@@ -370,6 +372,7 @@ fn test_p1_finding2_multi_workbook_save_isolation_prevents_wrong_workbook_overwr
         file_name: "B.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
     state.set_document_session(Some("doc-B".into()), Some("/data/B.xlsx".into()), 1);
     state.active_file_name.set(Some("B.xlsx".into()));
@@ -484,6 +487,7 @@ fn test_p1_filesystem_workbook_preservation_real_fixtures() {
         file_name: "Report_2025.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
     state.register_document_session(WorkbookSession {
         document_id: "doc-bud-2026".into(),
@@ -491,6 +495,7 @@ fn test_p1_filesystem_workbook_preservation_real_fixtures() {
         file_name: "Budget_2026.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
 
     // Active file is set to B:
@@ -561,6 +566,7 @@ fn test_gridcraft_multi_workbook_aggregate_dirty_preservation() {
         file_name: "financials_a.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
     assert!(!state.is_dirty.get_untracked());
 
@@ -576,6 +582,7 @@ fn test_gridcraft_multi_workbook_aggregate_dirty_preservation() {
         file_name: "estimates_b.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
     state.recompute_aggregate_dirty();
     assert!(
@@ -615,6 +622,7 @@ fn test_gridcraft_resolve_save_session_disambiguation() {
         file_name: "budget.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
     state.register_document_session(WorkbookSession {
         document_id: "doc-budget-q2".into(),
@@ -622,6 +630,7 @@ fn test_gridcraft_resolve_save_session_disambiguation() {
         file_name: "budget.xlsx".into(),
         revision: 1,
         is_dirty: false,
+        edit_revision: 0,
     });
 
     // Khi active_document_id là Q1: resolve bằng tên "budget.xlsx" phải trỏ về đúng Q1
@@ -645,3 +654,198 @@ fn test_gridcraft_resolve_save_session_disambiguation() {
         "Ambiguous filename resolution without active document ID must return None"
     );
 }
+
+#[test]
+fn test_gridcraft_inflight_edit_preserves_dirty_and_blocks_close() {
+    use office_utility_vn_ui::platform::coordinator::HostDocumentCoordinator;
+    use office_utility_vn_ui::platform::persistence::compute_fingerprint;
+
+    let state = GridCraftState::new();
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-wb-inflight".into(),
+        file_path: "/tmp/inflight.xlsx".into(),
+        file_name: "inflight.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+    });
+    state.set_document_session(
+        Some("doc-wb-inflight".into()),
+        Some("/tmp/inflight.xlsx".into()),
+        1,
+    );
+
+    let mut coord = HostDocumentCoordinator::new();
+    coord.on_document_opened("doc-wb-inflight", "/tmp/inflight.xlsx", "init-fp");
+
+    // 1. Người dùng sửa workbook A -> revision 1 (dirty)
+    let rev1 = state.bump_edit_revision("doc-wb-inflight");
+    assert_eq!(rev1, 1);
+    assert!(state.is_dirty.get_untracked());
+    coord.on_user_edit();
+
+    // 2. Bắt đầu lưu snapshot revision 1
+    let snap_rev = state.get_edit_revision("doc-wb-inflight");
+    assert_eq!(snap_rev, 1);
+
+    let snapshot_bytes = b"PK\x03\x04SNAPSHOT_REV_1_BYTES";
+    let req_id = "save-req-inflight-1";
+    let _action = coord.on_save_requested(
+        coord.session_generation(),
+        "doc-wb-inflight",
+        req_id,
+        snapshot_bytes.to_vec(),
+        1000,
+    );
+    assert!(coord.is_dirty());
+
+    // 3. Trong lúc đang lưu, người dùng tiếp tục chỉnh sửa -> tạo revision 2
+    let rev2 = state.bump_edit_revision("doc-wb-inflight");
+    assert_eq!(rev2, 2);
+    coord.on_user_edit();
+
+    // 4. Quá trình lưu snapshot revision 1 hoàn tất
+    let fp = compute_fingerprint(snapshot_bytes);
+    coord.on_durable_write_completed(req_id, &fp);
+
+    // Xác minh BẤT BIẾN:
+    // Coordinator VẪN PHẢI DIRTY vì live edit_revision (2) > snapshot_revision (1)!
+    assert!(
+        coord.is_dirty(),
+        "Coordinator must remain DIRTY when live revision > snapshot revision!"
+    );
+
+    let live_rev = state.get_edit_revision("doc-wb-inflight");
+    let is_still_dirty = coord.is_dirty() || (live_rev > snap_rev);
+    assert!(is_still_dirty);
+    state.set_document_dirty("doc-wb-inflight", is_still_dirty);
+    assert!(state.is_dirty.get_untracked());
+
+    // 5. Kiểm tra close manager: Không được cho phép đóng ứng dụng khi còn dirty
+    let close_mgr = office_utility_vn_ui::platform::window_close::WindowCloseManager::new();
+    let close_req = Some("close-req-1".to_string());
+    office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_completion(
+        is_still_dirty,
+        close_req,
+        Some(close_mgr),
+        None,
+    );
+    assert!(
+        !close_mgr.is_authorized.get_untracked(),
+        "Save & Exit MUST NOT authorize close when document has in-flight unsaved edits!"
+    );
+}
+
+#[test]
+fn test_gridcraft_save_as_format_matching_and_rejection() {
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::validate_save_as_format_compatibility;
+
+    // A. Dữ liệu XLSX (Bắt đầu bằng PK\x03\x04)
+    let xlsx_bytes = b"PK\x03\x04\x14\x00\x06\x00fake_excel_xml_data";
+
+    // Lưu vào file .xlsx -> Hợp lệ
+    assert!(validate_save_as_format_compatibility("/home/user/budget.xlsx", xlsx_bytes).is_ok());
+    assert!(validate_save_as_format_compatibility("report.XLSM", xlsx_bytes).is_ok());
+
+    // Lưu vào file .csv, .xls, .ods -> BẮT BUỘC TỪ CHỐI
+    let err_csv = validate_save_as_format_compatibility("/home/user/budget.csv", xlsx_bytes);
+    assert!(err_csv.is_err(), "Must reject writing XLSX binary into .csv file");
+    let err_msg = err_csv.unwrap_err();
+    assert!(err_msg.contains("Xung đột định dạng tệp"));
+
+    let err_ods = validate_save_as_format_compatibility("budget.ods", xlsx_bytes);
+    assert!(err_ods.is_err(), "Must reject writing XLSX binary into .ods file");
+
+    // B. Dữ liệu CSV văn bản thường (Không có PK header)
+    let csv_bytes = b"col1,col2,col3\nval1,val2,val3\n";
+
+    // Lưu vào .csv -> Hợp lệ
+    assert!(validate_save_as_format_compatibility("/data/export.csv", csv_bytes).is_ok());
+
+    // Lưu vào .xlsx -> BẮT BUỘC TỪ CHỐI vì thiếu chữ ký ZIP PK
+    let err_xlsx = validate_save_as_format_compatibility("/data/export.xlsx", csv_bytes);
+    assert!(err_xlsx.is_err(), "Must reject saving non-PK bytes to .xlsx path");
+}
+
+#[test]
+fn test_gridcraft_discard_and_exit_clears_dirty_and_enables_close() {
+    let state = GridCraftState::new();
+
+    // 1. Mở workbook và chỉnh sửa -> dirty
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-discard-test".into(),
+        file_path: "/data/sample.xlsx".into(),
+        file_name: "sample.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 5,
+    });
+    state.active_document_id.set(Some("doc-discard-test".into()));
+    state.is_dirty.set(true);
+    state.is_exit_confirm_open.set(true);
+
+    assert!(state.is_dirty.get_untracked());
+    assert!(state.is_exit_confirm_open.get_untracked());
+
+    // 2. Người dùng bấm "Hủy Thay đổi & Thoát" -> reset_state()
+    state.is_exit_confirm_open.set(false);
+    state.reset_state();
+
+    // Xác minh trạng thái sau khi discard & exit:
+    assert!(!state.is_dirty.get_untracked(), "is_dirty must be reset to false");
+    assert_eq!(state.active_document_id.get_untracked(), None);
+    assert_eq!(state.edit_revision.get_untracked(), 0);
+
+    // 3. Khi quay lại launcher và bấm đóng cửa sổ:
+    // Vì không còn dirty -> Close Manager tự động authorize đóng ngay lập tức, không hiện modal
+    let close_mgr = office_utility_vn_ui::platform::window_close::WindowCloseManager::new();
+    close_mgr.handle_native_close_requested(
+        "native-req-close-1".to_string(),
+        state.is_dirty.get_untracked(),
+        "No unsaved work",
+    );
+
+    assert!(
+        close_mgr.is_authorized.get_untracked(),
+        "Close must be authorized immediately when all micro-apps are clean after discard"
+    );
+    assert!(!close_mgr.is_dialog_open.get_untracked());
+    assert!(!close_mgr.is_saving.get_untracked());
+}
+
+#[test]
+fn test_gridcraft_missing_iframe_save_and_exit_does_not_hang_in_saving() {
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::set_mock_iframe_available;
+    use office_utility_vn_ui::platform::window_close::{WindowCloseDecision, WindowCloseManager};
+
+    let app_state = office_utility_vn_ui::app::AppState::new();
+    app_state.gridcraft_state.is_dirty.set(true);
+
+    let close_mgr = WindowCloseManager::new();
+    close_mgr.handle_native_close_requested(
+        "req-missing-iframe-test".to_string(),
+        true,
+        "GridCraft unsaved changes",
+    );
+    assert!(close_mgr.is_dialog_open.get_untracked());
+
+    // Giả lập iframe bị thiếu/unmounted
+    set_mock_iframe_available(false);
+
+    // Người dùng bấm Save trong close dialog
+    close_mgr.on_user_decision(WindowCloseDecision::Save, app_state);
+
+    // Khôi phục mock để không ảnh hưởng test khác
+    set_mock_iframe_available(true);
+
+    // Xác minh BẤT BIẾN:
+    // Manager KHÔNG ĐƯỢC KẸT ở is_saving = true!
+    assert!(
+        !close_mgr.is_saving.get_untracked(),
+        "WindowCloseManager must NOT hang in is_saving when iframe is missing"
+    );
+    assert!(close_mgr.error_message.get_untracked().is_some());
+    assert!(close_mgr.is_cancelled.get_untracked());
+}
+
+

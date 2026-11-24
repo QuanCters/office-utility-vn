@@ -101,6 +101,14 @@ pub enum PdfViewMode {
     Workflow,
 }
 
+/// Dữ liệu phiên tài liệu PDF được ủy quyền (Finding 1: PDF Document Session Identity)
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PdfDocumentSession {
+    pub file_path: String,
+    pub document_id: Option<String>,
+    pub revision: u64,
+}
+
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App PDF Studio.
 ///
 /// Các tệp PDF được nạp vào một lần sẽ có sẵn cho toàn bộ 18 công cụ xử lý.
@@ -136,6 +144,8 @@ pub struct PdfStudioState {
     pub edit_generation: RwSignal<u64>,
     /// Bộ đệm lưu trữ nội dung nhị phân của các tệp PDF đã mở trong phiên
     pub cached_documents: RwSignal<std::collections::HashMap<String, Vec<u8>>>,
+    /// Ánh xạ các phiên tài liệu theo đường dẫn tệp (Finding 1: PDF Document Session Identity)
+    pub document_sessions: RwSignal<std::collections::HashMap<String, PdfDocumentSession>>,
     /// Danh mục lọc hiện tại trên trang chủ PDF Studio Hub (None = Tất cả).
     pub hub_active_category: RwSignal<Option<PdfCategory>>,
 }
@@ -176,8 +186,28 @@ impl PdfStudioState {
             active_revision: RwSignal::new(0),
             edit_generation: RwSignal::new(0),
             cached_documents: RwSignal::new(std::collections::HashMap::new()),
+            document_sessions: RwSignal::new(std::collections::HashMap::new()),
             hub_active_category: RwSignal::new(None),
         }
+    }
+
+    /// Đăng ký hoặc cập nhật phiên tài liệu cho một đường dẫn tệp cụ thể (Finding 1)
+    pub fn register_document_session(&self, path: &str, doc_id: Option<String>, rev: u64) {
+        let mut map = self.document_sessions.get_untracked();
+        map.insert(
+            path.to_string(),
+            PdfDocumentSession {
+                file_path: path.to_string(),
+                document_id: doc_id,
+                revision: rev,
+            },
+        );
+        self.document_sessions.set(map);
+    }
+
+    /// Lấy phiên tài liệu theo đường dẫn tệp
+    pub fn get_document_session(&self, path: &str) -> Option<PdfDocumentSession> {
+        self.document_sessions.with_untracked(|map| map.get(path).cloned())
     }
 
     /// Lưu bộ đệm nội dung nhị phân của tài liệu đã được ủy quyền
@@ -204,11 +234,15 @@ impl PdfStudioState {
             if let Some(pos) = f.iter().position(|p| p == &path_str) {
                 idx = pos;
             } else {
-                f.push(path_str);
+                f.push(path_str.clone());
                 idx = f.len() - 1;
             }
         });
         self.active_file_index.set(Some(idx));
+        if let Some(sess) = self.get_document_session(&path_str) {
+            self.active_document_id.set(sess.document_id);
+            self.active_revision.set(sess.revision);
+        }
     }
 
     /// Thêm nhiều tệp PDF vào danh sách làm việc chung.
@@ -282,10 +316,18 @@ impl PdfStudioState {
     }
 
     /// Chọn một tệp cụ thể trong danh sách theo chỉ số index.
+    /// Khôi phục chính xác ID phiên tài liệu và revision của tệp được chọn (Finding 1).
     pub fn select_file(&self, index: usize) {
-        let len = self.loaded_files.with(|f| f.len());
-        if index < len {
+        let opt_path = self.loaded_files.with_untracked(|f| f.get(index).cloned());
+        if let Some(path) = opt_path {
             self.active_file_index.set(Some(index));
+            if let Some(sess) = self.get_document_session(&path) {
+                self.active_document_id.set(sess.document_id);
+                self.active_revision.set(sess.revision);
+            } else {
+                self.active_document_id.set(None);
+                self.active_revision.set(0);
+            }
         }
     }
 
@@ -441,10 +483,13 @@ impl PdfStudioState {
         self.active_revision.get()
     }
 
-    /// Cập nhật thông tin phiên tài liệu sau khi nạp hoặc lưu.
+    /// Cập nhật thông tin phiên tài liệu sau khi nạp hoặc lưu (Finding 1: PDF Document Session Identity).
     pub fn set_active_document_session(&self, doc_id: Option<String>, rev: u64) {
-        self.active_document_id.set(doc_id);
+        self.active_document_id.set(doc_id.clone());
         self.active_revision.set(rev);
+        if let Some(active_path) = self.active_file_path() {
+            self.register_document_session(&active_path, doc_id, rev);
+        }
     }
 
     /// Xử lý cập nhật trạng thái phản ứng khi nhận thông điệp từ PDFCraft Bridge.

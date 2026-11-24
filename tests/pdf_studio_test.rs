@@ -839,3 +839,105 @@ fn test_pdf_studio_cached_document_reopening() {
     assert!(read_res.is_ok());
     assert_eq!(read_res.unwrap(), fake_bytes);
 }
+
+#[test]
+fn test_pdf_studio_session_identity_restored_on_file_switch() {
+    let state = PdfStudioState::new();
+
+    // 1. Mở file A: /tmp/A.pdf với document_id "doc-A", rev 1
+    state.add_file("/tmp/A.pdf");
+    state.set_active_document_session(Some("doc-A".to_string()), 1);
+
+    // 2. Mở tiếp file B: /tmp/B.pdf với document_id "doc-B", rev 1
+    state.add_file("/tmp/B.pdf");
+    state.set_active_document_session(Some("doc-B".to_string()), 1);
+
+    assert_eq!(state.active_file_path(), Some("/tmp/B.pdf".to_string()));
+    assert_eq!(state.active_document_id(), Some("doc-B".to_string()));
+
+    // 3. Người dùng chọn lại file A (index 0)
+    state.select_file(0);
+
+    // BẮT BUỘC: Khi chọn lại file A, session ID và revision của A phải được phục hồi!
+    assert_eq!(state.active_file_path(), Some("/tmp/A.pdf".to_string()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-A".to_string()),
+        "Active document ID must be restored to A's session ID when switching back to A!"
+    );
+    assert_eq!(state.active_revision(), 1);
+}
+
+#[test]
+fn test_pdf_studio_switching_and_saving_preserves_other_document_bytes() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let path_a = dir.path().join("A.pdf");
+    let path_b = dir.path().join("B.pdf");
+
+    let initial_bytes_a = b"%PDF-1.7 ORIGINAL_CONTENT_FOR_DOCUMENT_A";
+    let initial_bytes_b = b"%PDF-1.7 DISTINCT_CONTENT_FOR_DOCUMENT_B";
+
+    std::fs::write(&path_a, initial_bytes_a).expect("write A");
+    std::fs::write(&path_b, initial_bytes_b).expect("write B");
+
+    let sha_b_before = {
+        use std::hash::{DefaultHasher, Hasher};
+        let mut hasher = DefaultHasher::new();
+        hasher.write(initial_bytes_b);
+        hasher.finish()
+    };
+
+    let state = PdfStudioState::new();
+
+    // 1. Mở A.pdf
+    let path_a_str = path_a.to_str().unwrap().to_string();
+    state.add_file(&path_a_str);
+    state.set_active_document_session(Some("doc-session-A".to_string()), 1);
+
+    // 2. Mở B.pdf
+    let path_b_str = path_b.to_str().unwrap().to_string();
+    state.add_file(&path_b_str);
+    state.set_active_document_session(Some("doc-session-B".to_string()), 1);
+
+    assert_eq!(state.active_file_path(), Some(path_b_str.clone()));
+    assert_eq!(state.active_document_id(), Some("doc-session-B".to_string()));
+
+    // 3. Người dùng chuyển lại tệp A
+    state.select_file(0);
+    assert_eq!(state.active_file_path(), Some(path_a_str.clone()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-A".to_string()),
+        "Must restore A's session ID, NOT keep B's session ID!"
+    );
+
+    // 4. Giả lập lưu A với nội dung mới
+    let new_bytes_a = b"%PDF-1.7 EDITED_CONTENT_FOR_DOCUMENT_A_V2";
+    // Kiểm tra rằng session được lấy để lưu là A
+    let grant_target_doc_id = state.active_document_id().expect("doc id for A");
+    assert_eq!(grant_target_doc_id, "doc-session-A");
+    assert_ne!(grant_target_doc_id, "doc-session-B");
+
+    // Ghi đĩa theo phiên A
+    let target_session = state.get_document_session(&path_a_str).expect("session for A");
+    assert_eq!(target_session.document_id, Some("doc-session-A".to_string()));
+    std::fs::write(&target_session.file_path, new_bytes_a).expect("write new A");
+    state.set_active_document_session(Some("doc-session-A".to_string()), 2);
+
+    // 5. Xác minh: A chứa đúng bytes mới, B giữ nguyên tuyệt đối
+    let read_a = std::fs::read(&path_a).expect("read A");
+    assert_eq!(read_a, new_bytes_a);
+
+    let read_b = std::fs::read(&path_b).expect("read B");
+    assert_eq!(read_b, initial_bytes_b);
+
+    let sha_b_after = {
+        use std::hash::{DefaultHasher, Hasher};
+        let mut hasher = DefaultHasher::new();
+        hasher.write(&read_b);
+        hasher.finish()
+    };
+    assert_eq!(sha_b_before, sha_b_after, "B's content must be 100% unchanged!");
+}
+
+

@@ -127,6 +127,7 @@ pub fn GridCraftApp(
                                         style="background: #DC2626; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 500; cursor: pointer;"
                                         on:click=move |_| {
                                             app_state.is_exit_confirm_open.set(false);
+                                            app_state.reset_state();
                                             on_back.run(());
                                         }
                                     >

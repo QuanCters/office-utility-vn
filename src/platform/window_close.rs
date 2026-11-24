@@ -153,15 +153,22 @@ impl WindowCloseManager {
                         .pending_close_request_id
                         .set(Some(req_clone.clone()));
 
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        crate::micro_apps::gridcraft::workspace::send_request_save_to_iframe(
-                            crate::micro_apps::gridcraft::workspace::GRIDCRAFT_IFRAME_ID,
-                            Some(&req_clone),
-                            false,
-                        );
+                    let dispatched = crate::micro_apps::gridcraft::workspace::send_request_save_to_iframe(
+                        crate::micro_apps::gridcraft::workspace::GRIDCRAFT_IFRAME_ID,
+                        Some(&req_clone),
+                        false,
+                    );
+
+                    if !dispatched {
+                        self.is_saving.set(false);
+                        app_state.gridcraft_state.pending_close_request_id.set(None);
+                        self.error_message.set(Some(
+                            "Không tìm thấy khung tài liệu GridCraft để lưu tự động. Vui lòng mở lại tài liệu hoặc hủy thay đổi trước khi đóng.".to_string(),
+                        ));
+                        self.cancel_close(&req_clone);
+                        return;
                     }
-                    // Giữ is_saving = true để hiển thị trạng thái đang lưu, không cancel_close
+                    // Giữ is_saving = true để hiển thị trạng thái đang lưu khi đã gửi thành công tới iframe
                     return;
                 }
 
