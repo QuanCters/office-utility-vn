@@ -88,7 +88,11 @@ def run_l5() -> bool:
     print("\n==========================================")
     print("📦 [Tier L5] Release Assurance & Pinned Vendor Integrity")
     print("==========================================")
-    evidence.verify_artifacts(repo_root)
+    ok = evidence.verify_artifacts(repo_root)
+    if not ok:
+        print("❌ [Tier L5] Release assurance failed: No compiled WASM/JS artifacts found in dist/")
+        return False
+    print("✅ [Tier L5] Release assurance passed: Build artifacts and checksums verified.")
     return True
 
 def main():

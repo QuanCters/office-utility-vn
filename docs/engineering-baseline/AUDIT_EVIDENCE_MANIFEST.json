@@ -1,0 +1,268 @@
+{
+  "manifest_version": "2.0.0",
+  "generated_at": "2026-11-22T22:25:00Z",
+  "audit_role": "Principal Software Architect, Independent Code Auditor & Release Safety Architect",
+  "environment": {
+    "git_head_sha": "8c57f9655bb0841064973effd6ddeb72c0fa3599",
+    "working_tree_clean": false,
+    "rustc_version": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo_version": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "python_version": "Python 3.12.3",
+    "os": "Linux 6.6.137+ x86_64"
+  },
+  "uncommitted_files": [
+    {
+      "path": ".github/CODEOWNERS",
+      "status": "MODIFIED",
+      "sha256": "fa84d7fe6f8bcd7d9a3d91454f5f96630e3e204b554e5d3bc89223c1a7cf895f"
+    },
+    {
+      "path": "crates/office-engine/src/data_lab/base64_file_codec.rs",
+      "status": "MODIFIED",
+      "sha256": "360fc9ca6ff751a9c88780336786d58141c41dc12ac00a8b17e7871e0a13d593"
+    },
+    {
+      "path": "crates/office-engine/src/data_lab/vietnamese_font_converter.rs",
+      "status": "MODIFIED",
+      "sha256": "4d8a7e88ef441c97fc422a834e6cf6e4acb15b391e799cc9c4ee10eefe6a0166"
+    },
+    {
+      "path": "crates/office-engine/src/media_studio/image_batch.rs",
+      "status": "MODIFIED",
+      "sha256": "2ef942dacb361d27fcdec93c8233b691984b5d8e6e147019124b2d7343218429"
+    },
+    {
+      "path": "src-tauri/src/safe_persistence.rs",
+      "status": "MODIFIED",
+      "sha256": "34fd58f5558808929487b69214447d6cdec8354eca8d04698dd2a0f565599327"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "fixtures/stage2c_v1.xlsx",
+      "sha256": "7657fec12a30ab44a2aeb730ed45304476ea6fe522328f2b606c0bb64854fbf5"
+    },
+    {
+      "path": "fixtures/stage2c_v2.xlsx",
+      "sha256": "53101c12722187859273fa85e56f379b18aa0d8d2f21e3a3b294413aa3536e92"
+    },
+    {
+      "path": "fixtures/test_uat_corrupt.xlsx",
+      "sha256": "cd4980ca91d5f891a04a6e8c34d9849069a538b30934b1278280ee4b431179aa"
+    },
+    {
+      "path": "fixtures/test_uat_doc.pdf",
+      "sha256": "e169f744fd608bab404a531711281b4695d041a88a8097e014530d8e7036f934"
+    },
+    {
+      "path": "fixtures/test_uat_sample.xlsx",
+      "sha256": "7c0db5967f29f4b0440bd239995deec96b9a585b306bcbefc1beee2d5fb2dfe3"
+    },
+    {
+      "path": "fixtures/test_uat_truncated.xlsx",
+      "sha256": "dd1211efbdfef179545ff3f34083bd044727a0d45280ef75f710f8306c67737c"
+    }
+  ],
+  "verification_commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 1,
+      "verdict": "FAIL",
+      "summary": "Diff phát hiện trong benches/performance_benchmarks.rs, crates/office-engine/src, src/, tests/"
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 101,
+      "verdict": "FAIL",
+      "summary": "97 warnings biên dịch: 64 trong crates/office-engine (unnecessary_map_or, collapsible_if, needless_range_loop, manual_unwrap_or_default) và 33 trong office-utility-vn-ui"
+    },
+    {
+      "command": "python3 scripts/verify_guardrails.py --repo . --mode enforce",
+      "exit_code": 1,
+      "verdict": "FAIL",
+      "summary": "Phát hiện 201 vi phạm guardrails (99 PDF001, 29 PDF002, 43 IME001, 16 FS001, 3 PDF003, 2 FAKE001, 1 FAKE002, 2 FAKE003, 2 VNI001, 1 PNG002, 1 IO001, 1 IO002, 1 IPC001)"
+    },
+    {
+      "command": "python3 scripts/verify_source_test_inventory.py --repo .",
+      "exit_code": 1,
+      "verdict": "FAIL",
+      "summary": "Thiếu 17 tệp test nguồn tích hợp bắt buộc theo hợp đồng (IPC-ALL-TOOLS, PDF-OBJECTS, OCR-NO-HARDCODE, ...)"
+    },
+    {
+      "command": "python3 scripts/verify_behavior.py --repo .",
+      "exit_code": 1,
+      "verdict": "FAIL",
+      "summary": "12 ca kiểm thử hành vi chưa thể thực thi do trạng thái TODO và thiếu adapter binary office_verify_adapter"
+    },
+    {
+      "command": "./scripts/verify_spine_lock.sh",
+      "exit_code": 0,
+      "verdict": "PASS",
+      "summary": "Các tầng crates/office-shared, src-tauri/src/db, src-tauri/src/commands có mã băm SHA-256 khớp chuẩn commit HEAD"
+    }
+  ],
+  "findings_evidence": [
+    {
+      "id": "FINDING-P0-IPC-01",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Code Inspection & IPC Routing Analysis",
+      "code_location": "src-tauri/src/commands/mod.rs:74-115",
+      "evidence_detail": "Nhánh wildcard _ => trong dispatch_tool_task phát 2 sự kiện TaskProgress (50%, 100%) và trả về status: SUCCESS kèm output_paths = req_clone.input_paths cho 50/58 slug.",
+      "confidence": "HIGH (100% verified via code inspection)"
+    },
+    {
+      "id": "FINDING-P0-PDF-01",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "AST & Regex Guardrail Analysis (PDF001)",
+      "code_location": "crates/office-engine/src/doc_suite/*.rs (99 matches)",
+      "evidence_detail": "Sử dụng String::from_utf8_lossy trên dữ liệu byte nhị phân PDF làm hỏng byte zlib stream và nhúng ký tự \\u{FFFD}.",
+      "confidence": "HIGH (99 distinct code matches confirmed)"
+    },
+    {
+      "id": "FINDING-P0-PDF-02",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Code Inspection (PDF002)",
+      "code_location": "crates/office-engine/src/doc_suite/pdf_merge_split.rs:254-287, 420-450",
+      "evidence_detail": "Chỉ sao chép từ điển /Type /Page mà không duyệt đệ quy transitive closure để sao chép /Resources, /Font, /XObject; tài liệu tách trang bị rỗng chữ/ảnh.",
+      "confidence": "HIGH (Confirmed missing transitive visitor logic)"
+    },
+    {
+      "id": "FINDING-P0-FAKE-01",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Inspection & Regex Guardrail (FAKE001)",
+      "code_location": "crates/office-engine/src/doc_suite/vietnamese_ocr.rs:121-130",
+      "evidence_detail": "Hàm perform_ocr_extract trả về chuỗi văn bản hardcode tĩnh 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM...' cho mọi tệp đầu vào.",
+      "confidence": "HIGH (Hardcoded Vietnamese text verified in source)"
+    },
+    {
+      "id": "FINDING-P0-FAKE-02",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Inspection & Regex Guardrail (FAKE002)",
+      "code_location": "crates/office-engine/src/media_studio/video_to_gif_webp.rs:254-293",
+      "evidence_detail": "Hàm extract_frames_from_video vẽ dải màu gradient vàng di chuyển (255, 215, 0) thay vì giải mã frame video.",
+      "confidence": "HIGH (Confirmed synthetic frame generator in place of video decoder)"
+    },
+    {
+      "id": "FINDING-P0-FAKE-03",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Inspection & Regex Guardrail (FAKE003)",
+      "code_location": "crates/office-engine/src/doc_suite/pdf_to_long_image.rs:73-100",
+      "evidence_detail": "Hàm render_pdf_page_to_bitmap vẽ bitmap thủ công với vạch xám rgb[idx]=50 thay vì rasterize thực tế từ PDFium/Poppler.",
+      "confidence": "HIGH (Confirmed synthetic bitmap painter in source)"
+    },
+    {
+      "id": "FINDING-P0-FAKE-04",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Inspection & Regex Guardrail (PDF003)",
+      "code_location": "crates/office-engine/src/doc_suite/pdf_pki_sign.rs:186-202",
+      "evidence_detail": "Ghi chuỗi ASCII hex thô 'PKCS7-SIG:CN=...' thay vì cấu trúc ASN.1 DER CMS tiêu chuẩn; chữ ký số không hợp lệ trong Adobe Reader.",
+      "confidence": "HIGH (String token signature pattern confirmed)"
+    },
+    {
+      "id": "FINDING-P0-FAKE-05",
+      "severity": "P0",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Inspection & Cryptographic Algorithm Review",
+      "code_location": "crates/office-engine/src/doc_suite/pdf_protect_sign.rs:149-165, 196-202",
+      "evidence_detail": "Mã hóa PDF bằng hàm cipher_xor tự chế và muối hardcode 'OFFICE_SEC_SALT_VN_2026' thay vì chuẩn Standard Security Handler AES-256.",
+      "confidence": "HIGH (Non-standard XOR crypto verified in source)"
+    },
+    {
+      "id": "FINDING-P0-MEDIA-01",
+      "severity": "P0",
+      "evidence_state": "FIXED_UNVERIFIED",
+      "verification_method": "Static Inspection, Guardrail Check (PNG002) & Git Working Tree Inspection",
+      "code_location": "crates/office-engine/src/media_studio/image_batch.rs:161-180, 1017",
+      "evidence_detail": "Mã nguồn gốc tại HEAD trả về ảnh xám/trắng 200/255 khi giải mã PNG lỗi. Thay đổi chưa commit đã xóa fallback này trong code chính nhưng dòng 1017 trong unit test vẫn kích hoạt regex PNG002.",
+      "confidence": "HIGH (Working tree patch partially applied; needs test clean-up and formal verification)"
+    },
+    {
+      "id": "FINDING-P0-HARNESS-01",
+      "severity": "P0",
+      "evidence_state": "REPRODUCED_DYNAMIC",
+      "verification_method": "Dynamic Execution of scripts/verify_source_test_inventory.py",
+      "code_location": "tests/verification/source_test_inventory.json:1-91",
+      "evidence_detail": "Lệnh verify_source_test_inventory.py trả về exit code 1, báo thiếu toàn bộ 17 tệp test nguồn bắt buộc theo hợp đồng kiểm định chất lượng release.",
+      "confidence": "HIGH (Dynamic test runner failure reproduced directly)"
+    },
+    {
+      "id": "FINDING-P1-IME-01",
+      "severity": "P1",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Regex / AST Guardrail Scan (IME001)",
+      "code_location": "src/tools/*_view.rs (43 files)",
+      "evidence_detail": "43 trường input/textarea Leptos có prop:value và on:input nhưng thiếu xử lý compositionstart/compositionend, gây nuốt dấu tiếng Việt trên WebKitGTK/WebView2.",
+      "confidence": "HIGH (43 exact code coordinates located and confirmed)"
+    },
+    {
+      "id": "FINDING-P1-DB-01",
+      "severity": "P1",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "SQLite Schema & Migration Script Inspection",
+      "code_location": "src-tauri/src/db/mod.rs:131-148",
+      "evidence_detail": "Seed data khởi tạo chỉ có 16 slug cũ; task_history tham chiếu FK vào tool_settings bị vi phạm và lỗi bị nuốt bởi let _ = dẫn đến mất lịch sử tác vụ.",
+      "confidence": "HIGH (Mismatch between 16 seeded slugs and 58 UI slugs verified)"
+    },
+    {
+      "id": "FINDING-P1-SEC-01",
+      "severity": "P1",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Configuration Review",
+      "code_location": "src-tauri/tauri.conf.json:13, 21-23",
+      "evidence_detail": "Cấu hình desktop tauri.conf.json đặt csp: null và withGlobalTauri: true, mở rộng bề mặt tấn công nếu xảy ra XSS.",
+      "confidence": "HIGH (Direct JSON configuration values verified)"
+    },
+    {
+      "id": "FINDING-P1-IO-01",
+      "severity": "P1",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Async Tokio Concurrency Inspection (IO001, IO002)",
+      "code_location": "src-tauri/src/commands/mod.rs:275-294",
+      "evidence_detail": "Hàm async inspect_file_metadata gọi I/O đồng bộ (std::fs::metadata, File::open) trực tiếp trên luồng Tokio và dùng unwrap_or(0) nuốt lỗi đọc đĩa.",
+      "confidence": "HIGH (Blocking I/O in async fn verified in source)"
+    },
+    {
+      "id": "FINDING-P1-BUILD-01",
+      "severity": "P1",
+      "evidence_state": "REPRODUCED_DYNAMIC",
+      "verification_method": "Dynamic Execution of cargo fmt and cargo clippy",
+      "code_location": "crates/office-engine, src/, benches/",
+      "evidence_detail": "cargo fmt -- --check thoát mã 1 (định dạng sai); cargo clippy -- -D warnings thoát mã 101 với 97 warnings (64 trong engine, 33 trong UI).",
+      "confidence": "HIGH (Dynamic compiler exit codes reproduced directly)"
+    },
+    {
+      "id": "FINDING-P2-PERSIST-01",
+      "severity": "P2",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Static Array Inspection",
+      "code_location": "src-tauri/src/safe_persistence.rs:18-25",
+      "evidence_detail": "Mảng ALLOWED_EXTENSIONS thiếu các đuôi tệp webp, gif, zip, ics, sql, md khiến thao tác Native Save Grant từ chối lưu các định dạng xuất hợp lệ này.",
+      "confidence": "HIGH (Static array elements inspected)"
+    },
+    {
+      "id": "FINDING-P2-TEST-01",
+      "severity": "P2",
+      "evidence_state": "CONFIRMED_STATIC",
+      "verification_method": "Test Suite Structural Audit",
+      "code_location": "crates/office-engine/src/**/*.rs (tests modules)",
+      "evidence_detail": "379 unit tests chủ yếu tạo fixture giả lập khớp với giải thuật nội bộ của chính nó (Mock Mirroring) thay vì kiểm định trên tệp nhị phân độc lập.",
+      "confidence": "HIGH (Test harness analysis confirmed)"
+    },
+    {
+      "id": "FINDING-P2-DATA-01",
+      "severity": "P2",
+      "evidence_state": "FIXED_UNVERIFIED",
+      "verification_method": "Static Code Inspection & Working Tree Diff",
+      "code_location": "crates/office-engine/src/data_lab/vietnamese_font_converter.rs:175-185",
+      "evidence_detail": "Nhận diện mã VNI/TCVN3 bằng duyệt byte Latin-1 char đã cải thiện so với UTF-8 lossy nhưng vẫn chưa có giải thuật chấm điểm xác suất phân phối n-gram.",
+      "confidence": "HIGH (Diff verified; needs statistical language model scoring)"
+    }
+  ]
+}

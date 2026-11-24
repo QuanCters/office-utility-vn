@@ -1,0 +1,91 @@
+{
+  "inventory_version": 1,
+  "description": "Required real Rust tests; Agent must implement using actual project types and production APIs. Inventory checker checks presence only.",
+  "required_source_tests": [
+    {
+      "id": "IPC-ALL-TOOLS",
+      "file": "src-tauri/tests/verification_ipc.rs",
+      "test_function": "unknown_and_disabled_tools_never_return_success"
+    },
+    {
+      "id": "IPC-COVERAGE",
+      "file": "src-tauri/tests/verification_ipc.rs",
+      "test_function": "every_advertised_tool_has_registry_entry"
+    },
+    {
+      "id": "PDF-OBJECTS",
+      "file": "crates/office-engine/tests/verification_pdf.rs",
+      "test_function": "real_pdf_merge_split_preserves_resources"
+    },
+    {
+      "id": "PDF-INVALID",
+      "file": "crates/office-engine/tests/verification_pdf.rs",
+      "test_function": "malformed_pdf_does_not_produce_success"
+    },
+    {
+      "id": "OCR-NO-HARDCODE",
+      "file": "crates/office-engine/tests/verification_ocr.rs",
+      "test_function": "ocr_result_depends_on_distinct_real_inputs"
+    },
+    {
+      "id": "VIDEO-NO-FAKE",
+      "file": "crates/office-engine/tests/verification_media.rs",
+      "test_function": "video_frames_match_timestamps_of_input"
+    },
+    {
+      "id": "PNG-RESOURCE-BOUND",
+      "file": "crates/office-engine/tests/verification_media.rs",
+      "test_function": "oversized_png_rejected_with_resource_error"
+    },
+    {
+      "id": "PNG-NO-WHITE-FALLBACK",
+      "file": "crates/office-engine/tests/verification_media.rs",
+      "test_function": "corrupt_png_returns_error_not_synthetic_pixels"
+    },
+    {
+      "id": "FILE-TRANSACTION",
+      "file": "crates/office-engine/tests/verification_io.rs",
+      "test_function": "failed_commit_preserves_original_and_reports_error"
+    },
+    {
+      "id": "VNI-ROUNDTRIP",
+      "file": "crates/office-engine/tests/verification_encoding.rs",
+      "test_function": "vni_and_tcvn3_goldens_preserve_vietnamese_diacritics"
+    },
+    {
+      "id": "PASSWORD-LIFETIME",
+      "file": "crates/office-engine/tests/verification_secrets.rs",
+      "test_function": "password_is_not_logged_or_persisted"
+    },
+    {
+      "id": "SESSION-CONCURRENT",
+      "file": "src-tauri/tests/verification_sessions.rs",
+      "test_function": "parallel_session_open_commit_revisions_are_consistent"
+    },
+    {
+      "id": "TOKIO-ASYNC-RESPONSE",
+      "file": "src-tauri/tests/verification_commands.rs",
+      "test_function": "slow_file_metadata_does_not_starve_async_executor"
+    },
+    {
+      "id": "SIGN-PADES-CRYPTO",
+      "file": "crates/office-engine/tests/verification_signing.rs",
+      "test_function": "signed_pdf_has_cryptographically_valid_cms_and_byterange"
+    },
+    {
+      "id": "PDF-REDACTION",
+      "file": "crates/office-engine/tests/verification_pdf.rs",
+      "test_function": "redaction_removes_content_not_only_overlays"
+    },
+    {
+      "id": "PDF-BITMAP-REAL",
+      "file": "crates/office-engine/tests/verification_pdf.rs",
+      "test_function": "rendered_pdf_pixels_represent_input_content"
+    },
+    {
+      "id": "IME-WINDOWS-E2E",
+      "file": "tests/e2e/verification_ime.spec.ts",
+      "required_text": "test(\"vietnamese_ime_composition_is_not_interrupted\""
+    }
+  ]
+}

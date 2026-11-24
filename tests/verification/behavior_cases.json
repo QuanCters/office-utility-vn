@@ -1,0 +1,226 @@
+{
+  "manifest_version": 1,
+  "description": "Production behavioral contracts. Intentionally TODO until real fixtures, sha256 and adapter are provided. Never mark ready without independent oracle.",
+  "cases": [
+    {
+      "id": "IPC-UNIMPLEMENTED-RETURNS-ERROR",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_A_REGISTERED_BUT_DISABLED_OR_UNSUPPORTED_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/invalid/ordinary_input.txt",
+          "sha256": ""
+        }
+      ],
+      "expect": "ERROR",
+      "error_code": "TOOL_UNAVAILABLE",
+      "options": {},
+      "timeout_seconds": 30
+    },
+    {
+      "id": "PDF-MERGE-REAL-FIXTURES",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_MERGE_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/pdf/word_export.pdf",
+          "sha256": ""
+        },
+        {
+          "path": "fixtures/pdf/acrobat_export.pdf",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "pdf",
+        "count": 1,
+        "pages": 4,
+        "tokens": [
+          "REPLACE_WITH_REAL_EXPECTED_TEXT"
+        ],
+        "render_pages": true
+      }
+    },
+    {
+      "id": "PDF-SPLIT-KEEP-RESOURCES",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_SPLIT_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/pdf/embedded_fonts_images.pdf",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "pdf",
+        "count": 1,
+        "pages": 1,
+        "tokens": [
+          "REPLACE_WITH_REAL_EXPECTED_TEXT"
+        ],
+        "render_pages": true
+      }
+    },
+    {
+      "id": "PDF-CORRUPT-REJECTED-NO-OUTPUT",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_PDF_TOOL_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/pdf/corrupt.pdf",
+          "sha256": ""
+        }
+      ],
+      "expect": "ERROR",
+      "error_code": "VALIDATION_FAILED"
+    },
+    {
+      "id": "OCR-VIETNAMESE-REAL-SCAN",
+      "state": "TODO",
+      "tool_slug": "vietnamese-ocr",
+      "inputs": [
+        {
+          "path": "fixtures/pdf/vietnamese_scanned.pdf",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "text",
+        "count": 1,
+        "tokens": [
+          "REPLACE_WITH_KNOWN_TEXT_FROM_SCAN"
+        ]
+      }
+    },
+    {
+      "id": "VIDEO-REAL-FRAMES",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_VIDEO_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/videos/known_video.mp4",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "gif",
+        "count": 1,
+        "min_frames": 3,
+        "must_be_non_uniform": true
+      }
+    },
+    {
+      "id": "PDF-RENDER-REAL-CONTENT",
+      "state": "TODO",
+      "tool_slug": "pdf-to-long-image",
+      "inputs": [
+        {
+          "path": "fixtures/pdf/word_export.pdf",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "png",
+        "count": 1,
+        "must_be_non_uniform": true
+      }
+    },
+    {
+      "id": "VNI-CONVERT-BYTE-LEVEL",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_VNI_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/legacy_encoding/vni_sample.bin",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "text",
+        "count": 1,
+        "tokens": [
+          "REPLACE_WITH_EXPECTED_VIETNAMESE"
+        ]
+      }
+    },
+    {
+      "id": "PNG-BROKEN-STREAM-NO-SILENT-FALLBACK",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_IMAGE_BATCH_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/images/corrupt_idat.png",
+          "sha256": ""
+        }
+      ],
+      "expect": "ERROR",
+      "error_code": "VALIDATION_FAILED"
+    },
+    {
+      "id": "OUTPUT-DESTINATION-ERROR-NO-FAKE-SUCCESS",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_BASE64_TOOL_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/invalid/base64_valid.txt",
+          "sha256": ""
+        }
+      ],
+      "expect": "ERROR",
+      "error_code": "IO_ERROR",
+      "options": {
+        "output_filename": "REPLACE_WITH_REAL_OUTPUT_NAME_PARAMETER"
+      },
+      "setup": {
+        "precreate_files": [
+          {
+            "path": "decoded.txt",
+            "text": "EXISTING_SENTINEL_DO_NOT_OVERWRITE"
+          }
+        ]
+      },
+      "notes": "Use actual production no-clobber output-name option; adapter must NOT synthesize an IO error. Precreated target must stay byte-identical."
+    },
+    {
+      "id": "PDF-SIGN-CMS-VERIFIED",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_SIGNATURE_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/pdf/unsigned.pdf",
+          "sha256": ""
+        }
+      ],
+      "expect": "SUCCESS",
+      "output": {
+        "type": "pdf",
+        "count": 1,
+        "pages": 1,
+        "render_pages": true,
+        "signature_valid": true
+      },
+      "notes": "Runner verifies pdfsig -nocert signature integrity only; trust chain/revocation and tamper tests require additional independent security checks."
+    },
+    {
+      "id": "PNG-DECOMPRESSION-OVERLIMIT-REJECTED",
+      "state": "TODO",
+      "tool_slug": "REPLACE_WITH_REAL_IMAGE_BATCH_SLUG",
+      "inputs": [
+        {
+          "path": "fixtures/images/over_limit.png",
+          "sha256": ""
+        }
+      ],
+      "expect": "ERROR",
+      "error_code": "RESOURCE_LIMIT_EXCEEDED",
+      "timeout_seconds": 30,
+      "notes": "Run in isolated OS container/process with memory limit. Do NOT use unsafe bombs on developer laptops."
+    }
+  ]
+}

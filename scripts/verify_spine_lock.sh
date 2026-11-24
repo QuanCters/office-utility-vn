@@ -25,7 +25,11 @@ EXPECTED_DB="38bcd07c7358503b46664e407ed6d84e641661d82a95a428299d15f61df0c5d1"
 # Stage 2D hash: 8f4524125899479ffebbc74b3b14be6a96fa6dc63bbce311a4278f46b920e1da
 # Stage 4B-2A initial hash: aaf5784b547e3d93836f22cfa1acf2024a0c3735d82e56df7620783282a09237
 # Stage 4B-2A revised hash: 191d8a12b60ec83217ac275c59a961a262bbaf014236444f44281f8182dd63a9
-EXPECTED_CMD="ca12b1ad5586453d6753bda21cb31213333c8f13f2d621b6d00f5bdc2228b1a0"
+# PR-01 Safety Gate Hardening Authorized Amendment (RFC-SPINE-2026-001-PR01):
+# Replaced wildcard fake SUCCESS with fail-closed deny-by-default (ENABLED_TOOL_ALLOWLIST),
+# routed fake engines & unsafe lossy PDF tools to fail-closed, added emergency kill-switch,
+# and enforced single-tool SQLite audit persistence (dispatch_tool_with_persistence).
+EXPECTED_CMD="a40efb22329bc176fda7e47b0f74c31234f1af35061a65eb339506b48c2955e3"
 
 ACTUAL_SHARED="$(sha256sum "${SHARED_FILE}" | awk '{print $1}')"
 ACTUAL_DB="$(sha256sum "${DB_FILE}" | awk '{print $1}')"
