@@ -101,11 +101,12 @@ impl GridCraftState {
         self.document_sessions.update(|map| {
             map.insert(session.document_id.clone(), session);
         });
+        self.recompute_aggregate_dirty();
     }
 
     /// Lấy thông tin phiên workbook theo document ID hoặc file name
     pub fn get_session_for_document(&self, doc_id_or_name: &str) -> Option<WorkbookSession> {
-        self.document_sessions.with(|map| {
+        self.document_sessions.with_untracked(|map| {
             if let Some(s) = map.get(doc_id_or_name) {
                 Some(s.clone())
             } else {
@@ -114,17 +115,17 @@ impl GridCraftState {
         })
     }
 
-    /// Phân giải phiên workbook đích chính xác để lưu (Finding 2: Multi-Workbook Save Isolation)
-    /// Trả về `None` nếu tệp không thuộc phiên làm việc nào đã đăng ký (buộc Save As).
+    /// Phân giải phiên workbook đích chính xác để lưu (Finding 2: Multi-Workbook Save Isolation & P1 #4679994753)
+    /// Trả về `None` nếu tệp không thuộc phiên làm việc nào đã đăng ký, hoặc tên tệp bị mơ hồ (buộc Save As / chọn đích rõ ràng).
     pub fn resolve_save_session(&self, name_or_doc_id: &str) -> Option<WorkbookSession> {
         // 1. Tìm trực tiếp theo document_id (định danh bền vững duy nhất)
-        let direct_match = self.document_sessions.with(|map| map.get(name_or_doc_id).cloned());
+        let direct_match = self.document_sessions.with_untracked(|map| map.get(name_or_doc_id).cloned());
         if let Some(sess) = direct_match {
             return Some(sess);
         }
 
-        // 2. Phân giải theo tên tệp: Kiểm tra trùng lặp tên tệp ở các thư mục khác nhau
-        let matches: Vec<WorkbookSession> = self.document_sessions.with(|map| {
+        // 2. Phân giải theo tên tệp: Chỉ chấp nhận nếu tên tệp là duy nhất tuyệt đối across all sessions
+        let matches: Vec<WorkbookSession> = self.document_sessions.with_untracked(|map| {
             map.values()
                 .filter(|s| s.file_name == name_or_doc_id)
                 .cloned()
@@ -132,29 +133,13 @@ impl GridCraftState {
         });
 
         if matches.len() == 1 {
-            return Some(matches[0].clone());
-        } else if matches.len() > 1 {
-            // Trường hợp có 2 workbook cùng tên ở 2 thư mục khác nhau:
-            // Chỉ giải quyết an toàn nếu một trong số đó khớp chính xác với active_document_id hiện tại.
-            // Tuyệt đối không đoán mò để tránh ghi nhầm vào tài liệu khác!
-            if let Some(active_id) = self.active_document_id.get_untracked() {
-                if let Some(active_sess) = matches.into_iter().find(|s| s.document_id == active_id) {
-                    return Some(active_sess);
-                }
-            }
-            return None;
+            Some(matches[0].clone())
+        } else {
+            // matches.len() > 1 (nhiều workbook cùng tên ở các thư mục khác nhau) hoặc 0 (không tìm thấy):
+            // Fail closed (P1 #4679994753): Tuyệt đối KHÔNG sử dụng active_document_id hay active_file_name để đoán mò session!
+            // Yêu cầu chỉ định document_id rõ ràng hoặc buộc người dùng chọn đích qua Save As.
+            None
         }
-
-        // 3. Nếu khớp tên với active_file_name, trả về phiên của active document
-        if let Some(ref cur_name) = self.active_file_name.get_untracked() {
-            if cur_name == name_or_doc_id {
-                if let Some(active_id) = self.active_document_id.get_untracked() {
-                    return self.document_sessions.with(|map| map.get(&active_id).cloned());
-                }
-            }
-        }
-
-        None
     }
 
     /// Đánh dấu trạng thái dirty cho một workbook cụ thể và cập nhật trạng thái dirty tổng hợp của workspace

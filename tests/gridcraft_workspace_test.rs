@@ -612,47 +612,94 @@ fn test_gridcraft_multi_workbook_aggregate_dirty_preservation() {
 #[test]
 fn test_gridcraft_resolve_save_session_disambiguation() {
     use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use sha2::{Digest, Sha256};
+    use std::fs;
+
+    let temp_dir = tempfile::tempdir().expect("Must create temp dir");
+    let dir1 = temp_dir.path().join("dir1");
+    let dir2 = temp_dir.path().join("dir2");
+    fs::create_dir_all(&dir1).expect("create dir1");
+    fs::create_dir_all(&dir2).expect("create dir2");
+
+    let path_q1 = dir1.join("budget.xlsx");
+    let path_q2 = dir2.join("budget.xlsx");
+
+    // Sử dụng 2 tệp fixture XLSX thật có cùng tên "budget.xlsx" ở 2 thư mục khác nhau
+    let fixture1 = fs::read("fixtures/stage2c_v1.xlsx").expect("read fixture 1");
+    let fixture2 = fs::read("fixtures/stage2c_v2.xlsx").expect("read fixture 2");
+
+    fs::write(&path_q1, &fixture1).expect("write q1");
+    fs::write(&path_q2, &fixture2).expect("write q2");
+
+    let hash_q1_initial = format!("{:x}", Sha256::digest(&fixture1));
+    let hash_q2_initial = format!("{:x}", Sha256::digest(&fixture2));
 
     let state = GridCraftState::new();
 
-    // Hai tệp cùng tên "budget.xlsx" ở 2 thư mục khác nhau
     state.register_document_session(WorkbookSession {
         document_id: "doc-budget-q1".into(),
-        file_path: "/dir1/budget.xlsx".into(),
+        file_path: path_q1.to_str().unwrap().into(),
         file_name: "budget.xlsx".into(),
         revision: 1,
-        is_dirty: false,
-        edit_revision: 0,
+        is_dirty: true,
+        edit_revision: 1,
     });
     state.register_document_session(WorkbookSession {
         document_id: "doc-budget-q2".into(),
-        file_path: "/dir2/budget.xlsx".into(),
+        file_path: path_q2.to_str().unwrap().into(),
         file_name: "budget.xlsx".into(),
         revision: 1,
-        is_dirty: false,
-        edit_revision: 0,
+        is_dirty: true,
+        edit_revision: 1,
     });
 
-    // Khi active_document_id là Q1: resolve bằng tên "budget.xlsx" phải trỏ về đúng Q1
+    // 1. Phân giải bằng document_id rõ ràng PHẢI luôn thành công và trỏ đúng session tương ứng
+    let resolved_id1 = state
+        .resolve_save_session("doc-budget-q1")
+        .expect("Phải phân giải được session bằng document_id rõ ràng");
+    assert_eq!(resolved_id1.document_id, "doc-budget-q1");
+    assert_eq!(resolved_id1.file_path, path_q1.to_str().unwrap());
+
+    let resolved_id2 = state
+        .resolve_save_session("doc-budget-q2")
+        .expect("Phải phân giải được session bằng document_id rõ ràng");
+    assert_eq!(resolved_id2.document_id, "doc-budget-q2");
+    assert_eq!(resolved_id2.file_path, path_q2.to_str().unwrap());
+
+    // 2. Phân giải bằng filename khi có nhiều session trùng tên:
+    // P1 #4679994753: BẮT BUỘC trả về None (Fail-closed) ngay cả khi active_document_id đang trỏ tới một trong hai!
+    // Tuyệt đối không suy diễn session từ active_document_id hoặc active_file_name.
     state.active_document_id.set(Some("doc-budget-q1".into()));
-    let resolved_q1 = state.resolve_save_session("budget.xlsx").expect("Must resolve to active Q1");
-    assert_eq!(resolved_q1.document_id, "doc-budget-q1");
-    assert_eq!(resolved_q1.file_path, "/dir1/budget.xlsx");
-
-    // Khi active_document_id là Q2: resolve bằng tên "budget.xlsx" phải trỏ về đúng Q2
-    state.active_document_id.set(Some("doc-budget-q2".into()));
-    let resolved_q2 = state.resolve_save_session("budget.xlsx").expect("Must resolve to active Q2");
-    assert_eq!(resolved_q2.document_id, "doc-budget-q2");
-    assert_eq!(resolved_q2.file_path, "/dir2/budget.xlsx");
-
-    // Khi active_document_id không trùng với tài liệu nào (hoặc None):
-    // lookup theo tên mơ hồ phải trả về None để buộc rơi vào Save As an toàn thay vì ghi đè sai file!
-    state.active_document_id.set(None);
-    let ambiguous = state.resolve_save_session("budget.xlsx");
+    state.active_file_name.set(Some("budget.xlsx".into()));
+    let ambiguous_with_active_q1 = state.resolve_save_session("budget.xlsx");
     assert!(
-        ambiguous.is_none(),
+        ambiguous_with_active_q1.is_none(),
+        "P1 #4679994753: Ambiguous filename resolution MUST fail closed even with active_document_id set to Q1!"
+    );
+
+    state.active_document_id.set(Some("doc-budget-q2".into()));
+    let ambiguous_with_active_q2 = state.resolve_save_session("budget.xlsx");
+    assert!(
+        ambiguous_with_active_q2.is_none(),
+        "P1 #4679994753: Ambiguous filename resolution MUST fail closed even with active_document_id set to Q2!"
+    );
+
+    state.active_document_id.set(None);
+    state.active_file_name.set(None);
+    let ambiguous_without_active = state.resolve_save_session("budget.xlsx");
+    assert!(
+        ambiguous_without_active.is_none(),
         "Ambiguous filename resolution without active document ID must return None"
     );
+
+    // 3. Xác thực khi yêu cầu lưu mơ hồ bị từ chối, SHA-256 của cả 2 tệp trên đĩa giữ nguyên 100% không đổi
+    let hash_q1_after = format!("{:x}", Sha256::digest(fs::read(&path_q1).unwrap()));
+    let hash_q2_after = format!("{:x}", Sha256::digest(fs::read(&path_q2).unwrap()));
+    assert_eq!(hash_q1_initial, hash_q1_after, "File Q1 SHA-256 must remain unchanged on ambiguous save rejection");
+    assert_eq!(hash_q2_initial, hash_q2_after, "File Q2 SHA-256 must remain unchanged on ambiguous save rejection");
+
+    // 4. Trạng thái dirty được bảo toàn
+    assert!(state.is_dirty.get_untracked(), "Dirty state must be preserved when save is rejected");
 }
 
 #[test]
