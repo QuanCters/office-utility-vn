@@ -89,7 +89,7 @@ pub fn GridCraftCanvasFrame(
                                     s.status_message.set("✓ Bảng tính GridCraft ở trạng thái sạch.".to_string());
                                 }
                             }
-                            DocumentStateEvent::SaveRequested { name, save_as: _, bytes, request_id } => {
+                            DocumentStateEvent::SaveRequested { name, intent: _, bytes, request_id } => {
                                 // =========================================================================
                                 // 🔒 SECURITY GATE: PERSISTENCE BỊ KHÓA HOÀN TOÀN TRONG CHẾ ĐỘ PREVIEW
                                 // Tuyệt đối KHÔNG gọi save_file_binary hoặc ghi đĩa cục bộ!

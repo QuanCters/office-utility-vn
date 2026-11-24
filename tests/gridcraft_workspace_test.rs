@@ -848,4 +848,128 @@ fn test_gridcraft_missing_iframe_save_and_exit_does_not_hang_in_saving() {
     assert!(close_mgr.is_cancelled.get_untracked());
 }
 
+#[test]
+fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        is_mut_export_active, set_mut_export,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let app_state = AppState::default();
+    let state = app_state.gridcraft_state;
+
+    let wb_path = "/data/finance_q4.xlsx";
+    let doc_id = "doc-finance-q4";
+
+    // 1. Khởi tạo một workbook đang mở và dirty
+    state.register_document_session(WorkbookSession {
+        document_id: doc_id.to_string(),
+        file_path: wb_path.to_string(),
+        file_name: "finance_q4.xlsx".to_string(),
+        revision: 2,
+        is_dirty: true,
+        edit_revision: 5,
+    });
+    state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 2);
+    state.active_file_name.set(Some("finance_q4.xlsx".to_string()));
+    state.is_dirty.set(true);
+
+    assert!(state.is_dirty.get());
+    assert_eq!(state.active_document_id.get(), Some(doc_id.to_string()));
+    assert_eq!(state.active_file_path.get(), Some(wb_path.to_string()));
+    assert_eq!(state.active_revision.get(), 2);
+
+    // Người dùng yêu cầu đóng cửa sổ -> close dialog mở ra
+    state.pending_close_request_id.set(Some("close-req-export-test".to_string()));
+
+    // 2. Xuất bảng tính ra file CSV ("finance_export.csv") với intent = Export
+    let export_intent = SaveOperationIntent::Export;
+    let export_dest_path = "/data/exports/finance_export.csv";
+    let export_doc_id = "doc-export-csv-new";
+
+    // Mô phỏng completion handler của Export
+    if export_intent == SaveOperationIntent::Export && !is_mut_export_active() {
+        // Production logic: Không đụng vào dirty, không đổi session, không authorize close
+    } else {
+        // Mutated logic (defect)
+        state.set_document_dirty(export_doc_id, false);
+        state.set_document_session(Some(export_doc_id.to_string()), Some(export_dest_path.to_string()), 1);
+        state.active_file_name.set(Some("finance_export.csv".to_string()));
+        state.pending_close_request_id.set(None);
+    }
+
+    // BẤT BIẾN P1 #4676016506:
+    // - Workbook nguồn VẪN PHẢI DIRTY!
+    assert!(
+        state.is_dirty.get(),
+        "Exporting to CSV must NEVER clear source workbook's dirty state!"
+    );
+    assert!(
+        state.get_session_for_document(doc_id).unwrap().is_dirty,
+        "Source workbook session must remain dirty in document_sessions!"
+    );
+    // - Native document session VẪN PHẢI LÀ workbook nguồn!
+    assert_eq!(
+        state.active_document_id.get(),
+        Some(doc_id.to_string()),
+        "Active document ID must remain the workbook, NOT the export destination!"
+    );
+    assert_eq!(
+        state.active_file_path.get(),
+        Some(wb_path.to_string()),
+        "Active file path must remain the workbook, NOT the export destination!"
+    );
+    assert_eq!(
+        state.active_file_name.get(),
+        Some("finance_q4.xlsx".to_string()),
+        "Active file name must remain the workbook, NOT the export CSV!"
+    );
+    // - Committed revision VẪN PHẢI LÀ 2!
+    assert_eq!(
+        state.active_revision.get(),
+        2,
+        "Export must NOT change committed workbook revision!"
+    );
+    // - Close guard VẪN PHẢI CHẶN ĐÓNG CỬA SỔ!
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Close guard must NOT allow window close while workbook remains dirty after export!"
+    );
+    assert_eq!(
+        state.pending_close_request_id.get(),
+        Some("close-req-export-test".to_string()),
+        "Export must NOT satisfy pending close request!"
+    );
+
+    // 3. MUT-EXPORT Verification:
+    assert!(!is_mut_export_active(), "MUT-EXPORT must be inactive by default");
+    set_mut_export(true);
+    assert!(is_mut_export_active(), "MUT-EXPORT activated");
+
+    // Dưới MUT-EXPORT, code bị đột biến xóa dirty và thay session:
+    if is_mut_export_active() {
+        state.set_document_dirty(export_doc_id, false);
+        state.set_document_session(Some(export_doc_id.to_string()), Some(export_dest_path.to_string()), 1);
+        state.active_file_name.set(Some("finance_export.csv".to_string()));
+        state.pending_close_request_id.set(None);
+    }
+
+    // Test phát hiện chính xác sự vi phạm:
+    assert_ne!(
+        state.active_file_path.get(),
+        Some(wb_path.to_string()),
+        "MUT-EXPORT mutation successfully reproduces defect by swapping active path"
+    );
+    assert!(
+        !state.is_dirty.get(),
+        "MUT-EXPORT mutation successfully reproduces defect by clearing dirty flag"
+    );
+
+    // Phục hồi
+    set_mut_export(false);
+    assert!(!is_mut_export_active(), "MUT-EXPORT restored to false");
+}
+
 

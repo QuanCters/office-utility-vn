@@ -111,13 +111,25 @@ pub struct PdfDocumentSession {
     pub edit_generation: u64,
 }
 
-/// Dữ liệu một yêu cầu lưu PDF đang được thực hiện ở tầng native (Finding 4675800826)
+/// Bối cảnh yêu cầu lưu bất biến (P1 #4676016520: Preserve Originating Document Context During Save As)
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SaveRequestContext {
+    pub request_id: String,
+    pub operation_intent: crate::platform::adapter::SaveOperationIntent,
+    pub originating_document_id: Option<String>,
+    pub originating_path: Option<String>,
+    pub session_generation: u64,
+    pub snapshot_edit_generation: u64,
+    pub expected_committed_revision: u64,
+    pub snapshot_fingerprint: String,
+    pub authorized_dest_path: Option<String>,
+}
+
+/// Dữ liệu một yêu cầu lưu PDF đang được thực hiện ở tầng native (Finding 4675800826 & 4676016520)
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PendingPdfSave {
     pub request_id: String,
-    pub file_path: String,
-    pub document_id: Option<String>,
-    pub snapshot_generation: u64,
+    pub context: SaveRequestContext,
 }
 
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App PDF Studio.
@@ -205,22 +217,18 @@ impl PdfStudioState {
         }
     }
 
-    /// Đăng ký một tác vụ lưu PDF pending trước khi gọi native async persistence (Finding 4675800826)
+    /// Đăng ký một tác vụ lưu PDF pending trước khi gọi native async persistence (Finding 4675800826 & 4676016520)
     pub fn register_pending_save(
         &self,
         request_id: String,
-        file_path: String,
-        document_id: Option<String>,
-        snapshot_generation: u64,
+        context: SaveRequestContext,
     ) {
         let mut map = self.pending_saves.get_untracked();
         map.insert(
             request_id.clone(),
             PendingPdfSave {
                 request_id,
-                file_path,
-                document_id,
-                snapshot_generation,
+                context,
             },
         );
         self.pending_saves.set(map);
@@ -243,9 +251,14 @@ impl PdfStudioState {
         self.pending_saves.with_untracked(|m| !m.is_empty())
     }
 
-    /// Kiểm tra xem có tác vụ lưu pending cho một file cụ thể hay không
+    /// Kiểm tra xem có tác vụ lưu pending cho một file cụ thể hay không (khớp originating_path hoặc authorized_dest_path)
     pub fn has_pending_saves_for_file(&self, path: &str) -> bool {
-        self.pending_saves.with_untracked(|m| m.values().any(|s| s.file_path == path))
+        self.pending_saves.with_untracked(|m| {
+            m.values().any(|s| {
+                s.context.originating_path.as_deref() == Some(path)
+                    || s.context.authorized_dest_path.as_deref() == Some(path)
+            })
+        })
     }
 
     /// Kiểm tra xem có bất kỳ tài liệu PDF nào (kể cả inactive) chưa lưu hoặc đang pending lưu không
@@ -328,11 +341,8 @@ impl PdfStudioState {
             self.active_revision.set(sess.revision);
             self.has_unsaved_changes.set(sess.is_dirty);
             self.edit_generation.set(sess.edit_generation);
-        } else if self.active_document_id.get_untracked().is_some() {
-            let cur_doc_id = self.active_document_id.get_untracked();
-            let cur_rev = self.active_revision.get_untracked();
-            self.register_document_session(&path_str, cur_doc_id, cur_rev);
         } else {
+            // P1 #4676016514: Tuyệt đối không kế thừa session/doc_id của tệp active trước đó
             self.active_document_id.set(None);
             self.active_revision.set(0);
             self.has_unsaved_changes.set(false);
@@ -353,7 +363,7 @@ impl PdfStudioState {
             }
         });
         if added && self.active_file_index.get().is_none() {
-            self.active_file_index.set(Some(0));
+            self.select_file(0);
         }
     }
 
@@ -371,20 +381,46 @@ impl PdfStudioState {
         let new_len = self.loaded_files.with(|f| f.len());
         if new_len == 0 {
             self.active_file_index.set(None);
+            self.active_document_id.set(None);
+            self.active_revision.set(0);
+            self.has_unsaved_changes.set(false);
+            self.edit_generation.set(0);
         } else {
+            let mut next_idx = 0;
             self.active_file_index.update(|opt_idx| {
                 if let Some(active) = *opt_idx {
                     if active == index {
                         if active >= new_len {
                             *opt_idx = Some(new_len - 1);
+                            next_idx = new_len - 1;
                         } else {
                             *opt_idx = Some(active);
+                            next_idx = active;
                         }
                     } else if active > index {
                         *opt_idx = Some(active - 1);
+                        next_idx = active - 1;
+                    } else {
+                        next_idx = active;
                     }
                 }
             });
+
+            // P1 #4676016514: Đồng bộ hóa phiên tài liệu cho tệp mới được kích hoạt
+            let opt_new_path = self.loaded_files.with_untracked(|f| f.get(next_idx).cloned());
+            if let Some(new_path) = opt_new_path {
+                if let Some(sess) = self.get_document_session(&new_path) {
+                    self.active_document_id.set(sess.document_id);
+                    self.active_revision.set(sess.revision);
+                    self.has_unsaved_changes.set(sess.is_dirty);
+                    self.edit_generation.set(sess.edit_generation);
+                } else {
+                    self.active_document_id.set(None);
+                    self.active_revision.set(0);
+                    self.has_unsaved_changes.set(false);
+                    self.edit_generation.set(0);
+                }
+            }
         }
     }
 
@@ -392,6 +428,11 @@ impl PdfStudioState {
     pub fn clear_files(&self) {
         self.loaded_files.set(Vec::new());
         self.active_file_index.set(None);
+        self.active_document_id.set(None);
+        self.active_revision.set(0);
+        self.has_unsaved_changes.set(false);
+        self.edit_generation.set(0);
+        self.document_sessions.set(std::collections::HashMap::new());
     }
 
     /// Lấy đường dẫn tệp PDF đang được kích hoạt (nếu có).

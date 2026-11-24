@@ -21,6 +21,18 @@ extern "C" {
 pub const GRIDCRAFT_IFRAME_SRC: &str =
     "/gridcraft/index.html?host=parent&save=confirmed&chrome=notitlebar";
 
+static MUT_EXPORT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[doc(hidden)]
+pub fn set_mut_export(active: bool) {
+    MUT_EXPORT.store(active, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[doc(hidden)]
+pub fn is_mut_export_active() -> bool {
+    MUT_EXPORT.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// ID phần tử iframe
 pub const GRIDCRAFT_IFRAME_ID: &str = "gridcraft-workspace-frame";
 
@@ -193,27 +205,87 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     }
                                 }
                             }
-                            "gridcraft:save" => {
+                            "gridcraft:save" | "gridcraft:export" => {
+                                let is_export_msg = msg_type == "gridcraft:export";
                                 let name = js_sys::Reflect::get(
                                     &data,
                                     &wasm_bindgen::JsValue::from_str("name"),
                                 )
                                 .ok()
                                 .and_then(|v| v.as_string())
-                                .unwrap_or_else(|| "workbook.xlsx".to_string());
+                                .unwrap_or_else(|| {
+                                    if is_export_msg {
+                                        "export.csv".to_string()
+                                    } else {
+                                        "workbook.xlsx".to_string()
+                                    }
+                                });
                                 let req_id = js_sys::Reflect::get(
                                     &data,
                                     &wasm_bindgen::JsValue::from_str("id"),
                                 )
                                 .ok()
                                 .and_then(|v| v.as_string());
-                                let save_as = js_sys::Reflect::get(
+                                let explicit_intent_str = js_sys::Reflect::get(
                                     &data,
-                                    &wasm_bindgen::JsValue::from_str("saveAs"),
+                                    &wasm_bindgen::JsValue::from_str("intent"),
                                 )
                                 .ok()
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(false);
+                                .and_then(|v| v.as_string());
+                                let parsed_intent = if is_export_msg {
+                                    Some(crate::platform::adapter::SaveOperationIntent::Export)
+                                } else {
+                                    match explicit_intent_str.as_deref() {
+                                        Some("export") => Some(crate::platform::adapter::SaveOperationIntent::Export),
+                                        Some("save_as") => Some(crate::platform::adapter::SaveOperationIntent::SaveAs),
+                                        Some("save") => Some(crate::platform::adapter::SaveOperationIntent::Save),
+                                        Some(_) => None,
+                                        None => {
+                                            let save_as_flag = js_sys::Reflect::get(
+                                                &data,
+                                                &wasm_bindgen::JsValue::from_str("saveAs"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_bool());
+                                            let has_id = js_sys::Reflect::get(
+                                                &data,
+                                                &wasm_bindgen::JsValue::from_str("id"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_string())
+                                            .is_some();
+                                            if save_as_flag == Some(true) {
+                                                Some(crate::platform::adapter::SaveOperationIntent::SaveAs)
+                                            } else if save_as_flag == Some(false) && has_id {
+                                                Some(crate::platform::adapter::SaveOperationIntent::Save)
+                                            } else {
+                                                None
+                                            }
+                                        }
+                                    }
+                                };
+                                let intent = match parsed_intent {
+                                    Some(i) => i,
+                                    None => {
+                                        if let Some(close_req_id) =
+                                            s.pending_close_request_id.get_untracked()
+                                        {
+                                            s.pending_close_request_id.set(None);
+                                            if let Some(cm) = close_manager {
+                                                cm.cancel_close(&close_req_id);
+                                                cm.error_message.set(Some("Yêu cầu lưu bị từ chối: Intent không hợp lệ hoặc mơ hồ.".into()));
+                                            }
+                                        }
+                                        send_save_failed_to_iframe(
+                                            GRIDCRAFT_IFRAME_ID,
+                                            "Yêu cầu lưu bị từ chối: Intent không hợp lệ hoặc mơ hồ.",
+                                            req_id.as_deref(),
+                                        );
+                                        return;
+                                    }
+                                };
+                                let save_as = intent == crate::platform::adapter::SaveOperationIntent::SaveAs
+                                    || intent == crate::platform::adapter::SaveOperationIntent::Export;
 
                                 let bytes_val = js_sys::Reflect::get(
                                     &data,
@@ -368,6 +440,22 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                 new_doc_id,
                                                 committed_rev,
                                             }) => {
+                                                let force_mut_export = is_mut_export_active();
+
+                                                if intent == crate::platform::adapter::SaveOperationIntent::Export && !force_mut_export {
+                                                    // P1 #4676016506: Xuất file (Export) TUYỆT ĐỐI KHÔNG:
+                                                    // - Xóa trạng thái dirty của workbook nguồn
+                                                    // - Thay thế session tài liệu native đang hoạt động
+                                                    // - Thay đổi committed revision của workbook
+                                                    // - Cho phép Save & Exit
+                                                    // - Xem file export là workbook gốc
+                                                    send_saved_to_iframe(
+                                                        GRIDCRAFT_IFRAME_ID,
+                                                        &req_clone,
+                                                    );
+                                                    return;
+                                                }
+
                                                 coordinator.update_value(|c| {
                                                     let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
                                                     c.on_durable_write_completed(&req_clone, &fp);

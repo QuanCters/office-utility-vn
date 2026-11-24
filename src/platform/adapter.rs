@@ -1,6 +1,15 @@
 use crate::micro_apps::MicroAppId;
 use crate::platform::transport::{RawBridgeMessage, TransportError};
 
+/// Ý định tác vụ lưu tài liệu tường minh (P1 #4676016506: Save vs Save As vs Export)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SaveOperationIntent {
+    Save,
+    SaveAs,
+    Export,
+}
+
 /// Trạng thái sự kiện tài liệu chuẩn hóa từ góc nhìn của Micro-App Adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DocumentStateEvent {
@@ -11,7 +20,7 @@ pub enum DocumentStateEvent {
     /// Ứng dụng nhúng yêu cầu lưu tệp kèm dữ liệu nhị phân.
     SaveRequested {
         name: String,
-        save_as: bool,
+        intent: SaveOperationIntent,
         bytes: Vec<u8>,
         request_id: Option<String>,
     },
@@ -73,11 +82,29 @@ impl MicroAppAdapter for PdfCraftAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("document.pdf")
                     .to_string();
-                let save_as = raw
-                    .payload
-                    .get("saveAs")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                let explicit_intent = raw.payload.get("intent").and_then(|v| v.as_str());
+                let intent = match explicit_intent {
+                    Some("export") => SaveOperationIntent::Export,
+                    Some("save_as") => SaveOperationIntent::SaveAs,
+                    Some("save") => SaveOperationIntent::Save,
+                    Some(other) => {
+                        return Err(TransportError::MalformedStructure(format!(
+                            "Invalid explicit save operation intent: {other}"
+                        )));
+                    }
+                    None => {
+                        let save_as = raw
+                            .payload
+                            .get("saveAs")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        if save_as {
+                            SaveOperationIntent::SaveAs
+                        } else {
+                            SaveOperationIntent::Save
+                        }
+                    }
+                };
                 let request_id = raw
                     .payload
                     .get("id")
@@ -86,7 +113,7 @@ impl MicroAppAdapter for PdfCraftAdapter {
                 let bytes = raw.binary_data.clone().unwrap_or_default();
                 Ok(DocumentStateEvent::SaveRequested {
                     name,
-                    save_as,
+                    intent,
                     bytes,
                     request_id,
                 })
@@ -149,18 +176,13 @@ impl MicroAppAdapter for GridCraftAdapter {
                     .unwrap_or(false);
                 Ok(DocumentStateEvent::Dirty { dirty })
             }
-            "gridcraft:save" => {
+            "gridcraft:export" => {
                 let name = raw
                     .payload
                     .get("name")
                     .and_then(|v| v.as_str())
-                    .unwrap_or("workbook.xlsx")
+                    .unwrap_or("export.csv")
                     .to_string();
-                let save_as = raw
-                    .payload
-                    .get("saveAs")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
                 let request_id = raw
                     .payload
                     .get("id")
@@ -169,7 +191,55 @@ impl MicroAppAdapter for GridCraftAdapter {
                 let bytes = raw.binary_data.clone().unwrap_or_default();
                 Ok(DocumentStateEvent::SaveRequested {
                     name,
-                    save_as,
+                    intent: SaveOperationIntent::Export,
+                    bytes,
+                    request_id,
+                })
+            }
+            "gridcraft:save" => {
+                let name = raw
+                    .payload
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("workbook.xlsx")
+                    .to_string();
+                let explicit_intent = raw.payload.get("intent").and_then(|v| v.as_str());
+                let intent = match explicit_intent {
+                    Some("export") => SaveOperationIntent::Export,
+                    Some("save_as") => SaveOperationIntent::SaveAs,
+                    Some("save") => SaveOperationIntent::Save,
+                    Some(other) => {
+                        return Err(TransportError::MalformedStructure(format!(
+                            "Invalid explicit save operation intent: {other}"
+                        )));
+                    }
+                    None => {
+                        let save_as = raw
+                            .payload
+                            .get("saveAs")
+                            .and_then(|v| v.as_bool());
+                        let has_id = raw.payload.get("id").and_then(|v| v.as_str()).is_some();
+                        if save_as == Some(true) {
+                            SaveOperationIntent::SaveAs
+                        } else if save_as == Some(false) && has_id {
+                            SaveOperationIntent::Save
+                        } else {
+                            // Missing or ambiguous intent without confirmed save protocol contract: fail-closed!
+                            return Err(TransportError::MalformedStructure(
+                                "Unknown or ambiguous save operation intent".to_string(),
+                            ));
+                        }
+                    }
+                };
+                let request_id = raw
+                    .payload
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let bytes = raw.binary_data.clone().unwrap_or_default();
+                Ok(DocumentStateEvent::SaveRequested {
+                    name,
+                    intent,
                     bytes,
                     request_id,
                 })

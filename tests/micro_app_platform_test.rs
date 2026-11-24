@@ -136,9 +136,9 @@ fn test_pdfcraft_adapter_protocol_parsing() {
         binary_data: Some(sample_pdf_bytes.clone()),
     };
     match adapter.parse_incoming(&msg_save).unwrap() {
-        DocumentStateEvent::SaveRequested { name, save_as, bytes, request_id } => {
+        DocumentStateEvent::SaveRequested { name, intent, bytes, request_id } => {
             assert_eq!(name, "contract.pdf");
-            assert!(save_as);
+            assert_eq!(intent, office_utility_vn_ui::platform::adapter::SaveOperationIntent::SaveAs);
             assert_eq!(bytes, sample_pdf_bytes);
             assert_eq!(request_id, None);
         }
@@ -187,14 +187,38 @@ fn test_gridcraft_adapter_protocol_parsing() {
         binary_data: Some(sample_xlsx.clone()),
     };
     match adapter.parse_incoming(&msg_save).unwrap() {
-        DocumentStateEvent::SaveRequested { name, save_as, bytes, request_id } => {
+        DocumentStateEvent::SaveRequested { name, intent, bytes, request_id } => {
             assert_eq!(name, "sheet.xlsx");
-            assert!(!save_as);
+            assert_eq!(intent, office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save);
             assert_eq!(bytes, sample_xlsx);
             assert_eq!(request_id.as_deref(), Some("save-1-1"));
         }
         other => panic!("Expected SaveRequested, got {other:?}"),
     }
+
+    // Export message (gridcraft:export)
+    let msg_export = RawBridgeMessage {
+        type_name: "gridcraft:export".to_string(),
+        payload: json!({ "name": "export.csv", "id": "export-1-1" }),
+        binary_data: Some(b"a,b,c\n1,2,3".to_vec()),
+    };
+    match adapter.parse_incoming(&msg_export).unwrap() {
+        DocumentStateEvent::SaveRequested { name, intent, bytes, request_id } => {
+            assert_eq!(name, "export.csv");
+            assert_eq!(intent, office_utility_vn_ui::platform::adapter::SaveOperationIntent::Export);
+            assert_eq!(bytes, b"a,b,c\n1,2,3");
+            assert_eq!(request_id.as_deref(), Some("export-1-1"));
+        }
+        other => panic!("Expected SaveRequested for export, got {other:?}"),
+    }
+
+    // Ambiguous save intent without id or saveAs must fail safely
+    let msg_ambiguous = RawBridgeMessage {
+        type_name: "gridcraft:save".to_string(),
+        payload: json!({ "name": "ambiguous.xlsx" }),
+        binary_data: Some(vec![1, 2, 3]),
+    };
+    assert!(adapter.parse_incoming(&msg_ambiguous).is_err());
 
     // Format Saved & Failed
     let saved_msg = GridCraftAdapter::format_saved("save-1-1");
