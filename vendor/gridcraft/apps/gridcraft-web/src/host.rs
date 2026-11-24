@@ -61,6 +61,14 @@ struct HostSaveIntent {
     save_as: bool,
 }
 
+#[derive(Clone, Debug)]
+struct ConfirmedSavedAck {
+    id: String,
+    new_name: Option<String>,
+    new_path: Option<String>,
+    new_doc_id: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct Bridge {
     host: Rc<Host>,
@@ -69,7 +77,7 @@ pub struct Bridge {
     confirmed: bool,
     next_save_id: Rc<Cell<u64>>,
     pending_saves: Rc<RefCell<HashMap<String, PendingSave>>>,
-    confirmed_saved_ids: Rc<RefCell<Vec<String>>>,
+    confirmed_saved_acks: Rc<RefCell<Vec<ConfirmedSavedAck>>>,
     last_saved_revisions: Rc<RefCell<HashMap<u64, u64>>>,
     pending_downloads: Rc<RefCell<Vec<(String, Vec<u8>)>>>,
     current_open_id: Rc<RefCell<Option<String>>>,
@@ -95,7 +103,7 @@ impl Bridge {
             confirmed,
             next_save_id: Rc::new(Cell::new(1)),
             pending_saves: Rc::default(),
-            confirmed_saved_ids: Rc::default(),
+            confirmed_saved_acks: Rc::default(),
             last_saved_revisions: Rc::default(),
             pending_downloads: Rc::default(),
             current_open_id: Rc::default(),
@@ -296,10 +304,10 @@ impl Bridge {
             }
         }
 
-        let confirmed_ids = std::mem::take(&mut *self.confirmed_saved_ids.borrow_mut());
-        for id in confirmed_ids {
+        let confirmed_acks = std::mem::take(&mut *self.confirmed_saved_acks.borrow_mut());
+        for ack in confirmed_acks {
             let mut pending_saves = self.pending_saves.borrow_mut();
-            if let Some(pending) = pending_saves.remove(&id) {
+            if let Some(pending) = pending_saves.remove(&ack.id) {
                 let mut last_revs = self.last_saved_revisions.borrow_mut();
                 let last_rev = last_revs.get(&pending.doc_uid).copied().unwrap_or(0);
                 if pending.revision >= last_rev {
@@ -309,16 +317,26 @@ impl Bridge {
                         if cur == i {
                             if let Some(doc) = app.session.active_mut() {
                                 doc.saved = pending.snapshot.clone();
-                                if doc.path.is_none() {
-                                    doc.title = pending.name;
+                                if let Some(ref new_n) = ack.new_name {
+                                    doc.title = new_n.clone();
+                                } else if doc.path.is_none() {
+                                    doc.title = pending.name.clone();
+                                }
+                                if let Some(ref new_p) = ack.new_path {
+                                    doc.path = Some(new_p.clone());
                                 }
                             }
                         } else {
                             app.session.set_active(i);
                             if let Some(doc) = app.session.active_mut() {
                                 doc.saved = pending.snapshot.clone();
-                                if doc.path.is_none() {
-                                    doc.title = pending.name;
+                                if let Some(ref new_n) = ack.new_name {
+                                    doc.title = new_n.clone();
+                                } else if doc.path.is_none() {
+                                    doc.title = pending.name.clone();
+                                }
+                                if let Some(ref new_p) = ack.new_path {
+                                    doc.path = Some(new_p.clone());
                                 }
                             }
                             app.session.set_active(cur);
@@ -365,12 +383,13 @@ impl Bridge {
                     });
                 } else {
                     log::warn!(
-                        "ignoring stale save acknowledgment for id {id}: revision {} < last saved revision {last_rev}",
+                        "ignoring stale save acknowledgment for id {}: revision {} < last saved revision {last_rev}",
+                        ack.id,
                         pending.revision
                     );
                 }
             } else {
-                log::warn!("received unexpected or duplicate save acknowledgment for id {id}");
+                log::warn!("received unexpected or duplicate save acknowledgment for id {}", ack.id);
             }
         }
 
@@ -407,7 +426,8 @@ impl Bridge {
 
     fn listen(&self, inbox: Inbox, ctx: egui::Context) {
         let confirmed = self.confirmed;
-        let confirmed_saved_ids = self.confirmed_saved_ids.clone();
+        let confirmed_saved_acks = self.confirmed_saved_acks.clone();
+        let confirmed_saved_acks_for_msgs = self.confirmed_saved_acks.clone();
         let pending_saves_for_fail = self.pending_saves.clone();
         let app_ctx_for_open = ctx.clone();
         let app_ctx_for_saved = ctx.clone();
@@ -419,7 +439,15 @@ impl Bridge {
             }
             Message::Saved { id } => {
                 if confirmed {
-                    confirmed_saved_ids.borrow_mut().push(id);
+                    let mut acks = confirmed_saved_acks.borrow_mut();
+                    if !acks.iter().any(|a| a.id == id) {
+                        acks.push(ConfirmedSavedAck {
+                            id,
+                            new_name: None,
+                            new_path: None,
+                            new_doc_id: None,
+                        });
+                    }
                     app_ctx_for_saved.request_repaint();
                 }
             }
@@ -474,6 +502,35 @@ impl Bridge {
                                 save_as,
                             });
                             app_ctx_for_intents.request_repaint();
+                        } else if t == "gridcraft:saved" {
+                            let save_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("id"))
+                                .ok()
+                                .and_then(|v| v.as_string());
+                            if let Some(id) = save_id {
+                                let new_name = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("name"))
+                                    .ok()
+                                    .and_then(|v| v.as_string());
+                                let new_path = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("path"))
+                                    .ok()
+                                    .and_then(|v| v.as_string());
+                                let new_doc_id = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("doc_id"))
+                                    .ok()
+                                    .and_then(|v| v.as_string());
+                                let mut acks = confirmed_saved_acks_for_msgs.borrow_mut();
+                                if let Some(existing) = acks.iter_mut().find(|a| a.id == id) {
+                                    if new_name.is_some() { existing.new_name = new_name; }
+                                    if new_path.is_some() { existing.new_path = new_path; }
+                                    if new_doc_id.is_some() { existing.new_doc_id = new_doc_id; }
+                                } else {
+                                    acks.push(ConfirmedSavedAck {
+                                        id,
+                                        new_name,
+                                        new_path,
+                                        new_doc_id,
+                                    });
+                                }
+                                app_ctx_for_msgs.request_repaint();
+                            }
                         }
                     }
                 },

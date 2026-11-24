@@ -3,33 +3,44 @@
   "toolchain": {
     "rustc_channel": "stable",
     "target": "wasm32-unknown-unknown",
-    "trunk_version_min": "0.19.0"
+    "trunk_version_min": "0.19.0",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "trunk": "trunk 0.22.1",
+    "wasm_opt": "wasm-opt version 119"
   },
   "vendor": {
     "name": "gridcraft",
     "upstream_repository": "https://github.com/storytold/gridcraft.git",
     "upstream_commit": "d60709a1738d4f02c7f507848441306c0aacf692",
     "version": "0.19.1",
-    "source_tree_sha256": "cc65895b35401dbf2e50a401042048f202434bcec94d8f279f317a22606cd864",
+    "source_tree_sha256": "57ded3fdf7603e8deadd0cfa7c06ad4ea7c226640ae502fb813acb8059cad0e6",
     "lockfile_path": "vendor/gridcraft/Cargo.lock",
     "lockfile_sha256": "cbde97ae234e836a04517681b93e44add4bea1458b14a652e01c5cbfe26d94ef",
     "patch_file": "patches/0001-gridcraft-confirmed-save.patch",
-    "patch_sha256": "cf813d27f706958cb0490b4e5a4f98b3995354480a9fe415a7be97fb7fa90087"
+    "patch_sha256": "2faf081b5ebeb0834d401224659ab642be245db5dbfc379653adc14e8aebde4b"
   },
   "artifacts": [
     {
+      "name": "ico",
+      "path": "public/gridcraft/gridcraft-45f84b7721cb79a9.ico",
+      "dist_path": "dist/gridcraft/gridcraft-45f84b7721cb79a9.ico",
+      "sha256": "f5693fcf3f71695d5ab332d24377c80e0315f952c24ae1eb3b4203bad9ea7f07",
+      "size": 26895,
+      "required": true
+    },
+    {
       "name": "wasm",
-      "path": "public/gridcraft/gridcraft-web-8ec302fc82564728_bg.wasm",
-      "dist_path": "dist/gridcraft/gridcraft-web-8ec302fc82564728_bg.wasm",
-      "sha256": "de9a4e709481f44e9a86123f7a90595a7d77d312309c6693633edd8902e67f54",
-      "size": 27375930,
+      "path": "public/gridcraft/gridcraft-web-ca0a0aa8ad489bc5_bg.wasm",
+      "dist_path": "dist/gridcraft/gridcraft-web-ca0a0aa8ad489bc5_bg.wasm",
+      "sha256": "9de8675d4112528f8f44fe76522df80a89c907dc51858900de649162a6e79ec7",
+      "size": 27376589,
       "required": true
     },
     {
       "name": "js",
-      "path": "public/gridcraft/gridcraft-web-34b8ab77b32c0566.js",
-      "dist_path": "dist/gridcraft/gridcraft-web-34b8ab77b32c0566.js",
-      "sha256": "393f2bd107c300039849260df8fcc656f1ae898fe89f0cec53ac97b70df0e1a6",
+      "path": "public/gridcraft/gridcraft-web-ed020013f72b6939.js",
+      "dist_path": "dist/gridcraft/gridcraft-web-ed020013f72b6939.js",
+      "sha256": "700afedd45b1fc3729c84753a47cc8fc3242e455cb0a3c77c74b9ae25d3f69f5",
       "size": 174912,
       "required": true
     },
@@ -37,16 +48,8 @@
       "name": "html",
       "path": "public/gridcraft/index.html",
       "dist_path": "dist/gridcraft/index.html",
-      "sha256": "17ec8ddd46b9626fdd89c7d76582bf035523b4ffc8f10830843915b3111f638d",
+      "sha256": "0a55468b3f88ef762defef76452b5b07e34553e2cc643eaed47fa1f58c691801",
       "size": 1773,
-      "required": true
-    },
-    {
-      "name": "ico",
-      "path": "public/gridcraft/gridcraft-45f84b7721cb79a9.ico",
-      "dist_path": "dist/gridcraft/gridcraft-45f84b7721cb79a9.ico",
-      "sha256": "f5693fcf3f71695d5ab332d24377c80e0315f952c24ae1eb3b4203bad9ea7f07",
-      "size": 26895,
       "required": true
     }
   ]

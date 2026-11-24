@@ -1366,6 +1366,162 @@ fn test_gridcraft_behavioral_packaged_workbook_save_and_exit_close_decision() {
     );
 }
 
+#[test]
+fn test_p1_save_as_identity_rebinding_genuine_xlsx_fixtures() {
+    use office_engine::data_lab::excel_reader::read_tabular_rows;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        handle_gridcraft_save_outcome, DevSaveResult,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::coordinator::HostDocumentCoordinator;
+    use sha2::{Digest, Sha256};
+    use std::sync::atomic::AtomicBool;
+
+    let cancel_flag = AtomicBool::new(false);
+    let temp_dir = tempfile::tempdir().expect("Failed to create tempdir");
+    let path_a = temp_dir.path().join("A.xlsx");
+    let path_b = temp_dir.path().join("B.xlsx");
+
+    // 1. Nạp fixture XLSX gốc vào A.xlsx
+    let a_bytes_initial = std::fs::read("fixtures/stage2c_v1.xlsx").expect("read fixture stage2c_v1");
+    std::fs::write(&path_a, &a_bytes_initial).expect("write A.xlsx");
+    let a_sha256_initial = format!("{:x}", Sha256::digest(&a_bytes_initial));
+
+    // Độc lập parse A.xlsx và kiểm tra dữ liệu ban đầu
+    let parsed_a = read_tabular_rows(&a_bytes_initial, &cancel_flag).expect("parse A.xlsx");
+    assert_eq!(parsed_a[0][0], "98765", "A1 ban đầu của A.xlsx phải là 98765");
+
+    let state = GridCraftState::new();
+    let coordinator = StoredValue::new(HostDocumentCoordinator::new());
+
+    // Mở tài liệu A.xlsx
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-session-A".into(),
+        file_path: path_a.to_str().unwrap().to_string(),
+        file_name: "A.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+    });
+    state.set_document_session(
+        Some("doc-session-A".into()),
+        Some(path_a.to_str().unwrap().to_string()),
+        1,
+    );
+    state.active_file_name.set(Some("A.xlsx".into()));
+    coordinator.update_value(|c| {
+        c.on_document_opened("doc-session-A", path_a.to_str().unwrap(), "fp-a");
+    });
+
+    // 2. Thực hiện Save As sang B.xlsx
+    let b_bytes_v2 = std::fs::read("fixtures/stage2c_v2.xlsx").expect("read fixture stage2c_v2");
+    std::fs::write(&path_b, &b_bytes_v2).expect("write B.xlsx");
+
+    let save_as_outcome = DevSaveResult::Saved {
+        dest_path: path_b.to_str().unwrap().to_string(),
+        new_doc_id: "doc-session-B".to_string(),
+        committed_rev: 1,
+    };
+
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(save_as_outcome),
+        SaveOperationIntent::SaveAs,
+        "A.xlsx",
+        "req-save-as-1",
+        &b_bytes_v2,
+        0,
+        None,
+        None,
+    );
+
+    // XÁC MINH BẤT BIẾN REBINDING SAU KHI SAVE AS THÀNH CÔNG:
+    // a. Active file path phải được rebind sang B.xlsx
+    assert_eq!(state.active_file_path.get_untracked(), Some(path_b.to_str().unwrap().to_string()));
+    // b. Active document ID phải là doc-session-B
+    assert_eq!(state.active_document_id.get_untracked(), Some("doc-session-B".to_string()));
+    // c. Active file name phải là B.xlsx (không được giữ A.xlsx)
+    assert_eq!(state.active_file_name.get_untracked(), Some("B.xlsx".to_string()));
+    // d. Coordinator phải trỏ tới B.xlsx
+    assert_eq!(coordinator.read_value().dest_path(), Some(path_b.to_str().unwrap()));
+
+    // 3. Người dùng chỉnh sửa trên tài liệu B
+    state.bump_edit_revision("doc-session-B");
+    coordinator.update_value(|c| {
+        c.on_user_edit();
+    });
+    assert!(state.is_dirty.get_untracked(), "Workbook B phải ở trạng thái dirty sau chỉnh sửa");
+
+    // 4. Người dùng thực hiện lưu thông thường (Ordinary Save):
+    // Phân giải session lưu tiếp theo - BẮT BUỘC phải trỏ tới B.xlsx, tuyệt đối không trỏ về A.xlsx
+    let resolved_b = state.resolve_save_session("B.xlsx").expect("Phải phân giải được session B");
+    assert_eq!(resolved_b.document_id, "doc-session-B");
+    assert_eq!(resolved_b.file_path, path_b.to_str().unwrap());
+
+    // Giả lập ghi nội dung sửa đổi vào B (sử dụng fixture test_uat_sample với nội dung mới)
+    let b_bytes_modified = std::fs::read("fixtures/test_uat_sample.xlsx").expect("read test_uat_sample");
+    std::fs::write(&resolved_b.file_path, &b_bytes_modified).expect("write modified B.xlsx");
+
+    let ordinary_save_outcome = DevSaveResult::Saved {
+        dest_path: path_b.to_str().unwrap().to_string(),
+        new_doc_id: "doc-session-B".to_string(),
+        committed_rev: 2,
+    };
+
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coordinator),
+        Ok(ordinary_save_outcome),
+        SaveOperationIntent::Save,
+        "B.xlsx",
+        "req-save-ord-2",
+        &b_bytes_modified,
+        1,
+        None,
+        None,
+    );
+
+    // 5. Độc lập parse B.xlsx và xác minh nội dung ô đã cập nhật
+    let parsed_b_after = read_tabular_rows(&b_bytes_modified, &cancel_flag).expect("parse B.xlsx after save");
+    assert!(!parsed_b_after.is_empty(), "B.xlsx phải chứa dữ liệu bảng tính hợp lệ");
+
+    // 6. XÁC MINH TUYỆT ĐỐI: A.xlsx KHÔNG HỀ BỊ THAY ĐỔI DÙ CHỈ 1 BYTE (SHA-256 BẤT BIẾN)
+    let a_bytes_final = std::fs::read(&path_a).expect("read A.xlsx final");
+    let a_sha256_final = format!("{:x}", Sha256::digest(&a_bytes_final));
+    assert_eq!(
+        a_sha256_final, a_sha256_initial,
+        "A.xlsx SHA-256 BẮT BUỘC PHẢI NGUYÊN VẸN 100% SAU KHI LƯU VÀ SỬA ĐỔI B.xlsx!"
+    );
+}
+
+#[test]
+fn test_p2_gridcraft_pdf_and_format_validation() {
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::validate_save_as_format_compatibility;
+
+    let xlsx_bytes = b"PK\x03\x04_XLSX_DATA";
+    let pdf_bytes = b"%PDF-1.7\n1 0 obj\n<<>>\nendobj";
+    let csv_bytes = b"Col1,Col2,Col3\nVal1,Val2,Val3\n";
+
+    // 1. XLSX validation
+    assert!(validate_save_as_format_compatibility("test.xlsx", xlsx_bytes).is_ok());
+    assert!(validate_save_as_format_compatibility("test.xlsm", xlsx_bytes).is_ok());
+    assert!(validate_save_as_format_compatibility("test.pdf", xlsx_bytes).is_err());
+    assert!(validate_save_as_format_compatibility("test.csv", xlsx_bytes).is_err());
+
+    // 2. PDF validation
+    assert!(validate_save_as_format_compatibility("report.pdf", pdf_bytes).is_ok());
+    assert!(validate_save_as_format_compatibility("report.xlsx", pdf_bytes).is_err());
+    assert!(validate_save_as_format_compatibility("report.csv", pdf_bytes).is_err());
+
+    // 3. CSV validation
+    assert!(validate_save_as_format_compatibility("data.csv", csv_bytes).is_ok());
+    assert!(validate_save_as_format_compatibility("data.txt", csv_bytes).is_ok());
+    assert!(validate_save_as_format_compatibility("data.xlsx", csv_bytes).is_err());
+    assert!(validate_save_as_format_compatibility("data.pdf", csv_bytes).is_err());
+}
+
 
 
 

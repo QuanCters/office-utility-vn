@@ -79,14 +79,22 @@ def test_changed_source_with_intact_old_bundle():
 
 def test_missing_or_corrupted_dist_artifact():
     print("Testing Case 4: Missing or corrupted output asset in dist...")
-    dist_wasm = os.path.join(REPO_ROOT, "dist", "gridcraft", "gridcraft-web-8ec302fc82564728_bg.wasm")
+    import json
+    prov_path = os.path.join(REPO_ROOT, "vendor", "gridcraft", "PROVENANCE.json")
+    with open(prov_path, "r", encoding="utf-8") as f:
+        prov = json.load(f)
+
+    wasm_entry = next((a for a in prov.get("artifacts", []) if a.get("name") == "wasm"), None)
+    assert wasm_entry, "WASM artifact entry must exist in PROVENANCE.json"
+
+    dist_wasm = os.path.join(REPO_ROOT, wasm_entry["dist_path"])
     dist_bak = dist_wasm + ".bak"
 
     # Ensure dist exists
     os.makedirs(os.path.dirname(dist_wasm), exist_ok=True)
     if not os.path.exists(dist_wasm):
         # copy from public
-        src_wasm = os.path.join(REPO_ROOT, "public", "gridcraft", "gridcraft-web-8ec302fc82564728_bg.wasm")
+        src_wasm = os.path.join(REPO_ROOT, wasm_entry["path"])
         shutil.copy2(src_wasm, dist_wasm)
 
     try:
@@ -155,6 +163,87 @@ def test_modified_vendor_patch():
         with open(patch_path, "wb") as f:
             f.write(original_bytes)
 
+def test_missing_or_malformed_provenance_source_tree():
+    print("Testing Case 7: Missing or malformed source_tree_sha256 in PROVENANCE.json...")
+    prov_path = os.path.join(REPO_ROOT, "vendor", "gridcraft", "PROVENANCE.json")
+    with open(prov_path, "r", encoding="utf-8") as f:
+        original_json = f.read()
+
+    try:
+        import json
+        data = json.loads(original_json)
+        data["vendor"]["source_tree_sha256"] = ""
+        with open(prov_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+        ok, errs = evidence.verify_vendor_pin(REPO_ROOT)
+        assert not ok, "Verification MUST fail when source_tree_sha256 is missing/empty!"
+        assert any("source_tree_sha256" in e for e in errs), f"Expected source_tree_sha256 error, got: {errs}"
+        print("  ✓ PASSED: Missing source_tree_sha256 was rejected fail-closed.")
+    finally:
+        with open(prov_path, "w", encoding="utf-8") as f:
+            f.write(original_json)
+
+def test_missing_or_malformed_lockfile_metadata():
+    print("Testing Case 8: Missing or malformed lockfile_sha256 in PROVENANCE.json...")
+    prov_path = os.path.join(REPO_ROOT, "vendor", "gridcraft", "PROVENANCE.json")
+    with open(prov_path, "r", encoding="utf-8") as f:
+        original_json = f.read()
+
+    try:
+        import json
+        data = json.loads(original_json)
+        data["vendor"]["lockfile_sha256"] = ""
+        with open(prov_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+        ok, errs = evidence.verify_vendor_pin(REPO_ROOT)
+        assert not ok, "Verification MUST fail when lockfile_sha256 is missing/empty!"
+        assert any("lockfile_sha256" in e for e in errs), f"Expected lockfile_sha256 error, got: {errs}"
+        print("  ✓ PASSED: Missing lockfile_sha256 was rejected fail-closed.")
+    finally:
+        with open(prov_path, "w", encoding="utf-8") as f:
+            f.write(original_json)
+
+def test_missing_or_malformed_toolchain_metadata():
+    print("Testing Case 9: Missing or malformed toolchain metadata in PROVENANCE.json...")
+    prov_path = os.path.join(REPO_ROOT, "vendor", "gridcraft", "PROVENANCE.json")
+    with open(prov_path, "r", encoding="utf-8") as f:
+        original_json = f.read()
+
+    try:
+        import json
+        data = json.loads(original_json)
+        del data["toolchain"]
+        with open(prov_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+        ok, errs = evidence.verify_vendor_pin(REPO_ROOT)
+        assert not ok, "Verification MUST fail when toolchain metadata is missing!"
+        assert any("toolchain" in e for e in errs), f"Expected toolchain error, got: {errs}"
+        print("  ✓ PASSED: Missing toolchain metadata was rejected fail-closed.")
+    finally:
+        with open(prov_path, "w", encoding="utf-8") as f:
+            f.write(original_json)
+
+def test_missing_dist_when_dist_required():
+    print("Testing Case 10: Missing dist/ directory when dist_required=True...")
+    dist_dir = os.path.join(REPO_ROOT, "dist")
+    dist_bak = os.path.join(REPO_ROOT, "dist.bak.negative_test")
+
+    had_dist = os.path.exists(dist_dir)
+    if had_dist:
+        shutil.move(dist_dir, dist_bak)
+
+    try:
+        ok, errs = evidence.verify_artifacts(REPO_ROOT, dist_required=True)
+        assert not ok, "Verification MUST fail when dist_required=True and dist/ does not exist!"
+        assert any("dist/' does not exist" in e for e in errs), f"Expected missing dist error, got: {errs}"
+        print("  ✓ PASSED: Missing dist/ with dist_required=True was rejected fail-closed.")
+    finally:
+        if had_dist and os.path.exists(dist_bak):
+            shutil.move(dist_bak, dist_dir)
+
 def main():
     print("================================================================")
     print("🧪 Running Executable Negative Verification Tests (P2 #4678429571 & Mandatory Corrections A, B)")
@@ -165,7 +254,11 @@ def main():
     test_missing_or_corrupted_dist_artifact()
     test_cli_false_success_regression()
     test_modified_vendor_patch()
-    print("\n🎉 ALL 6 NEGATIVE VERIFICATION TESTS PASSED CLEANLY (FAIL-CLOSED VERIFIED)!")
+    test_missing_or_malformed_provenance_source_tree()
+    test_missing_or_malformed_lockfile_metadata()
+    test_missing_or_malformed_toolchain_metadata()
+    test_missing_dist_when_dist_required()
+    print("\n🎉 ALL 10 NEGATIVE VERIFICATION TESTS PASSED CLEANLY (FAIL-CLOSED VERIFIED)!")
 
 if __name__ == "__main__":
     main()

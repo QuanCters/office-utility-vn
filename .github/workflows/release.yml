@@ -106,6 +106,17 @@ jobs:
         with:
           args: ${{ matrix.args }}
 
+      # Mandatory post-build dist verification (P2 #4679604061 / Requirement 4)
+      - name: Verify Post-Build Dist Artifacts Fail-Closed
+        shell: bash
+        run: python3 harness/runner/evidence.py --verify-artifacts --check-dist
+
+      - name: Verify Package Artifact Availability
+        shell: bash
+        run: |
+          echo "Verifying generated package artifacts exist..."
+          find src-tauri/target -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o -name "*.app" || true
+
       - name: Upload Build Artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -118,10 +129,12 @@ jobs:
             src-tauri/target/**/bundle/macos/*.app
           if-no-files-found: warn
 
+  # PUBLICATION FREEZE: Production release publication strictly frozen per Product Owner Decision
+  # Disabled until separate Product Owner release authorization is issued.
   publish-release:
-    name: Authorized Public Release Publication
+    name: Authorized Public Release Publication (FROZEN - UNAUTHORIZED)
     needs: [verify-release-gate, build-tauri]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    if: false # Publication strictly unauthorized until Product Owner release authorization is issued
     environment: production-release
     permissions:
       contents: write

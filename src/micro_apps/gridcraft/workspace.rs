@@ -102,14 +102,22 @@ pub fn handle_gridcraft_save_outcome(
                 // - Thay đổi committed revision của workbook
                 // - Cho phép Save & Exit
                 // - Xem file export là workbook gốc
-                send_saved_to_iframe(GRIDCRAFT_IFRAME_ID, req_id);
+                send_saved_to_iframe(GRIDCRAFT_IFRAME_ID, req_id, None, None, None);
                 return;
             }
+
+            let actual_file_name = std::path::Path::new(&dest_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(name)
+                .to_string();
 
             if let Some(coord) = coordinator {
                 coord.update_value(|c| {
                     let fp = crate::platform::persistence::compute_fingerprint(bytes);
                     c.on_durable_write_completed(req_id, &fp);
+                    // P1 #4679604052: Đồng bộ hóa Coordinator với session và đường dẫn mới sau Save As
+                    c.on_document_opened(&new_doc_id, &dest_path, &fp);
                 });
             }
             let live_edit_rev = s.get_edit_revision(&new_doc_id);
@@ -119,18 +127,24 @@ pub fn handle_gridcraft_save_outcome(
             s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
                 document_id: new_doc_id.clone(),
                 file_path: dest_path.clone(),
-                file_name: name.to_string(),
+                file_name: actual_file_name.clone(),
                 revision: committed_rev,
                 is_dirty: is_still_dirty,
                 edit_revision: live_edit_rev,
             });
             s.set_document_session(
-                Some(new_doc_id),
+                Some(new_doc_id.clone()),
                 Some(dest_path.clone()),
                 committed_rev,
             );
-            s.active_file_name.set(Some(name.to_string()));
-            send_saved_to_iframe(GRIDCRAFT_IFRAME_ID, req_id);
+            s.active_file_name.set(Some(actual_file_name.clone()));
+            send_saved_to_iframe(
+                GRIDCRAFT_IFRAME_ID,
+                req_id,
+                Some(&actual_file_name),
+                Some(&dest_path),
+                Some(&new_doc_id),
+            );
 
             let close_req = s.pending_close_request_id.get_untracked();
             s.pending_close_request_id.set(None);
@@ -418,6 +432,20 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 )
                                 .ok()
                                 .and_then(|v| v.as_string());
+                                let incoming_doc_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("doc_id"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string())
+                                .or_else(|| {
+                                    js_sys::Reflect::get(
+                                        &data,
+                                        &wasm_bindgen::JsValue::from_str("document_id"),
+                                    )
+                                    .ok()
+                                    .and_then(|v| v.as_string())
+                                });
                                 let explicit_intent_str = js_sys::Reflect::get(
                                     &data,
                                     &wasm_bindgen::JsValue::from_str("intent"),
@@ -516,8 +544,9 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         }
                                     }
                                 } else {
-                                    // Finding 2: Phân giải chính xác phiên workbook đích để tránh ghi đè workbook khác
-                                    let resolved_session = s.resolve_save_session(&name);
+                                    // Finding 2 & P1 #4679604052: Phân giải chính xác phiên workbook đích bằng doc_id hoặc name để tránh ghi đè workbook khác
+                                    let lookup_key = incoming_doc_id.as_deref().unwrap_or(&name);
+                                    let resolved_session = s.resolve_save_session(lookup_key);
                                     let (target_doc_id, target_path, target_rev) =
                                         if let Some(ref sess) = resolved_session {
                                             (
@@ -533,7 +562,7 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         };
 
                                     let effective_doc_id =
-                                        target_doc_id.as_deref().unwrap_or("gridcraft-doc");
+                                        target_doc_id.as_deref().or(incoming_doc_id.as_deref()).unwrap_or("gridcraft-doc");
                                     let effective_path = target_path.as_deref().unwrap_or(&name);
 
                                     // Finding 1: Đồng bộ hóa Coordinator với workbook này trước khi phát lệnh lưu
@@ -851,9 +880,15 @@ pub fn send_save_failed_to_iframe(iframe_id: &str, error: &str, req_id: Option<&
 #[cfg(not(target_arch = "wasm32"))]
 pub fn send_save_failed_to_iframe(_iframe_id: &str, _error: &str, _req_id: Option<&str>) {}
 
-/// Gửi thông báo xác nhận lưu thành công vào GridCraft iframe (Bản vá 0001 confirmed save)
+/// Gửi thông báo xác nhận lưu thành công vào GridCraft iframe (Bản vá 0001 confirmed save & P1 #4679604052)
 #[cfg(target_arch = "wasm32")]
-pub fn send_saved_to_iframe(iframe_id: &str, req_id: &str) {
+pub fn send_saved_to_iframe(
+    iframe_id: &str,
+    req_id: &str,
+    new_name: Option<&str>,
+    dest_path: Option<&str>,
+    new_doc_id: Option<&str>,
+) {
     use web_sys::window;
     if let Some(win) = window() {
         if let Some(doc) = win.document() {
@@ -871,6 +906,27 @@ pub fn send_saved_to_iframe(iframe_id: &str, req_id: &str) {
                             &wasm_bindgen::JsValue::from_str("id"),
                             &wasm_bindgen::JsValue::from_str(req_id),
                         );
+                        if let Some(n) = new_name {
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("name"),
+                                &wasm_bindgen::JsValue::from_str(n),
+                            );
+                        }
+                        if let Some(p) = dest_path {
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("path"),
+                                &wasm_bindgen::JsValue::from_str(p),
+                            );
+                        }
+                        if let Some(d) = new_doc_id {
+                            let _ = js_sys::Reflect::set(
+                                &obj,
+                                &wasm_bindgen::JsValue::from_str("doc_id"),
+                                &wasm_bindgen::JsValue::from_str(d),
+                            );
+                        }
                         let _ = cw.post_message(&obj, "*");
                     }
                 }
@@ -880,7 +936,13 @@ pub fn send_saved_to_iframe(iframe_id: &str, req_id: &str) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn send_saved_to_iframe(_iframe_id: &str, _req_id: &str) {}
+pub fn send_saved_to_iframe(
+    _iframe_id: &str,
+    _req_id: &str,
+    _new_name: Option<&str>,
+    _dest_path: Option<&str>,
+    _new_doc_id: Option<&str>,
+) {}
 
 /// Gửi thông điệp yêu cầu iframe GridCraft tuần tự hóa và lưu tệp chủ động (Stage 4C-0C Task 1)
 /// Trả về true nếu đã gửi thành công tới iframe, false nếu iframe không tồn tại trong DOM (Finding 4)
@@ -1081,11 +1143,15 @@ pub async fn execute_gridcraft_save(
     }
 
     // 2. Save As (hoặc Lưu lần đầu) thông qua Native Dialog
-    // Finding 3: Giới hạn định dạng hộp thoại Save As nghiêm ngặt theo chữ ký dữ liệu đã serialize
+    // Finding 3 & P2 #4679604061: Giới hạn định dạng hộp thoại Save As nghiêm ngặt theo chữ ký dữ liệu đã serialize (XLSX, CSV, PDF)
     let (filter_name, extensions) = if bytes.starts_with(b"PK\x03\x04") {
         ("Bảng tính Excel (*.xlsx)", vec!["xlsx"])
-    } else {
+    } else if bytes.starts_with(b"%PDF-") {
+        ("Tài liệu PDF (*.pdf)", vec!["pdf"])
+    } else if name.ends_with(".csv") || std::str::from_utf8(bytes).is_ok() {
         ("Tệp CSV (*.csv)", vec!["csv"])
+    } else {
+        return Ok(DevSaveResult::Failed("Định dạng dữ liệu không được hỗ trợ".to_string()));
     };
 
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
@@ -1168,10 +1234,11 @@ pub async fn execute_gridcraft_save(
     }
 }
 
-/// Xác thực tính tương thích giữa định dạng phần mở rộng của đường dẫn đích và nội dung nhị phân (Finding 3: Save As Format)
+/// Xác thực tính tương thích giữa định dạng phần mở rộng của đường dẫn đích và nội dung nhị phân (Finding 3 & P2 #4679604061: XLSX, CSV, PDF)
 pub fn validate_save_as_format_compatibility(dest_path: &str, bytes: &[u8]) -> Result<(), String> {
     let dest_lower = dest_path.to_lowercase();
     let is_zip_xlsx = bytes.starts_with(b"PK\x03\x04");
+    let is_pdf = bytes.starts_with(b"%PDF-");
 
     if is_zip_xlsx {
         if !dest_lower.ends_with(".xlsx") && !dest_lower.ends_with(".xlsm") {
@@ -1179,10 +1246,26 @@ pub fn validate_save_as_format_compatibility(dest_path: &str, bytes: &[u8]) -> R
                 "Xung đột định dạng tệp: Dữ liệu nhị phân là Excel ZIP/OpenXML nhưng tệp đích là '{dest_path}'. Bị từ chối để tránh hỏng dữ liệu."
             ));
         }
+    } else if is_pdf {
+        if !dest_lower.ends_with(".pdf") {
+            return Err(format!(
+                "Xung đột định dạng tệp: Dữ liệu nhị phân là PDF nhưng tệp đích là '{dest_path}'. Bị từ chối để tránh hỏng dữ liệu."
+            ));
+        }
     } else {
         if dest_lower.ends_with(".xlsx") || dest_lower.ends_with(".xlsm") {
             return Err(format!(
                 "Xung đột định dạng tệp: Tệp đích là Excel '{dest_path}' nhưng dữ liệu nhị phân không chứa chữ ký PK ZIP hợp lệ."
+            ));
+        }
+        if dest_lower.ends_with(".pdf") {
+            return Err(format!(
+                "Xung đột định dạng tệp: Tệp đích là PDF '{dest_path}' nhưng dữ liệu nhị phân không chứa chữ ký %PDF- hợp lệ."
+            ));
+        }
+        if !dest_lower.ends_with(".csv") && !dest_lower.ends_with(".txt") {
+            return Err(format!(
+                "Xung đột định dạng tệp: Tệp đích '{dest_path}' không tương thích với định dạng văn bản/CSV."
             ));
         }
     }

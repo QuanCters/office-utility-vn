@@ -474,6 +474,27 @@ def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
     lockfile_rel = vendor_info.get("lockfile_path", "vendor/gridcraft/Cargo.lock")
     expected_lockfile_sha = vendor_info.get("lockfile_sha256")
 
+    # Mandatory field enforcement (P2 #4679604061 / Provenance Gate)
+    if not expected_commit:
+        errors.append("Missing mandatory vendor field: 'upstream_commit'")
+    if not patch_rel or not expected_patch_sha:
+        errors.append("Missing mandatory vendor field: 'patch_file' or 'patch_sha256'")
+    if not lockfile_rel or not expected_lockfile_sha:
+        errors.append("Missing mandatory vendor field: 'lockfile_path' or 'lockfile_sha256'")
+    if not expected_tree_sha:
+        errors.append("Missing mandatory vendor field: 'source_tree_sha256'")
+
+    # Toolchain verification
+    toolchain = prov.get("toolchain")
+    if not toolchain or not isinstance(toolchain, dict):
+        errors.append("Missing or malformed mandatory 'toolchain' metadata in PROVENANCE.json")
+    else:
+        for req_field in ["rustc", "target", "trunk", "wasm_opt"]:
+            if not toolchain.get(req_field):
+                errors.append(f"Missing mandatory toolchain field: '{req_field}'")
+        if toolchain.get("target") != "wasm32-unknown-unknown":
+            errors.append(f"Toolchain target mismatch: expected 'wasm32-unknown-unknown', got '{toolchain.get('target')}'")
+
     # 1. Kiểm tra UPSTREAM_COMMIT.txt
     upstream_meta = os.path.join(repo_root, "vendor", "gridcraft", "UPSTREAM_COMMIT.txt")
     if not os.path.exists(upstream_meta):
@@ -589,6 +610,10 @@ def verify_artifacts(repo_root: str, check_dist: bool = False, dist_required: bo
         expected_size = item.get("size")
         is_required = item.get("required", True)
 
+        if not rel_path or not expected_sha or expected_size is None:
+            errors.append(f"Artifact entry is missing mandatory metadata ('path', 'sha256', or 'size'): {item}")
+            continue
+
         full_path = os.path.join(repo_root, rel_path)
         if not os.path.exists(full_path):
             if is_required:
@@ -685,7 +710,7 @@ def main():
 
     if "--verify-artifacts" in sys.argv:
         check_dist = "--check-dist" in sys.argv or "--dist" in sys.argv
-        dist_req = "--require-dist" in sys.argv
+        dist_req = "--require-dist" in sys.argv or "--dist-required" in sys.argv
         ok, errs = verify_artifacts(repo_root, check_dist=check_dist, dist_required=dist_req)
         if not ok:
             print("❌ Build artifact verification failed:")
