@@ -1314,7 +1314,7 @@ fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed(
         session_generation: 1,
         authorized_dest_path: active_path.to_string(),
         expected_revision: expected_rev,
-        request_id: Some("req-123".to_string()),
+        request_id: "req-123".to_string(),
     };
     assert_eq!(valid_grant.authorized_dest_path, active_path);
     assert_eq!(valid_grant.document_id, doc_id);

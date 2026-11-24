@@ -92,6 +92,7 @@ impl WindowCloseManager {
         self.is_authorized.set(true);
         self.is_dialog_open.set(false);
         self.active_request_id.set(None);
+        self.is_saving.set(false);
         let _ = request_id;
 
         #[cfg(target_arch = "wasm32")]

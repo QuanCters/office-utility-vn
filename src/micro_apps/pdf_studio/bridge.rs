@@ -62,17 +62,9 @@ pub enum SaveOutcome {
 }
 
 /// DTO phân quyền lưu đĩa có kiểu dữ liệu chặt chẽ (P1 #4676016514: Strict Save Grant Validation)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NativeSaveGrantDto {
-    pub grant_id: String,
-    pub document_id: String,
-    pub app_instance_id: String,
-    pub session_generation: u64,
-    pub authorized_dest_path: String,
-    pub expected_revision: u64,
-    #[serde(default)]
-    pub request_id: Option<String>,
-}
+pub use crate::platform::save_grant::{
+    validate_native_save_grant, NativeSaveGrantDto, SaveAsHandleDto, SaveRequestContext,
+};
 
 static MUT_GRANT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -770,47 +762,25 @@ pub async fn save_file_to_disk_or_download(
                 }
             };
 
+            let ctx = SaveRequestContext {
+                document_id: doc_id.to_string(),
+                app_instance_id: "pdf-studio-instance".to_string(),
+                session_generation: 1,
+                authorized_dest_path: Some(_path.to_string()),
+                expected_revision: expected_rev,
+                request_id: req_id.clone(),
+            };
+
             let skip_dest = is_mut_grant_active();
-
-            if !skip_dest && grant.authorized_dest_path != _path {
-                return Ok(SaveOutcome::Failed(format!(
-                    "Lỗi bất biến phiên tài liệu: Grant cấp cho {} nhưng tệp đang chọn là {}",
-                    grant.authorized_dest_path, _path
-                )));
-            }
-
-            if grant.grant_id.trim().is_empty() {
-                return Ok(SaveOutcome::Failed("Lỗi bất biến: Grant ID rỗng".into()));
-            }
-            if grant.document_id != doc_id {
-                return Ok(SaveOutcome::Failed(format!(
-                    "Lỗi bất biến: Grant document_id ({}) không khớp doc_id ({doc_id})",
-                    grant.document_id
-                )));
-            }
-            if grant.expected_revision != expected_rev {
-                return Ok(SaveOutcome::Failed(format!(
-                    "Lỗi bất biến: Grant expected_revision ({}) không khớp expected_rev ({expected_rev})",
-                    grant.expected_revision
-                )));
-            }
-            if grant.app_instance_id != "pdf-studio-instance" {
-                return Ok(SaveOutcome::Failed(format!(
-                    "Lỗi bất biến: Grant app_instance_id ({}) không khớp",
-                    grant.app_instance_id
-                )));
-            }
-            if let Some(ref req) = grant.request_id {
-                if req != &req_id {
-                    return Ok(SaveOutcome::Failed(format!(
-                        "Lỗi bất biến: Request ID ({req}) không khớp ({req_id})"
-                    )));
+            if !skip_dest {
+                if let Err(err) = validate_native_save_grant(&grant, &ctx) {
+                    return Ok(SaveOutcome::Failed(format!("Lỗi bất biến: {err}")));
                 }
             }
 
             let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
                 "grantId": grant.grant_id,
-                "requestId": grant.request_id.unwrap_or(req_id),
+                "requestId": grant.request_id,
                 "bytes": bytes,
             }))
             .map_err(|e| format!("{e:?}"))?;
@@ -850,41 +820,44 @@ pub async fn save_file_to_disk_or_download(
 
         match invoke("native_dialog_save_as", args).await {
             Ok(js_res) => {
-                if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res) {
-                    let new_doc_id = handle.get("document_id").and_then(|v| v.as_str()).map(|s| s.to_string());
-                    if let Some(grant) = handle.get("grant") {
-                        if let (Some(grant_id), Some(req_id)) = (
-                            grant.get("grant_id").and_then(|v| v.as_str()),
-                            grant.get("request_id").and_then(|v| v.as_str()),
-                        ) {
-                            let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
-                                "grantId": grant_id,
-                                "requestId": req_id,
-                                "bytes": bytes,
-                            }))
-                            .map_err(|e| format!("{e:?}"))?;
+                if let Ok(Some(handle)) = serde_wasm_bindgen::from_value::<Option<SaveAsHandleDto>>(js_res) {
+                    let ctx = SaveRequestContext {
+                        document_id: handle.document_id.clone(),
+                        app_instance_id: "pdf-studio-instance".to_string(),
+                        session_generation: 1,
+                        authorized_dest_path: Some(handle.file_path.clone()),
+                        expected_revision: 1,
+                        request_id: handle.grant.request_id.clone(),
+                    };
+                    if let Err(val_err) = validate_native_save_grant(&handle.grant, &ctx) {
+                        return Ok(SaveOutcome::Failed(format!("Thẩm định Save As grant thất bại: {val_err}")));
+                    }
 
-                            match invoke("secure_save_document", save_args).await {
-                                Ok(save_res) => {
-                                    let rev = if let Ok(resp) = serde_wasm_bindgen::from_value::<serde_json::Value>(save_res) {
-                                        resp.get("committed_revision").and_then(|v| v.as_u64()).unwrap_or(1)
-                                    } else {
-                                        1
-                                    };
-                                    let dest_path = handle.get("file_path").and_then(|v| v.as_str()).unwrap_or(name).to_string();
-                                    return Ok(SaveOutcome::Saved {
-                                        dest_path,
-                                        committed_revision: rev,
-                                        new_document_id: new_doc_id,
-                                    });
-                                }
-                                Err(e) => {
-                                    return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
-                                }
-                            }
+                    let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                        "grantId": handle.grant.grant_id,
+                        "requestId": handle.grant.request_id,
+                        "bytes": bytes,
+                    }))
+                    .map_err(|e| format!("{e:?}"))?;
+
+                    match invoke("secure_save_document", save_args).await {
+                        Ok(save_res) => {
+                            let rev = if let Ok(resp) = serde_wasm_bindgen::from_value::<serde_json::Value>(save_res) {
+                                resp.get("committed_revision").and_then(|v| v.as_u64()).unwrap_or(1)
+                            } else {
+                                1
+                            };
+                            let dest_path = handle.file_path;
+                            return Ok(SaveOutcome::Saved {
+                                dest_path,
+                                committed_revision: rev,
+                                new_document_id: Some(handle.document_id),
+                            });
+                        }
+                        Err(e) => {
+                            return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
                         }
                     }
-                    Ok(SaveOutcome::Failed("Cấu trúc phản hồi từ native dialog không hợp lệ".to_string()))
                 } else {
                     // Người dùng chủ động bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> KHÔNG LƯU, GIỮ NGUYÊN DIRTY
                     Ok(SaveOutcome::Canceled)

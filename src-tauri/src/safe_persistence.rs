@@ -579,6 +579,7 @@ pub struct NativeDocumentSession {
     pub last_committed_revision: u64,
     pub last_committed_seq: u64,
     pub is_user_authorized: bool,
+    pub is_provisional: bool,
 }
 
 /// Kết quả phản hồi thành công sau khi ghi đĩa có ủy quyền
@@ -761,6 +762,7 @@ impl NativeSaveGrantManager {
             last_committed_revision: 0,
             last_committed_seq: 0,
             is_user_authorized: true,
+            is_provisional: false,
         };
 
         {
@@ -820,6 +822,7 @@ impl NativeSaveGrantManager {
             last_committed_revision: 0,
             last_committed_seq: 0,
             is_user_authorized: true,
+            is_provisional: true,
         };
         {
             let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
@@ -904,6 +907,7 @@ impl NativeSaveGrantManager {
             last_committed_revision: initial_revision,
             last_committed_seq: 0,
             is_user_authorized: true,
+            is_provisional: false,
         };
         let mut map = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         map.insert(document_id.to_string(), session.clone());
@@ -1186,6 +1190,7 @@ impl NativeSaveGrantManager {
                     grant.status = GrantStatus::Consumed;
                 }
                 if let Some(session) = sessions.get_mut(&session_id) {
+                    session.is_provisional = false;
                     if expected_revision > session.last_committed_revision {
                         session.last_committed_revision = expected_revision;
                     }
@@ -1212,6 +1217,7 @@ impl NativeSaveGrantManager {
                     // Tệp đích đã bị hoán đổi thành công trên đĩa nhưng độ bền chưa được xác nhận hoàn toàn.
                     // Cập nhật last_committed_revision để phản ánh tệp đích đã thay đổi và ngăn replay ghi đè cũ.
                     if let Some(session) = sessions.get_mut(&session_id) {
+                        session.is_provisional = false;
                         if expected_revision > session.last_committed_revision {
                             session.last_committed_revision = expected_revision;
                         }
@@ -1219,7 +1225,7 @@ impl NativeSaveGrantManager {
                 } else {
                     // Thất bại trước rename -> Tệp đích chưa bị thay đổi -> Dọn dẹp session nếu là phiên tạm
                     if let Some(session) = sessions.get(&session_id) {
-                        if session.last_committed_revision == 0 {
+                        if session.is_provisional {
                             sessions.remove(&session_id);
                         }
                     }
@@ -3681,5 +3687,208 @@ mod tests {
 
         let mode = std::fs::metadata(&dest_path).expect("meta").permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "Quyền truy cập gốc 0600 phải được giữ nguyên");
+    }
+
+    #[test]
+    fn test_p2_preserve_established_session_after_save_failure_and_allow_retry() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let parent_dir = temp_dir.path().join("save_dir");
+        std::fs::create_dir(&parent_dir).unwrap();
+        let file_path = parent_dir.join("test_est.xlsx");
+        let initial_bytes = b"PK\x03\x04INITIAL_ESTABLISHED_CONTENT";
+        std::fs::write(&file_path, initial_bytes).unwrap();
+
+        let manager = NativeSaveGrantManager::new();
+        // 1. Open / register established document session (is_provisional == false, last_committed_revision == 0)
+        let session = manager
+            .register_document_session("doc-est-1", "gridcraft-inst", 1, &file_path, 0)
+            .unwrap();
+        assert!(!session.is_provisional, "Established session must not be provisional");
+        assert_eq!(session.last_committed_revision, 0);
+
+        // 2. Obtain save grant
+        let grant1 = manager
+            .issue_save_grant(
+                "doc-est-1",
+                "gridcraft-inst",
+                1,
+                "req-attempt-1",
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .unwrap();
+
+        // 3. Khóa thư mục cha thành read-only để gây lỗi I/O thực sự trong native_atomic_durable_write trước khi rename
+        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+
+        let attempted_bytes = b"PK\x03\x04ATTEMPTED_DATA_THAT_FAILS_PRE_RENAME";
+        let res1 = manager.execute_granted_save(&grant1.grant_id, "req-attempt-1", attempted_bytes);
+        assert!(res1.is_err(), "Pre-rename I/O failure must return Err");
+
+        // Mở khóa thư mục cha để tiếp tục các thao tác sau
+        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+        // 4. Verify disk bytes unchanged
+        let current_bytes = std::fs::read(&file_path).unwrap();
+        assert_eq!(current_bytes, initial_bytes, "Destination bytes must remain unchanged");
+
+        // 5. Verify established session is STILL authorized and NOT removed
+        {
+            let sessions = manager.sessions.lock().unwrap();
+            let s = sessions.get("doc-est-1").expect("Established session MUST still exist");
+            assert!(s.is_user_authorized, "Session must still be authorized");
+            assert_eq!(s.last_committed_revision, 0, "Revision must not have advanced");
+            assert!(!s.is_provisional, "Session must still be established");
+        }
+
+        // 6. Obtain NEW grant for the same session
+        let grant2 = manager
+            .issue_save_grant(
+                "doc-est-1",
+                "gridcraft-inst",
+                1,
+                "req-attempt-2",
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .unwrap();
+
+        // 7. Retry save with valid bytes
+        let valid_new_bytes = b"PK\x03\x04NEW_SAVED_DATA_REV_1";
+        let res2 = manager.execute_granted_save(&grant2.grant_id, "req-attempt-2", valid_new_bytes);
+        assert!(res2.is_ok(), "Retry save must succeed");
+
+        // 8. Verify destination updated and revision committed
+        let updated_bytes = std::fs::read(&file_path).unwrap();
+        assert_eq!(updated_bytes, valid_new_bytes, "Destination must contain new saved bytes");
+        assert_eq!(manager.get_session_revision("doc-est-1"), Some(1));
+    }
+
+    #[test]
+    fn test_p2_provisional_save_as_session_cleaned_up_on_pre_rename_failure() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let parent_dir = temp_dir.path().join("save_as_dir");
+        std::fs::create_dir(&parent_dir).unwrap();
+        let target_path = parent_dir.join("new_save_as.xlsx");
+
+        let manager = NativeSaveGrantManager::new();
+        // Giả lập save_as_via_native_dialog trả về target_path
+        let dialog = Box::new(MockNativeDialogService::new(None, Some(target_path.clone())));
+        manager.set_dialog_service_for_test(dialog);
+
+        let sa_handle = manager
+            .save_as_via_native_dialog(
+                None,
+                "gridcraft-inst",
+                1,
+                Some("new_save_as.xlsx"),
+                "Excel",
+                &["xlsx"],
+            )
+            .unwrap()
+            .expect("dialog returns handle");
+
+        let prov_doc_id = sa_handle.document_id.clone();
+        // Kiểm tra session vừa tạo là provisional
+        {
+            let sessions = manager.sessions.lock().unwrap();
+            let s = sessions.get(&prov_doc_id).expect("Provisional session created");
+            assert!(s.is_provisional, "Save As session must be provisional before commit");
+        }
+
+        // Khóa thư mục cha để gây lỗi I/O thực sự trong native_atomic_durable_write trước khi rename
+        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+
+        let attempted_bytes = b"PK\x03\x04PROVISIONAL_ATTEMPT_DATA";
+        let res = manager.execute_granted_save(&sa_handle.grant.grant_id, &sa_handle.grant.request_id, attempted_bytes);
+        assert!(res.is_err(), "Write must fail in native_atomic_durable_write");
+
+        // Mở lại quyền thư mục cha
+        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+        // Bất biến: Phiên provisional BẮT BUỘC bị dọn dẹp khỏi sessions
+        {
+            let sessions = manager.sessions.lock().unwrap();
+            assert!(
+                sessions.get(&prov_doc_id).is_none(),
+                "Failed provisional session MUST be removed to prevent orphaned sessions"
+            );
+        }
+        assert!(!target_path.exists(), "Target file must not be created");
+    }
+
+    #[test]
+    fn test_gridcraft_behavioral_save_and_exit_with_execute_granted_save() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("financial_report.xlsx");
+        let initial_bytes = b"PK\x03\x04ORIGINAL_REAL_EXCEL_WORKBOOK_DATA";
+        std::fs::write(&file_path, initial_bytes).unwrap();
+
+        let manager = NativeSaveGrantManager::new();
+        // 1. Mở workbook qua native dialog để thiết lập session chính thức
+        let dialog = Box::new(MockNativeDialogService::new(Some(file_path.clone()), None));
+        manager.set_dialog_service_for_test(dialog);
+
+        let open_res = manager
+            .open_file_via_native_dialog("gridcraft-workspace-instance", 1, "Excel", &["xlsx"])
+            .unwrap()
+            .expect("dialog returns file");
+
+        let doc_id = open_res.document_id;
+        assert_eq!(manager.get_session_revision(&doc_id), Some(0));
+
+        // 2. Người dùng sửa đổi workbook trong ứng dụng đóng gói
+        let edited_bytes = b"PK\x03\x04EDITED_REAL_EXCEL_WORKBOOK_DATA_REVISION_1";
+        let expected_fp = compute_fingerprint(edited_bytes);
+
+        // 3. Người dùng chọn đóng cửa sổ -> Kích hoạt Host-initiated Save & Exit
+        let close_req_id = "close-req-gridcraft-behavioral-1";
+        let grant = manager
+            .issue_save_grant(
+                &doc_id,
+                "gridcraft-workspace-instance",
+                open_res.session_generation,
+                close_req_id,
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .expect("issue save grant for save and exit");
+
+        assert_eq!(grant.request_id, close_req_id);
+        assert_eq!(grant.document_id, doc_id);
+        assert_eq!(grant.expected_revision, 1);
+
+        // 4. Hoàn tất ghi đĩa nguyên tử thông qua execute_granted_save
+        let save_res = manager
+            .execute_granted_save(&grant.grant_id, close_req_id, edited_bytes)
+            .expect("execute_granted_save must succeed");
+
+        assert_eq!(save_res.dest_path, file_path.to_str().unwrap());
+        assert_eq!(save_res.committed_revision, 1);
+        assert_eq!(save_res.bytes_written, edited_bytes.len());
+        assert!(!save_res.is_ambiguous);
+        assert_eq!(save_res.fingerprint, expected_fp);
+
+        // 5. Xác minh dữ liệu tệp đích trên đĩa khớp 100% với fingerprint độc lập
+        let on_disk_bytes = std::fs::read(&file_path).expect("read file from disk");
+        assert_eq!(on_disk_bytes, edited_bytes);
+        let actual_disk_fp = compute_fingerprint(&on_disk_bytes);
+        assert_eq!(actual_disk_fp, expected_fp);
+
+        // 6. Xác minh session cập nhật committed_revision lên 1 và không phải provisional
+        assert_eq!(manager.get_session_revision(&doc_id), Some(1));
+        let session = manager.sessions.lock().unwrap().get(&doc_id).unwrap().clone();
+        assert!(!session.is_provisional);
+        assert_eq!(session.last_committed_revision, 1);
     }
 }

@@ -1018,5 +1018,107 @@ fn test_gridcraft_export_csv_does_not_corrupt_coordinator_saving_state_for_subse
     );
 }
 
+#[test]
+fn test_gridcraft_behavioral_packaged_workbook_save_and_exit_close_decision() {
+    use sha2::{Digest, Sha256};
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+    use office_utility_vn_ui::platform::persistence::atomic_durable_write;
+    use office_utility_vn_ui::platform::save_grant::{
+        validate_native_save_grant, NativeSaveGrantDto, SaveRequestContext,
+    };
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_completion;
+
+    // 1. Mở một workbook thực tế trên đĩa
+    let temp_dir = tempfile::tempdir().unwrap();
+    let file_path = temp_dir.path().join("quarterly_budget.xlsx");
+    let initial_bytes = b"PK\x03\x04ORIGINAL_REAL_PACKAGED_WORKBOOK_DATA";
+    std::fs::write(&file_path, initial_bytes).unwrap();
+
+    let state = GridCraftState::new();
+    let doc_id = "doc-wb-packaged-behavioral-1";
+    let file_path_str = file_path.to_str().unwrap().to_string();
+
+    state.register_document_session(WorkbookSession {
+        document_id: doc_id.to_string(),
+        file_path: file_path_str.clone(),
+        file_name: "quarterly_budget.xlsx".to_string(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+    });
+    state.set_document_session(Some(doc_id.to_string()), Some(file_path_str.clone()), 1);
+
+    // 2. Người dùng sửa đổi workbook trong ứng dụng đóng gói
+    state.set_document_dirty(doc_id, true);
+    let edit_rev = state.bump_edit_revision(doc_id);
+    assert_eq!(edit_rev, 1);
+    assert!(state.is_dirty.get_untracked());
+
+    // 3. Người dùng yêu cầu đóng cửa sổ -> Native Close Guard phát hiện unsaved work
+    let close_mgr = WindowCloseManager::new();
+    let close_req_id = "close-req-gc-behavioral-100".to_string();
+    close_mgr.handle_native_close_requested(close_req_id.clone(), true, "GridCraft: quarterly_budget.xlsx");
+    assert!(close_mgr.is_dialog_open.get_untracked());
+    assert!(!close_mgr.is_authorized.get_untracked());
+
+    // Người dùng chọn Save & Exit -> Chuyển sang trạng thái đang lưu
+    close_mgr.is_saving.set(true);
+    assert!(close_mgr.is_saving.get_untracked());
+
+    // 4. Nhận save snapshot từ GridCraft iframe
+    let edited_bytes = b"PK\x03\x04EDITED_REAL_PACKAGED_WORKBOOK_DATA_REV_2";
+    let expected_sha256 = format!("{:x}", Sha256::digest(edited_bytes));
+
+    // Thẩm tra Save Grant theo hợp đồng bảo mật chặt chẽ
+    let grant = NativeSaveGrantDto {
+        grant_id: "grant-gc-behavioral-100".to_string(),
+        document_id: doc_id.to_string(),
+        app_instance_id: "gridcraft-workspace-instance".to_string(),
+        session_generation: 1,
+        authorized_dest_path: file_path_str.clone(),
+        expected_revision: 2,
+        request_id: close_req_id.clone(),
+    };
+    let save_ctx = SaveRequestContext {
+        document_id: doc_id.to_string(),
+        app_instance_id: "gridcraft-workspace-instance".to_string(),
+        session_generation: 1,
+        authorized_dest_path: Some(file_path_str.clone()),
+        expected_revision: 2,
+        request_id: close_req_id.clone(),
+    };
+    validate_native_save_grant(&grant, &save_ctx).expect("save grant must be valid");
+
+    // 5. Thực thi ghi đĩa nguyên tử bền vững
+    let write_report = atomic_durable_write(&file_path, edited_bytes).expect("durable write succeeds");
+    assert_eq!(write_report.bytes_written, edited_bytes.len());
+
+    // Xác minh tệp đích trên đĩa khớp 100% bằng SHA-256 độc lập
+    let disk_bytes = std::fs::read(&file_path).expect("read file from disk");
+    assert_eq!(disk_bytes, edited_bytes);
+    let disk_sha256 = format!("{:x}", Sha256::digest(&disk_bytes));
+    assert_eq!(disk_sha256, expected_sha256);
+
+    // 6. Hoàn tất lưu và cập nhật trạng thái session & dirty
+    let live_edit_rev = state.get_edit_revision(doc_id);
+    assert_eq!(live_edit_rev, edit_rev, "Không có chỉnh sửa mới chen ngang");
+    state.set_document_dirty(doc_id, false);
+    assert!(!state.is_dirty.get_untracked());
+
+    // Xử lý hoàn tất Save & Exit
+    handle_gridcraft_save_completion(false, Some(close_req_id), Some(close_mgr), None);
+
+    // 7. Xác minh quyết định đóng cửa sổ: Được phép đóng ngay lập tức (Authorized)!
+    assert!(
+        close_mgr.is_authorized.get_untracked(),
+        "Window close must be AUTHORIZED after successful Save & Exit persistence!"
+    );
+    assert!(
+        !close_mgr.is_saving.get_untracked(),
+        "Window close manager must not be in saving state after authorization"
+    );
+}
+
+
 
 

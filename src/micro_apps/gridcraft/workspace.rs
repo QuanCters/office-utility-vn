@@ -940,7 +940,7 @@ pub async fn execute_gridcraft_save(
             }
         };
 
-        let grant: crate::micro_apps::pdf_studio::bridge::NativeSaveGrantDto =
+        let grant: crate::platform::NativeSaveGrantDto =
             match serde_wasm_bindgen::from_value(grant_val) {
                 Ok(g) => g,
                 Err(e) => {
@@ -950,26 +950,17 @@ pub async fn execute_gridcraft_save(
                 }
             };
 
-        if grant.authorized_dest_path != _path {
-            return Ok(DevSaveResult::Failed(format!(
-                "Lỗi bất biến phiên tài liệu: Grant cấp cho {} nhưng tệp đang chọn là {}",
-                grant.authorized_dest_path, _path
-            )));
-        }
-        if grant.grant_id.trim().is_empty() {
-            return Ok(DevSaveResult::Failed("Lỗi bất biến: Grant ID rỗng".into()));
-        }
-        if grant.document_id != doc_id {
-            return Ok(DevSaveResult::Failed(format!(
-                "Lỗi bất biến: Grant document_id ({}) không khớp doc_id ({doc_id})",
-                grant.document_id
-            )));
-        }
-        if grant.expected_revision != expected_rev {
-            return Ok(DevSaveResult::Failed(format!(
-                "Lỗi bất biến: Grant expected_revision ({}) không khớp ({expected_rev})",
-                grant.expected_revision
-            )));
+        let ctx = crate::platform::SaveRequestContext {
+            document_id: doc_id.to_string(),
+            app_instance_id: "gridcraft-workspace-instance".to_string(),
+            session_generation: session_gen,
+            authorized_dest_path: Some(_path.to_string()),
+            expected_revision: expected_rev,
+            request_id: req_id.to_string(),
+        };
+
+        if let Err(err) = crate::platform::validate_native_save_grant(&grant, &ctx) {
+            return Ok(DevSaveResult::Failed(format!("Lỗi bất biến: {err}")));
         }
 
         let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
@@ -1029,66 +1020,57 @@ pub async fn execute_gridcraft_save(
     match invoke("native_dialog_save_as", args).await {
         Ok(js_res) => {
             if let Ok(Some(handle)) =
-                serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res)
+                serde_wasm_bindgen::from_value::<Option<crate::platform::SaveAsHandleDto>>(js_res)
             {
-                if let Some(grant) = handle.get("grant") {
-                    if let (Some(grant_id), Some(g_req_id)) = (
-                        grant.get("grant_id").and_then(|v| v.as_str()),
-                        grant.get("request_id").and_then(|v| v.as_str()),
-                    ) {
-                        let dest_path = handle
-                            .get("file_path")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(name)
-                            .to_string();
+                let dest_path = handle.file_path;
 
-                        // Finding 3: Xác thực định dạng đích tương thích chữ ký nhị phân
-                        if let Err(err) = validate_save_as_format_compatibility(&dest_path, bytes) {
-                            return Ok(DevSaveResult::Failed(err));
-                        }
+                // Finding 3: Xác thực định dạng đích tương thích chữ ký nhị phân
+                if let Err(err) = validate_save_as_format_compatibility(&dest_path, bytes) {
+                    return Ok(DevSaveResult::Failed(err));
+                }
 
-                        let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
-                            "grantId": grant_id,
-                            "requestId": g_req_id,
-                            "bytes": bytes,
-                        }))
-                        .map_err(|e| format!("{e:?}"))?;
+                let ctx = crate::platform::SaveRequestContext {
+                    document_id: handle.document_id.clone(),
+                    app_instance_id: "gridcraft-workspace-instance".to_string(),
+                    session_generation: session_gen,
+                    authorized_dest_path: Some(dest_path.clone()),
+                    expected_revision: 1,
+                    request_id: handle.grant.request_id.clone(),
+                };
 
-                        match invoke("secure_save_document", save_args).await {
-                            Ok(save_res) => {
-                                let rev = if let Ok(resp) =
-                                    serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
-                                {
-                                    resp.get("committed_revision")
-                                        .and_then(|v| v.as_u64())
-                                        .unwrap_or(1)
-                                } else {
-                                    1
-                                };
-                                let new_doc_id = handle
-                                    .get("document_id")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("doc-gridcraft-new")
-                                    .to_string();
-                                return Ok(DevSaveResult::Saved {
-                                    dest_path,
-                                    new_doc_id,
-                                    committed_rev: rev,
-                                });
-                            }
-                            Err(e) => {
-                                return Ok(DevSaveResult::Failed(format!(
-                                    "Ghi đĩa thất bại: {e:?}"
-                                )));
-                            }
-                        }
+                if let Err(err) = crate::platform::validate_native_save_grant(&handle.grant, &ctx) {
+                    return Ok(DevSaveResult::Failed(format!("Lỗi bất biến Save As: {err}")));
+                }
+
+                let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                    "grantId": handle.grant.grant_id,
+                    "requestId": handle.grant.request_id,
+                    "bytes": bytes,
+                }))
+                .map_err(|e| format!("{e:?}"))?;
+
+                match invoke("secure_save_document", save_args).await {
+                    Ok(save_res) => {
+                        let rev = if let Ok(resp) =
+                            serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
+                        {
+                            resp.get("committed_revision")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(1)
+                        } else {
+                            1
+                        };
+                        return Ok(DevSaveResult::Saved {
+                            dest_path,
+                            new_doc_id: handle.document_id,
+                            committed_rev: rev,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(DevSaveResult::Failed(format!("Lỗi ghi đĩa: {e:?}")));
                     }
                 }
-                Ok(DevSaveResult::Failed(
-                    "Phản hồi Save As không hợp lệ".to_string(),
-                ))
             } else {
-                // Người dùng Cancel
                 Ok(DevSaveResult::Canceled)
             }
         }

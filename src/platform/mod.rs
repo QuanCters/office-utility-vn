@@ -3,6 +3,7 @@ pub mod transport;
 pub mod adapter;
 pub mod coordinator;
 pub mod persistence;
+pub mod save_grant;
 pub mod window_close;
 
 pub use descriptor::{
@@ -17,6 +18,9 @@ pub use persistence::{
     atomic_durable_write, atomic_durable_write_with_ticket, compute_fingerprint,
     execute_durable_save, validate_destination_path, DestinationSaveTracker, DestinationState,
     PersistenceError, PersistenceReport, WriteTicket, GLOBAL_SAVE_TRACKER,
+};
+pub use save_grant::{
+    validate_native_save_grant, NativeSaveGrantDto, SaveAsHandleDto, SaveRequestContext,
 };
 pub use window_close::{WindowCloseDecision, WindowCloseManager};
 #[cfg(target_arch = "wasm32")]
