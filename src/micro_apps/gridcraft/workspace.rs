@@ -76,6 +76,174 @@ pub fn handle_gridcraft_save_completion(
     }
 }
 
+/// Xử lý kết quả lưu tài liệu GridCraft theo các bất biến sản phẩm (Finding 4 & P1 #4676016506)
+pub fn handle_gridcraft_save_outcome(
+    s: &GridCraftState,
+    coordinator: Option<&leptos::prelude::StoredValue<HostDocumentCoordinator>>,
+    outcome: Result<DevSaveResult, String>,
+    intent: crate::platform::adapter::SaveOperationIntent,
+    name: &str,
+    req_id: &str,
+    bytes: &[u8],
+    snapshot_edit_rev: u64,
+    close_manager: Option<crate::platform::window_close::WindowCloseManager>,
+    app_state: Option<crate::app::AppState>,
+) {
+    match outcome {
+        Ok(DevSaveResult::Saved {
+            dest_path,
+            new_doc_id,
+            committed_rev,
+        }) => {
+            if intent == crate::platform::adapter::SaveOperationIntent::Export {
+                // P1 #4676016506: Xuất file (Export) TUYỆT ĐỐI KHÔNG:
+                // - Xóa trạng thái dirty của workbook nguồn
+                // - Thay thế session tài liệu native đang hoạt động
+                // - Thay đổi committed revision của workbook
+                // - Cho phép Save & Exit
+                // - Xem file export là workbook gốc
+                send_saved_to_iframe(GRIDCRAFT_IFRAME_ID, req_id);
+                return;
+            }
+
+            if let Some(coord) = coordinator {
+                coord.update_value(|c| {
+                    let fp = crate::platform::persistence::compute_fingerprint(bytes);
+                    c.on_durable_write_completed(req_id, &fp);
+                });
+            }
+            let live_edit_rev = s.get_edit_revision(&new_doc_id);
+            let is_still_dirty = coordinator.map(|c| c.read_value().is_dirty()).unwrap_or(false)
+                || (live_edit_rev > snapshot_edit_rev);
+            s.set_document_dirty(&new_doc_id, is_still_dirty);
+            s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
+                document_id: new_doc_id.clone(),
+                file_path: dest_path.clone(),
+                file_name: name.to_string(),
+                revision: committed_rev,
+                is_dirty: is_still_dirty,
+                edit_revision: live_edit_rev,
+            });
+            s.set_document_session(
+                Some(new_doc_id),
+                Some(dest_path.clone()),
+                committed_rev,
+            );
+            s.active_file_name.set(Some(name.to_string()));
+            send_saved_to_iframe(GRIDCRAFT_IFRAME_ID, req_id);
+
+            let close_req = s.pending_close_request_id.get_untracked();
+            s.pending_close_request_id.set(None);
+            handle_gridcraft_save_completion(
+                is_still_dirty,
+                close_req,
+                close_manager,
+                app_state,
+            );
+        }
+        Ok(DevSaveResult::AmbiguousCommit {
+            dest_path,
+            new_doc_id,
+            committed_rev,
+            message,
+        }) => {
+            if let Some(coord) = coordinator {
+                coord.update_value(|c| {
+                    let _ = c.on_durable_write_failed(req_id, &message);
+                });
+            }
+            let live_edit_rev = s.get_edit_revision(&new_doc_id);
+            s.set_document_dirty(&new_doc_id, true);
+            s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
+                document_id: new_doc_id.clone(),
+                file_path: dest_path.clone(),
+                file_name: name.to_string(),
+                revision: committed_rev,
+                is_dirty: true,
+                edit_revision: live_edit_rev,
+            });
+            s.set_document_session(
+                Some(new_doc_id),
+                Some(dest_path),
+                committed_rev,
+            );
+            s.active_file_name.set(Some(name.to_string()));
+            s.is_dirty.set(true);
+
+            s.save_blocked_detail.set(format!(
+                "⚠️ Hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại (Ambiguous Commit): {message}"
+            ));
+            s.is_save_blocked_alert.set(true);
+            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &message, Some(req_id));
+
+            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
+                s.pending_close_request_id.set(None);
+                if let Some(cm) = close_manager {
+                    cm.cancel_close(&close_req_id);
+                    cm.error_message.set(Some(format!(
+                        "Lỗi ghi đĩa (Ambiguous Commit): {message}"
+                    )));
+                }
+            }
+        }
+        Ok(DevSaveResult::Canceled) => {
+            if let Some(coord) = coordinator {
+                coord.update_value(|c| {
+                    c.on_save_cancelled(req_id);
+                });
+            }
+            s.is_dirty.set(true);
+            send_save_failed_to_iframe(
+                GRIDCRAFT_IFRAME_ID,
+                "Đã hủy thao tác lưu",
+                Some(req_id),
+            );
+            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
+                s.pending_close_request_id.set(None);
+                if let Some(cm) = close_manager {
+                    cm.cancel_close(&close_req_id);
+                }
+            }
+        }
+        Ok(DevSaveResult::Failed(err)) => {
+            if let Some(coord) = coordinator {
+                coord.update_value(|c| {
+                    let _ = c.on_durable_write_failed(req_id, &err);
+                });
+            }
+            s.is_dirty.set(true);
+            s.save_blocked_detail.set(format!("❌ Lỗi ghi đĩa: {err}"));
+            s.is_save_blocked_alert.set(true);
+            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &err, Some(req_id));
+            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
+                s.pending_close_request_id.set(None);
+                if let Some(cm) = close_manager {
+                    cm.cancel_close(&close_req_id);
+                    cm.error_message.set(Some(format!("Lỗi ghi đĩa: {err}")));
+                }
+            }
+        }
+        Err(err) => {
+            if let Some(coord) = coordinator {
+                coord.update_value(|c| {
+                    let _ = c.on_durable_write_failed(req_id, &err);
+                });
+            }
+            s.is_dirty.set(true);
+            s.save_blocked_detail.set(format!("❌ Lỗi hệ thống: {err}"));
+            s.is_save_blocked_alert.set(true);
+            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &err, Some(req_id));
+            if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
+                s.pending_close_request_id.set(None);
+                if let Some(cm) = close_manager {
+                    cm.cancel_close(&close_req_id);
+                    cm.error_message.set(Some(format!("Lỗi hệ thống: {err}")));
+                }
+            }
+        }
+    }
+}
+
 /// Component `GridCraftWorkspace`:
 /// Chiếm trọn 100% không gian làm việc (Full-Workspace),
 /// nhúng trực tiếp giao diện gốc GridCraft WebAssembly mà không có bất kỳ thành phần nào của Data Lab cũ.
@@ -432,190 +600,18 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         )
                                         .await;
 
-                                        match outcome {
-                                            Ok(DevSaveResult::Saved {
-                                                dest_path,
-                                                new_doc_id,
-                                                committed_rev,
-                                            }) => {
-                                                if intent == crate::platform::adapter::SaveOperationIntent::Export {
-                                                    // P1 #4676016506: Xuất file (Export) TUYỆT ĐỐI KHÔNG:
-                                                    // - Xóa trạng thái dirty của workbook nguồn
-                                                    // - Thay thế session tài liệu native đang hoạt động
-                                                    // - Thay đổi committed revision của workbook
-                                                    // - Cho phép Save & Exit
-                                                    // - Xem file export là workbook gốc
-                                                    send_saved_to_iframe(
-                                                        GRIDCRAFT_IFRAME_ID,
-                                                        &req_clone,
-                                                    );
-                                                    return;
-                                                }
-
-                                                coordinator.update_value(|c| {
-                                                    let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
-                                                    c.on_durable_write_completed(&req_clone, &fp);
-                                                });
-                                                let live_edit_rev = s.get_edit_revision(&new_doc_id);
-                                                let is_still_dirty =
-                                                    coordinator.read_value().is_dirty() || (live_edit_rev > snapshot_edit_rev);
-                                                s.set_document_dirty(&new_doc_id, is_still_dirty);
-                                                s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
-                                                    document_id: new_doc_id.clone(),
-                                                    file_path: dest_path.clone(),
-                                                    file_name: name_clone.clone(),
-                                                    revision: committed_rev,
-                                                    is_dirty: is_still_dirty,
-                                                    edit_revision: live_edit_rev,
-                                                });
-                                                s.set_document_session(
-                                                    Some(new_doc_id),
-                                                    Some(dest_path.clone()),
-                                                    committed_rev,
-                                                );
-                                                s.active_file_name.set(Some(name_clone));
-                                                send_saved_to_iframe(
-                                                    GRIDCRAFT_IFRAME_ID,
-                                                    &req_clone,
-                                                );
-
-                                                // Finding 4: Kiểm tra toàn bộ ứng dụng trước khi ủy quyền đóng cửa sổ
-                                                let close_req =
-                                                    s.pending_close_request_id.get_untracked();
-                                                s.pending_close_request_id.set(None);
-                                                handle_gridcraft_save_completion(
-                                                    is_still_dirty,
-                                                    close_req,
-                                                    close_manager,
-                                                    app_state,
-                                                );
-                                            }
-                                            Ok(DevSaveResult::AmbiguousCommit {
-                                                dest_path,
-                                                new_doc_id,
-                                                committed_rev,
-                                                message,
-                                            }) => {
-                                                // P2 #4678429561: Hoán đổi nguyên tử thành công nhưng đồng bộ thư mục cha thất bại.
-                                                // Cập nhật session lên committed_rev để tránh stale revision write ở lần lưu tiếp theo,
-                                                // nhưng BẮT BUỘC giữ trạng thái dirty, KHÔNG tuyên bố lưu bền vững thành công,
-                                                // và KHÔNG cho phép đóng cửa sổ.
-                                                coordinator.update_value(|c| {
-                                                    let _ = c.on_durable_write_failed(&req_clone, &message);
-                                                });
-                                                let live_edit_rev = s.get_edit_revision(&new_doc_id);
-                                                s.set_document_dirty(&new_doc_id, true);
-                                                s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
-                                                    document_id: new_doc_id.clone(),
-                                                    file_path: dest_path.clone(),
-                                                    file_name: name_clone.clone(),
-                                                    revision: committed_rev,
-                                                    is_dirty: true,
-                                                    edit_revision: live_edit_rev,
-                                                });
-                                                s.set_document_session(
-                                                    Some(new_doc_id),
-                                                    Some(dest_path.clone()),
-                                                    committed_rev,
-                                                );
-                                                s.active_file_name.set(Some(name_clone));
-                                                s.is_dirty.set(true);
-
-                                                s.save_blocked_detail.set(format!(
-                                                    "⚠️ Hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại (Ambiguous Commit): {message}"
-                                                ));
-                                                s.is_save_blocked_alert.set(true);
-                                                send_save_failed_to_iframe(
-                                                    GRIDCRAFT_IFRAME_ID,
-                                                    &message,
-                                                    Some(&req_clone),
-                                                );
-
-                                                // Hủy pending close request: KHÔNG cho phép đóng ứng dụng
-                                                if let Some(close_req_id) =
-                                                    s.pending_close_request_id.get_untracked()
-                                                {
-                                                    s.pending_close_request_id.set(None);
-                                                    if let Some(cm) = close_manager {
-                                                        cm.cancel_close(&close_req_id);
-                                                        cm.error_message.set(Some(format!(
-                                                            "Lỗi ghi đĩa (Ambiguous Commit): {message}"
-                                                        )));
-                                                    }
-                                                }
-                                            }
-                                            Ok(DevSaveResult::Canceled) => {
-                                                coordinator.update_value(|c| {
-                                                    c.on_save_cancelled(&req_clone)
-                                                });
-                                                s.is_dirty.set(true);
-                                                send_save_failed_to_iframe(
-                                                    GRIDCRAFT_IFRAME_ID,
-                                                    "Đã hủy thao tác lưu",
-                                                    Some(&req_clone),
-                                                );
-                                                if let Some(close_req_id) =
-                                                    s.pending_close_request_id.get_untracked()
-                                                {
-                                                    s.pending_close_request_id.set(None);
-                                                    if let Some(cm) = close_manager {
-                                                        cm.cancel_close(&close_req_id);
-                                                    }
-                                                }
-                                            }
-                                            Ok(DevSaveResult::Failed(err)) => {
-                                                coordinator.update_value(|c| {
-                                                    let _ =
-                                                        c.on_durable_write_failed(&req_clone, &err);
-                                                });
-                                                s.is_dirty.set(true);
-                                                s.save_blocked_detail
-                                                    .set(format!("❌ Lỗi ghi đĩa: {err}"));
-                                                s.is_save_blocked_alert.set(true);
-                                                send_save_failed_to_iframe(
-                                                    GRIDCRAFT_IFRAME_ID,
-                                                    &err,
-                                                    Some(&req_clone),
-                                                );
-                                                if let Some(close_req_id) =
-                                                    s.pending_close_request_id.get_untracked()
-                                                {
-                                                    s.pending_close_request_id.set(None);
-                                                    if let Some(cm) = close_manager {
-                                                        cm.cancel_close(&close_req_id);
-                                                        cm.error_message.set(Some(format!(
-                                                            "Lỗi ghi đĩa: {err}"
-                                                        )));
-                                                    }
-                                                }
-                                            }
-                                            Err(err) => {
-                                                coordinator.update_value(|c| {
-                                                    let _ =
-                                                        c.on_durable_write_failed(&req_clone, &err);
-                                                });
-                                                s.is_dirty.set(true);
-                                                s.save_blocked_detail
-                                                    .set(format!("❌ Lỗi hệ thống: {err}"));
-                                                s.is_save_blocked_alert.set(true);
-                                                send_save_failed_to_iframe(
-                                                    GRIDCRAFT_IFRAME_ID,
-                                                    &err,
-                                                    Some(&req_clone),
-                                                );
-                                                if let Some(close_req_id) =
-                                                    s.pending_close_request_id.get_untracked()
-                                                {
-                                                    s.pending_close_request_id.set(None);
-                                                    if let Some(cm) = close_manager {
-                                                        cm.cancel_close(&close_req_id);
-                                                        cm.error_message.set(Some(format!(
-                                                            "Lỗi hệ thống: {err}"
-                                                        )));
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        handle_gridcraft_save_outcome(
+                                            &s,
+                                            Some(&coordinator),
+                                            outcome,
+                                            intent,
+                                            &name_clone,
+                                            &req_clone,
+                                            &bytes_clone,
+                                            snapshot_edit_rev,
+                                            close_manager,
+                                            app_state,
+                                        );
                                     });
                                 }
                             }

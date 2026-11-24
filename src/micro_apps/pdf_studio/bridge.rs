@@ -74,6 +74,33 @@ pub use crate::platform::save_grant::{
     validate_native_save_grant, NativeSaveGrantDto, SaveAsHandleDto, SaveRequestContext,
 };
 
+/// Khởi tạo SaveRequestContext chuẩn xác, bảo lưu originating context trên mọi luồng lưu (P1 #4676016514)
+pub fn construct_pdf_save_request_context(
+    req_id: String,
+    save_as: bool,
+    orig_doc_id: Option<String>,
+    orig_path: Option<String>,
+    cur_rev: u64,
+    snapshot_gen: u64,
+    fp: String,
+) -> crate::micro_apps::pdf_studio::state::SaveRequestContext {
+    crate::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: req_id,
+        operation_intent: if save_as {
+            crate::platform::adapter::SaveOperationIntent::SaveAs
+        } else {
+            crate::platform::adapter::SaveOperationIntent::Save
+        },
+        originating_document_id: orig_doc_id.clone(),
+        originating_path: orig_path.clone(),
+        session_generation: 1,
+        snapshot_edit_generation: snapshot_gen,
+        expected_committed_revision: cur_rev + 1,
+        snapshot_fingerprint: fp,
+        authorized_dest_path: if !save_as { orig_path } else { None },
+    }
+}
+
 static AUTHORIZED_PDF_CACHE: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
@@ -401,21 +428,15 @@ pub fn setup_bridge_listener(
                 let req_id = format!("pdf-save-{}-{}", snapshot_gen, count);
                 let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
 
-                let ctx = crate::micro_apps::pdf_studio::state::SaveRequestContext {
-                    request_id: req_id.clone(),
-                    operation_intent: if save_as {
-                        crate::platform::adapter::SaveOperationIntent::SaveAs
-                    } else {
-                        crate::platform::adapter::SaveOperationIntent::Save
-                    },
-                    originating_document_id: orig_doc_id.clone(),
-                    originating_path: orig_path.clone(),
-                    session_generation: 1,
-                    snapshot_edit_generation: snapshot_gen,
-                    expected_committed_revision: cur_rev + 1,
-                    snapshot_fingerprint: fp,
-                    authorized_dest_path: if !save_as { orig_path.clone() } else { None },
-                };
+                let ctx = construct_pdf_save_request_context(
+                    req_id.clone(),
+                    save_as,
+                    orig_doc_id.clone(),
+                    orig_path.clone(),
+                    cur_rev,
+                    snapshot_gen,
+                    fp,
+                );
 
                 state.register_pending_save(req_id.clone(), ctx.clone());
                 let ctx_clone = ctx.clone();

@@ -1488,18 +1488,16 @@ fn test_p1_pdf_save_as_preserves_originating_context_throughout_lifecycle() {
     assert_eq!(state.active_file_path(), Some(path_a.to_string()));
     assert!(state.has_unsaved_changes());
 
-    // 1. Khởi tạo Save As cho A: Bắt buộc chụp lại SaveRequestContext bất biến
-    let ctx_save_as = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
-        request_id: "req-save-as-1".to_string(),
-        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::SaveAs,
-        originating_document_id: Some("doc-session-A".to_string()),
-        originating_path: Some(path_a.to_string()),
-        session_generation: 1,
-        snapshot_edit_generation: gen_a,
-        expected_committed_revision: 2,
-        snapshot_fingerprint: "fp-save-as".to_string(),
-        authorized_dest_path: None,
-    };
+    // 1. Khởi tạo Save As cho A: Bắt buộc chụp lại SaveRequestContext bất biến qua hàm sản xuất dùng chung
+    let ctx_save_as = office_utility_vn_ui::micro_apps::pdf_studio::bridge::construct_pdf_save_request_context(
+        "req-save-as-1".to_string(),
+        true,
+        Some("doc-session-A".to_string()),
+        Some(path_a.to_string()),
+        1,
+        gen_a,
+        "fp-save-as".to_string(),
+    );
     state.register_pending_save("req-save-as-1".to_string(), ctx_save_as.clone());
 
     // BẤT BIẾN: Trong suốt thời gian Save As đang pending, originating_path được bảo vệ
@@ -1532,17 +1530,15 @@ fn test_p1_pdf_save_as_preserves_originating_context_throughout_lifecycle() {
     );
 
     // 3. Người dùng bắt đầu Save As lại, nhưng chuyển sang xem Document C trong khi hộp thoại/save đang chạy
-    let ctx_save_as_2 = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
-        request_id: "req-save-as-2".to_string(),
-        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::SaveAs,
-        originating_document_id: Some("doc-session-A".to_string()),
-        originating_path: Some(path_a.to_string()),
-        session_generation: 1,
-        snapshot_edit_generation: gen_a,
-        expected_committed_revision: 2,
-        snapshot_fingerprint: "fp-save-as-2".to_string(),
-        authorized_dest_path: None,
-    };
+    let ctx_save_as_2 = office_utility_vn_ui::micro_apps::pdf_studio::bridge::construct_pdf_save_request_context(
+        "req-save-as-2".to_string(),
+        true,
+        Some("doc-session-A".to_string()),
+        Some(path_a.to_string()),
+        1,
+        gen_a,
+        "fp-save-as-2".to_string(),
+    );
     state.register_pending_save("req-save-as-2".to_string(), ctx_save_as_2.clone());
 
     // Người dùng chuyển sang tab Document C

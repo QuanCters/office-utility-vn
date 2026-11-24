@@ -883,12 +883,26 @@ fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
 
     // 2. Xuất bảng tính ra file CSV ("finance_export.csv") với intent = Export
     let export_intent = SaveOperationIntent::Export;
+    let export_dest_path = "/data/exports/finance_export.csv";
+    let export_doc_id = "doc-export-csv-new";
 
-    // Production logic: Khi intent == Export, hàm completion handler chỉ gửi thông báo xác nhận tới iframe,
-    // tuyệt đối không đụng vào dirty flag, không đổi session, không authorize close.
-    if export_intent == SaveOperationIntent::Export {
-        // Production logic: No state alteration for export
-    }
+    // Gọi trực tiếp hàm xử lý kết quả lưu dùng chung của mã nguồn sản xuất
+    office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(office_utility_vn_ui::micro_apps::gridcraft::workspace::DevSaveResult::Saved {
+            dest_path: export_dest_path.to_string(),
+            new_doc_id: export_doc_id.to_string(),
+            committed_rev: 99,
+        }),
+        export_intent,
+        "finance_export.csv",
+        "close-req-export-test",
+        b"COL1,COL2\nVAL1,VAL2",
+        1,
+        None,
+        Some(app_state.clone()),
+    );
 
     // BẤT BIẾN P1 #4676016506:
     // - Workbook nguồn VẪN PHẢI DIRTY!
