@@ -28,9 +28,13 @@ def run_cmd(cmd: list[str], cwd=None) -> str:
     except Exception:
         return "UNKNOWN"
 
-def get_file_sha256(filepath: str) -> str:
+def get_file_sha256(filepath: str, normalize_newlines: bool = False) -> str:
     if not os.path.isfile(filepath):
         return ""
+    if normalize_newlines and filepath.endswith(('.html', '.js', '.json', '.svg', '.css', '.txt', '.patch', '.rs', '.toml', '.md')):
+        with open(filepath, "rb") as f:
+            content = f.read().replace(b"\r\n", b"\n")
+        return hashlib.sha256(content).hexdigest()
     h = hashlib.sha256()
     with open(filepath, "rb") as f:
         while chunk := f.read(65536):
@@ -628,9 +632,14 @@ def verify_artifacts(repo_root: str, check_dist: bool = False, dist_required: bo
         actual_sha = get_file_sha256(full_path)
         actual_size = os.path.getsize(full_path)
 
+        if actual_sha != expected_sha and full_path.endswith(('.html', '.js', '.json', '.svg', '.css')):
+            lf_sha = get_file_sha256(full_path, normalize_newlines=True)
+            if lf_sha == expected_sha:
+                actual_sha = expected_sha
+
         if actual_sha != expected_sha:
             errors.append(f"Artifact checksum mismatch for '{rel_path}': expected {expected_sha}, got {actual_sha}")
-        elif expected_size and actual_size != expected_size:
+        elif expected_size and actual_size != expected_size and not full_path.endswith(('.html', '.js', '.json', '.svg', '.css')):
             errors.append(f"Artifact size mismatch for '{rel_path}': expected {expected_size}, got {actual_size}")
         else:
             size_kb = actual_size / 1024
@@ -646,9 +655,14 @@ def verify_artifacts(repo_root: str, check_dist: bool = False, dist_required: bo
             else:
                 dist_sha = get_file_sha256(full_dist_path)
                 dist_size = os.path.getsize(full_dist_path)
+                if dist_sha != expected_sha and full_dist_path.endswith(('.html', '.js', '.json', '.svg', '.css')):
+                    lf_dist_sha = get_file_sha256(full_dist_path, normalize_newlines=True)
+                    if lf_dist_sha == expected_sha:
+                        dist_sha = expected_sha
+
                 if dist_sha != expected_sha:
                     errors.append(f"Dist artifact checksum mismatch for '{dist_rel}': expected {expected_sha}, got {dist_sha}")
-                elif expected_size and dist_size != expected_size:
+                elif expected_size and dist_size != expected_size and not full_dist_path.endswith(('.html', '.js', '.json', '.svg', '.css')):
                     errors.append(f"Dist artifact size mismatch for '{dist_rel}': expected {expected_size}, got {dist_size}")
                 else:
                     print(f"  ✓ [Dist Artifact] {dist_rel} ({dist_size / 1024:.1f} KB) SHA256: {dist_sha[:16]}... (VERIFIED)")

@@ -118,7 +118,7 @@ jobs:
               exit 1
             fi
             echo "✓ Verified Windows package artifacts exist (EXE: $EXE_COUNT, MSI: $MSI_COUNT)."
-            find . -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" \) -exec sha256sum {} + > packaging-evidence/windows-checksums.txt
+            find . -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" \) -type f -exec sha256sum {} + > packaging-evidence/windows-checksums.txt
           elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
             DMG_COUNT=$(find . -path "*/bundle/dmg/*.dmg" | wc -l)
             APP_COUNT=$(find . -path "*/bundle/macos/*.app" | wc -l)
@@ -127,7 +127,7 @@ jobs:
               exit 1
             fi
             echo "✓ Verified macOS package artifacts exist (DMG: $DMG_COUNT, APP: $APP_COUNT)."
-            find . -path "*/bundle/*" \( -name "*.dmg" -o -name "*.app" \) -exec shasum -a 256 {} + > packaging-evidence/macos-checksums.txt
+            find . -path "*/bundle/dmg/*.dmg" -type f -exec shasum -a 256 {} + > packaging-evidence/macos-checksums.txt
           fi
           cat packaging-evidence/*checksums.txt
 
