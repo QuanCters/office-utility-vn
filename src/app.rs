@@ -525,8 +525,8 @@ impl AppState {
         if self.gridcraft_state.is_dirty.get_untracked() {
             return true;
         }
-        // 2. PDF Studio unsaved changes hoặc đang chạy
-        if self.pdf_studio_state.has_unsaved_changes.get_untracked()
+        // 2. PDF Studio unsaved changes, inactive dirty documents, hoặc đang có pending saves (Finding 4675800826)
+        if self.pdf_studio_state.has_unsaved_documents_or_pending_saves()
             || self.pdf_studio_state.is_running.get_untracked()
         {
             return true;
@@ -556,8 +556,12 @@ impl AppState {
                 .unwrap_or_else(|| "Bảng tính GridCraft".to_string());
             parts.push(format!("Bảng tính ({name})"));
         }
-        if self.pdf_studio_state.has_unsaved_changes.get_untracked() {
-            parts.push("Tài liệu PDF Studio".to_string());
+        if self.pdf_studio_state.has_unsaved_documents_or_pending_saves() {
+            if self.pdf_studio_state.has_pending_saves() {
+                parts.push("Tài liệu PDF Studio (đang lưu)".to_string());
+            } else {
+                parts.push("Tài liệu PDF Studio".to_string());
+            }
         }
         if self.pdf_studio_state.is_running.get_untracked() {
             parts.push("Tác vụ xử lý PDF".to_string());

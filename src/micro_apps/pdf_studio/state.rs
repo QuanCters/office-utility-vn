@@ -111,6 +111,15 @@ pub struct PdfDocumentSession {
     pub edit_generation: u64,
 }
 
+/// Dữ liệu một yêu cầu lưu PDF đang được thực hiện ở tầng native (Finding 4675800826)
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PendingPdfSave {
+    pub request_id: String,
+    pub file_path: String,
+    pub document_id: Option<String>,
+    pub snapshot_generation: u64,
+}
+
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App PDF Studio.
 ///
 /// Các tệp PDF được nạp vào một lần sẽ có sẵn cho toàn bộ 18 công cụ xử lý.
@@ -148,6 +157,8 @@ pub struct PdfStudioState {
     pub cached_documents: RwSignal<std::collections::HashMap<String, Vec<u8>>>,
     /// Ánh xạ các phiên tài liệu theo đường dẫn tệp (Finding 1: PDF Document Session Identity)
     pub document_sessions: RwSignal<std::collections::HashMap<String, PdfDocumentSession>>,
+    /// Danh sách các tác vụ lưu tệp đang pending ở tầng native (Finding 4675800826)
+    pub pending_saves: RwSignal<std::collections::HashMap<String, PendingPdfSave>>,
     /// Danh mục lọc hiện tại trên trang chủ PDF Studio Hub (None = Tất cả).
     pub hub_active_category: RwSignal<Option<PdfCategory>>,
 }
@@ -189,8 +200,63 @@ impl PdfStudioState {
             edit_generation: RwSignal::new(0),
             cached_documents: RwSignal::new(std::collections::HashMap::new()),
             document_sessions: RwSignal::new(std::collections::HashMap::new()),
+            pending_saves: RwSignal::new(std::collections::HashMap::new()),
             hub_active_category: RwSignal::new(None),
         }
+    }
+
+    /// Đăng ký một tác vụ lưu PDF pending trước khi gọi native async persistence (Finding 4675800826)
+    pub fn register_pending_save(
+        &self,
+        request_id: String,
+        file_path: String,
+        document_id: Option<String>,
+        snapshot_generation: u64,
+    ) {
+        let mut map = self.pending_saves.get_untracked();
+        map.insert(
+            request_id.clone(),
+            PendingPdfSave {
+                request_id,
+                file_path,
+                document_id,
+                snapshot_generation,
+            },
+        );
+        self.pending_saves.set(map);
+        self.is_running.set(true);
+    }
+
+    /// Xóa tác vụ lưu pending sau khi nhận kết quả terminal (thành công, thất bại, hủy)
+    pub fn clear_pending_save(&self, request_id: &str) -> Option<PendingPdfSave> {
+        let mut map = self.pending_saves.get_untracked();
+        let removed = map.remove(request_id);
+        self.pending_saves.set(map.clone());
+        if map.is_empty() {
+            self.is_running.set(false);
+        }
+        removed
+    }
+
+    /// Kiểm tra xem có bất kỳ tác vụ lưu PDF nào đang pending hay không
+    pub fn has_pending_saves(&self) -> bool {
+        self.pending_saves.with_untracked(|m| !m.is_empty())
+    }
+
+    /// Kiểm tra xem có tác vụ lưu pending cho một file cụ thể hay không
+    pub fn has_pending_saves_for_file(&self, path: &str) -> bool {
+        self.pending_saves.with_untracked(|m| m.values().any(|s| s.file_path == path))
+    }
+
+    /// Kiểm tra xem có bất kỳ tài liệu PDF nào (kể cả inactive) chưa lưu hoặc đang pending lưu không
+    pub fn has_unsaved_documents_or_pending_saves(&self) -> bool {
+        if self.has_pending_saves() {
+            return true;
+        }
+        if self.has_unsaved_changes.get_untracked() {
+            return true;
+        }
+        self.document_sessions.with_untracked(|map| map.values().any(|s| s.is_dirty))
     }
 
     /// Đăng ký hoặc cập nhật phiên tài liệu cho một đường dẫn tệp cụ thể (Finding 1)
@@ -544,6 +610,18 @@ impl PdfStudioState {
                 self.status_message.set(format!("PDFCraft Canvas sẵn sàng (v{})", version));
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Dirty { dirty } => {
+                if !*dirty {
+                    // Nếu iframe báo sạch (dirty = false) nhưng đang có pending save cho file này,
+                    // KHÔNG ĐƯỢC chấp nhận thông báo sạch sớm từ iframe để xóa dirty!
+                    // Dirty chỉ được xóa khi native persistence hoàn tất thành công bền vững.
+                    let active_has_pending = self
+                        .active_file_path()
+                        .map(|p| self.has_pending_saves_for_file(&p))
+                        .unwrap_or_else(|| self.has_pending_saves());
+                    if active_has_pending {
+                        return;
+                    }
+                }
                 self.set_unsaved_changes(*dirty);
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Save { name, .. } => {

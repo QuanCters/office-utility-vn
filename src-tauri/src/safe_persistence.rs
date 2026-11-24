@@ -9,8 +9,15 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
+#[cfg(test)]
+use std::sync::Arc;
 use office_shared::CommandError;
 use serde::{Deserialize, Serialize};
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -79,6 +86,58 @@ fn check_post_rename_fault(dest_path: &Path) -> Option<CommandError> {
         }
     }
     None
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreRenameFault {
+    SetPermissionsFailure,
+}
+
+static PRE_RENAME_FAULT_INJECTION: Mutex<Option<HashMap<PathBuf, PreRenameFault>>> = Mutex::new(None);
+
+pub fn set_pre_rename_fault_for_path(path: PathBuf, fault: PreRenameFault) {
+    let mut guard = PRE_RENAME_FAULT_INJECTION.lock().unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(HashMap::new);
+    map.insert(path, fault);
+}
+
+pub fn clear_pre_rename_fault_for_path(path: &Path) {
+    let mut guard = PRE_RENAME_FAULT_INJECTION.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = guard.as_mut() {
+        map.remove(path);
+    }
+}
+
+#[allow(dead_code)]
+fn check_pre_rename_fault(dest_path: &Path) -> Option<CommandError> {
+    let guard = PRE_RENAME_FAULT_INJECTION.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = guard.as_ref() {
+        for (target, fault) in map.iter() {
+            if dest_path == target || dest_path.ends_with(target) {
+                match fault {
+                    PreRenameFault::SetPermissionsFailure => return Some(CommandError::IoError {
+                        details: "Lỗi tiêm thử nghiệm: Không thể đặt quyền hạn lên tệp tạm (SetPermissionsFailure)".to_string(),
+                    }),
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+static TEMP_FILE_INSPECTOR: Mutex<Option<Arc<dyn Fn(&Path) + Send + Sync>>> = Mutex::new(None);
+
+#[cfg(test)]
+pub fn set_temp_file_inspector<F: Fn(&Path) + Send + Sync + 'static>(f: F) {
+    let mut guard = TEMP_FILE_INSPECTOR.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(Arc::new(f));
+}
+
+#[cfg(test)]
+pub fn clear_temp_file_inspector() {
+    let mut guard = TEMP_FILE_INSPECTOR.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
 }
 
 /// Trạng thái phiên ghi của một đường dẫn đích cụ thể
@@ -291,6 +350,25 @@ impl<'a> Drop for TempFileGuard<'a> {
 }
 
 /// Quy trình 10 bước thực hiện ghi đĩa bền vững và nguyên tử ở tầng native
+///
+/// ### Đảm bảo & Ranh giới Bảo mật Phân quyền (Security Guarantees & Limitations - Finding 4675800831):
+/// 1. **POSIX / Unix Mode Bits (0600 Restrictive Default & Preservation)**:
+///    - **Tệp tạm**: Luôn được tạo độc quyền với cờ `OpenOptionsExt::mode(0o600)` (chỉ chủ sở hữu
+///      có quyền đọc/ghi), bất chấp `umask` mặc định của tiến trình (ví dụ 022), loại bỏ hoàn toàn
+///      khe hở tiết lộ dữ liệu nhạy cảm cho người dùng khác trong lúc stream byte (NFR-SEC-03).
+///    - **Bảo lưu quyền hạn**: Nếu tệp đích đã tồn tại, quyền truy cập POSIX mode bits (`0o777`)
+///      được đọc từ tệp gốc và áp dụng lại vào tệp tạm qua `set_permissions` trước khi fsync
+///      và hoán đổi nguyên tử (`rename`), ngăn chặn việc tệp bảo mật (0600) bị biến thành 0644.
+///    - **Tệp mới**: Tự động áp dụng quyền mặc định an toàn `0600`.
+///    - **Lỗi đặt quyền**: Bất kỳ sự cố nào khi đặt permissions đều được truyền tải về caller
+///      trước khi đổi tên nguyên tử, đảm bảo tệp gốc không bị thay đổi.
+/// 2. **Hạn chế đối với POSIX Extended ACLs & Extended Attributes (xattrs)**:
+///    - Các danh sách kiểm soát truy cập mở rộng (POSIX ACLs via `setfacl`) và thuộc tính mở rộng
+///      (xattrs) không được tự động sao chép qua việc hoán đổi inode nếu không có thư viện bên ngoài
+///      phụ thuộc vào hệ thống (`libacl`/`libattr`).
+/// 3. **Hệ điều hành Windows (NTFS)**:
+///    - Trên Windows NTFS, tệp kế thừa Access Control Lists (DACLs) từ thư mục cha. Việc hoán đổi
+///      nguyên tử sẽ tiếp tục áp dụng các chính sách bảo mật kế thừa của thư mục đích.
 pub fn native_atomic_durable_write(dest_path_str: &str, bytes: &[u8]) -> Result<(), CommandError> {
     // Bước 1: Thẩm tra an toàn đường dẫn và quyền hạn
     let dest_path = validate_and_authorize_path(dest_path_str)?;
@@ -316,20 +394,54 @@ pub fn native_atomic_durable_write(dest_path_str: &str, bytes: &[u8]) -> Result<
     let temp_name = format!(".tmp.{}.{}.{}.{}", file_name, std::process::id(), nanos, counter);
     let temp_path = parent_dir.join(&temp_name);
 
-    // Bước 5 & 6: Kích hoạt RAII Guard và mở tệp tạm độc quyền (create_new)
-    let mut guard = TempFileGuard::new(&temp_path);
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp_path)
-        .map_err(|e| CommandError::IoError {
-            details: format!("Không thể tạo tệp tạm '{temp_path:?}': {e}"),
-        })?;
+    // Bước 4.5: Thu thập quyền hạn của tệp đích hiện hữu (nếu có) hoặc dùng 0600 an toàn (Finding 4675800831)
+    #[cfg(unix)]
+    let target_permissions = if let Ok(meta) = std::fs::symlink_metadata(&dest_path) {
+        Some(meta.permissions())
+    } else {
+        Some(std::fs::Permissions::from_mode(0o600))
+    };
 
-    // Bước 7: Ghi toàn bộ dữ liệu, flush và fsync phần cứng
+    // Bước 5 & 6: Kích hoạt RAII Guard và mở tệp tạm độc quyền (create_new) với quyền hạn chế 0600
+    let mut guard = TempFileGuard::new(&temp_path);
+    let mut open_options = OpenOptions::new();
+    open_options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        // Luôn tạo file tạm với quyền chặt chẽ 0600 để chống tiết lộ thông tin khi đang ghi
+        open_options.mode(0o600);
+    }
+    let mut file = open_options.open(&temp_path).map_err(|e| CommandError::IoError {
+        details: format!("Không thể tạo tệp tạm '{temp_path:?}': {e}"),
+    })?;
+
+    // Bước 7: Ghi toàn bộ dữ liệu ra tệp tạm
     file.write_all(bytes).map_err(|e| CommandError::IoError {
         details: format!("Không thể ghi dữ liệu vào tệp tạm: {e}"),
     })?;
+
+    // Hook kiểm tra quyền hạn của tệp tạm trước khi thay thế (Test Verification Scenario 2)
+    #[cfg(test)]
+    {
+        let guard = TEMP_FILE_INSPECTOR.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref inspector) = *guard {
+            inspector(&temp_path);
+        }
+    }
+
+    // Kiểm tra lỗi tiêm thử nghiệm trước khi đặt quyền / rename (Test Verification Scenario 4)
+    #[cfg(test)]
+    if let Some(fault) = check_pre_rename_fault(&dest_path) {
+        return Err(fault);
+    }
+
+    // Áp dụng quyền hạn mục tiêu (bảo lưu quyền tệp cũ hoặc 0600 cho tệp mới) trước khi fsync & rename
+    #[cfg(unix)]
+    if let Some(perms) = target_permissions {
+        std::fs::set_permissions(&temp_path, perms).map_err(|e| CommandError::IoError {
+            details: format!("Không thể áp dụng quyền truy cập lên tệp tạm '{temp_path:?}': {e}"),
+        })?;
+    }
 
     file.flush().map_err(|e| CommandError::IoError {
         details: format!("Không thể flush tệp tạm: {e}"),
@@ -3431,5 +3543,143 @@ mod tests {
         // Tệp gốc vẫn giữ nguyên tuyệt đối
         let disk_bytes = std::fs::read(&dest_path).expect("read dest");
         assert_eq!(disk_bytes, original_bytes);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_unix_atomic_write_preserves_0600_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("confidential.pdf");
+        let initial_bytes = b"%PDF-1.7 INITIAL CONFIDENTIAL DATA";
+        std::fs::write(&dest_path, initial_bytes).expect("write initial");
+
+        // Đặt permissions 0600 cho tệp gốc
+        std::fs::set_permissions(&dest_path, std::fs::Permissions::from_mode(0o600)).expect("set 0600");
+        let initial_mode = std::fs::metadata(&dest_path).expect("meta").permissions().mode() & 0o777;
+        assert_eq!(initial_mode, 0o600);
+
+        // Ghi dữ liệu mới qua native_atomic_durable_write
+        let new_bytes = b"%PDF-1.7 REPLACED CONFIDENTIAL DATA";
+        native_atomic_durable_write(dest_path.to_str().unwrap(), new_bytes).expect("write durable");
+
+        // Sau khi hoán đổi nguyên tử, permissions của tệp đích BẮT BUỘC PHẢI GIỮ NGUYÊN 0600!
+        let post_mode = std::fs::metadata(&dest_path).expect("meta post").permissions().mode() & 0o777;
+        assert_eq!(
+            post_mode, 0o600,
+            "Permissions của tệp bảo mật 0600 phải được bảo lưu tuyệt đối sau khi ghi đĩa nguyên tử! Nhận được: {:o}",
+            post_mode
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_unix_temp_file_permissions_restrictive_before_replacement() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::AtomicBool;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("secure_work.xlsx");
+        let verified = Arc::new(AtomicBool::new(false));
+        let verified_clone = Arc::clone(&verified);
+
+        set_temp_file_inspector(move |temp_path| {
+            let mode = std::fs::metadata(temp_path)
+                .expect("temp metadata")
+                .permissions()
+                .mode() & 0o777;
+            assert_eq!(
+                mode, 0o600,
+                "Tệp tạm thời phải luôn được tạo với quyền tối thiểu hạn chế 0600! Nhận được: {:o}",
+                mode
+            );
+            verified_clone.store(true, Ordering::SeqCst);
+        });
+
+        let payload = b"PK\x03\x04RESTRICTIVE_TEMP_TEST";
+        let res = native_atomic_durable_write(dest_path.to_str().unwrap(), payload);
+        clear_temp_file_inspector();
+
+        assert!(res.is_ok(), "Ghi tệp thành công");
+        assert!(verified.load(Ordering::SeqCst), "Inspector phải được kích hoạt để kiểm tra tệp tạm");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_unix_atomic_write_new_file_secure_default_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("brand_new_document.pdf");
+        assert!(!dest_path.exists(), "Tệp phải chưa tồn tại trước khi ghi");
+
+        let payload = b"%PDF-1.7 NEW_DOC_SECURE_DEFAULT";
+        native_atomic_durable_write(dest_path.to_str().unwrap(), payload).expect("write new doc");
+
+        let mode = std::fs::metadata(&dest_path).expect("meta").permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "Tài liệu mới phải có quyền mặc định an toàn 0600! Nhận được: {:o}",
+            mode
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_pre_rename_permission_failure_preserves_original_file_and_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("guarded_contract.docx");
+        let original_bytes = b"ORIGINAL_CONFIDENTIAL_CONTRACT";
+        std::fs::write(&dest_path, original_bytes).expect("write original");
+        std::fs::set_permissions(&dest_path, std::fs::Permissions::from_mode(0o600)).expect("set 0600");
+
+        let manager = NativeSaveGrantManager::new();
+        manager
+            .register_document_session("doc-guard-1", "app-1", 1, &dest_path, 0)
+            .expect("register session");
+
+        let grant = manager
+            .issue_save_grant(
+                "doc-guard-1",
+                "app-1",
+                1,
+                "req-guard-1",
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .expect("issue grant");
+
+        // Tiêm lỗi đặt quyền trước khi đổi tên (chỉ scoped cho dest_path này)
+        set_pre_rename_fault_for_path(dest_path.clone(), PreRenameFault::SetPermissionsFailure);
+
+        let new_bytes = b"MALICIOUS_OR_CORRUPT_OVERWRITE";
+        let res = manager.execute_granted_save(&grant.grant_id, "req-guard-1", new_bytes);
+
+        clear_pre_rename_fault_for_path(&dest_path);
+
+        // 1. Phải trả về lỗi
+        assert!(res.is_err(), "Lỗi đặt quyền trước rename phải trả về Err");
+
+        // 2. Trạng thái cấp quyền phải là Failed (KHÔNG phải AmbiguousCommit)
+        let grants = manager.grants.lock().unwrap();
+        let g = grants.get(&grant.grant_id).expect("grant exists");
+        assert_eq!(
+            g.status,
+            GrantStatus::Failed,
+            "Lỗi trước khi đổi tên phải đánh dấu grant là Failed"
+        );
+        drop(grants);
+
+        // 3. Tệp gốc phải giữ nguyên 100% cả nội dung lẫn quyền truy cập 0600
+        let disk_bytes = std::fs::read(&dest_path).expect("read dest");
+        assert_eq!(disk_bytes, original_bytes, "Nội dung tệp gốc không được thay đổi");
+
+        let mode = std::fs::metadata(&dest_path).expect("meta").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "Quyền truy cập gốc 0600 phải được giữ nguyên");
     }
 }

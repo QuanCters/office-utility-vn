@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
-    IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge,
+    IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge, SaveOutcome,
 };
 use office_utility_vn_ui::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
 use office_utility_vn_ui::micro_apps::pdf_studio::state::{category_for_tool, PdfCategory, PdfStudioState};
@@ -1006,6 +1006,7 @@ fn test_pdf_studio_save_completion_cross_document_interleaving_safety() {
     office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
         &state,
         Ok(outcome_a),
+        "req-test-a",
         Some(originating_path_a.clone()),
         Some(originating_doc_id_a.clone()),
         snapshot_gen_a,
@@ -1039,6 +1040,7 @@ fn test_pdf_studio_save_completion_cross_document_interleaving_safety() {
     office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
         &state,
         Ok(outcome_b),
+        "req-test-b",
         Some(originating_path_b.clone()),
         Some(originating_doc_id_b),
         state.edit_generation.get_untracked(),
@@ -1059,5 +1061,191 @@ fn test_pdf_studio_save_completion_cross_document_interleaving_safety() {
     assert_ne!(oracle_final_a, oracle_final_b, "A and B must have distinct SHA-256!");
     assert_ne!(oracle_final_b, oracle_initial_b, "B was updated with new bytes!");
 }
+
+#[test]
+fn test_pdf_pending_save_lifecycle_five_scenarios() {
+    use office_utility_vn_ui::app::AppState;
+
+    let app_state = AppState::default();
+    let state = app_state.pdf_studio_state;
+
+    let path_a = "/tmp/test_pdf_pending_a.pdf";
+    let path_b = "/tmp/test_pdf_pending_b.pdf";
+
+    // Mở file A và đánh dấu dirty
+    state.add_file(path_a);
+    state.set_active_document_session(Some("doc-session-A".to_string()), 1);
+    state.set_unsaved_changes(true);
+    let gen_a0 = state.edit_generation.get_untracked();
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 1: Bắt đầu lưu PDF A, iframe gửi dirty(false) sớm trước khi native ghi đĩa xong.
+    // Yêu cầu: Cửa sổ / close guard VẪN PHẢI BỊ CHẶN (close must remain blocked)!
+    // -------------------------------------------------------------------------
+    let req_a1 = "pdf-save-req-a1".to_string();
+    state.register_pending_save(
+        req_a1.clone(),
+        path_a.to_string(),
+        Some("doc-session-A".to_string()),
+        gen_a0,
+    );
+    assert!(state.has_pending_saves(), "Phải ghi nhận có pending save");
+    assert!(state.has_pending_saves_for_file(path_a));
+
+    // Iframe gửi thông điệp dirty(false) sớm (do postMessage thành công trong iframe)
+    state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: false });
+
+    // Cực kỳ quan trọng: Close guard phải tiếp tục chặn đóng!
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 1: Close guard phải chặn đóng cửa sổ khi tác vụ lưu PDF vẫn đang pending!"
+    );
+    assert!(
+        state.has_unsaved_changes(),
+        "Scenario 1: Thông báo sạch sớm từ iframe không được nuốt mất dirty flag trước khi ghi đĩa xong!"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 2: Native write gặp lỗi sau khi iframe đã gửi clean notification.
+    // Yêu cầu: Tài liệu VẪN PHẢI GIỮ NGUYÊN DIRTY (document remains dirty)!
+    // -------------------------------------------------------------------------
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Err("Lỗi IO native khi ghi đĩa".to_string()),
+        &req_a1,
+        Some(path_a.to_string()),
+        Some("doc-session-A".to_string()),
+        gen_a0,
+        false,
+        b"%PDF-1.7 CONTENT",
+    );
+    assert!(
+        !state.has_pending_saves_for_file(path_a),
+        "Pending save req_a1 phải được dọn sau khi kết thúc"
+    );
+    assert!(
+        state.has_unsaved_changes(),
+        "Scenario 2: Khi lưu thất bại, document phải giữ nguyên dirty!"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 2: Close guard vẫn phải chặn đóng khi lưu thất bại"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 3: Bắt đầu 2 pending saves (A và B), hoàn tất 1 cái (A).
+    // Yêu cầu: Cái còn lại (B) TIẾP TỤC CHẶN ĐÓNG CỬA SỔ!
+    // -------------------------------------------------------------------------
+    state.add_file(path_b);
+    state.set_active_document_session(Some("doc-session-B".to_string()), 1);
+    state.set_unsaved_changes(true);
+    let gen_b0 = state.edit_generation.get_untracked();
+
+    // Chuyển lại về A
+    state.select_file(0);
+    state.set_unsaved_changes(true);
+    let gen_a1 = state.edit_generation.get_untracked();
+
+    let req_a2 = "pdf-save-req-a2".to_string();
+    let req_b1 = "pdf-save-req-b1".to_string();
+
+    state.register_pending_save(req_a2.clone(), path_a.to_string(), Some("doc-session-A".to_string()), gen_a1);
+    state.register_pending_save(req_b1.clone(), path_b.to_string(), Some("doc-session-B".to_string()), gen_b0);
+
+    assert_eq!(state.pending_saves.get_untracked().len(), 2);
+
+    // Hoàn tất lưu A thành công
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_a.to_string(),
+            committed_revision: 2,
+            new_document_id: Some("doc-session-A".to_string()),
+        }),
+        &req_a2,
+        Some(path_a.to_string()),
+        Some("doc-session-A".to_string()),
+        gen_a1,
+        false,
+        b"%PDF-1.7 CONTENT A",
+    );
+
+    assert!(!state.has_pending_saves_for_file(path_a), "A đã lưu xong");
+    assert!(state.has_pending_saves_for_file(path_b), "B vẫn đang pending");
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 3: Hoàn tất lưu A nhưng B còn pending thì close guard vẫn phải chặn đóng!"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 4: Người dùng chỉnh sửa tài liệu trong khi save đang chạy (in-flight).
+    // Yêu cầu: Hoàn tất snapshot cũ KHÔNG ĐƯỢC XÓA DIRTY của chỉnh sửa mới hơn!
+    // -------------------------------------------------------------------------
+    state.select_file(1); // Chọn B
+    assert_eq!(state.active_file_path(), Some(path_b.to_string()));
+    let snap_gen_b = gen_b0; // Snapshot bắt đầu lưu ở thế hệ gen_b0
+
+    // Người dùng chỉnh sửa B trong lúc persistence của req_b1 đang chạy
+    state.set_unsaved_changes(true);
+    let newer_gen_b = state.edit_generation.get_untracked();
+    assert!(newer_gen_b > snap_gen_b, "Thế hệ chỉnh sửa mới phải lớn hơn snapshot");
+
+    // Tác vụ lưu của req_b1 (với snapshot cũ snap_gen_b) hoàn tất thành công
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_b.to_string(),
+            committed_revision: 2,
+            new_document_id: Some("doc-session-B".to_string()),
+        }),
+        &req_b1,
+        Some(path_b.to_string()),
+        Some("doc-session-B".to_string()),
+        snap_gen_b,
+        false,
+        b"%PDF-1.7 OLD SNAPSHOT B",
+    );
+
+    assert!(
+        state.has_unsaved_changes(),
+        "Scenario 4: Chỉnh sửa mới hơn phải giữ nguyên dirty state sau khi snapshot cũ hoàn tất!"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 4: Close guard phải chặn đóng vì vẫn còn chỉnh sửa mới chưa lưu"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 5: Lưu thành công khi không có chỉnh sửa mới nào can thiệp.
+    // Yêu cầu: Pending state được dọn sạch, dirty = false, đủ điều kiện đóng ứng dụng.
+    // -------------------------------------------------------------------------
+    let req_b2 = "pdf-save-req-b2".to_string();
+    let current_gen_b = state.edit_generation.get_untracked();
+    state.register_pending_save(req_b2.clone(), path_b.to_string(), Some("doc-session-B".to_string()), current_gen_b);
+
+    // Không có chỉnh sửa mới, lưu thành công
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_b.to_string(),
+            committed_revision: 3,
+            new_document_id: Some("doc-session-B".to_string()),
+        }),
+        &req_b2,
+        Some(path_b.to_string()),
+        Some("doc-session-B".to_string()),
+        current_gen_b,
+        false,
+        b"%PDF-1.7 FINAL B",
+    );
+
+    assert!(!state.has_pending_saves(), "Không còn pending save nào");
+    assert!(!state.has_unsaved_changes(), "Tài liệu B đã sạch");
+    assert!(
+        !app_state.has_unsaved_work_or_running_task(),
+        "Scenario 5: Khi toàn bộ tài liệu đã lưu bền vững, close guard cho phép đóng bình thường!"
+    );
+}
+
 
 

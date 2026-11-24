@@ -383,6 +383,16 @@ pub fn setup_bridge_listener(
                 let doc_id = state.active_document_id();
                 let cur_rev = state.active_revision();
                 let snapshot_gen = state.edit_generation.get_untracked();
+                static REQ_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                let count = REQ_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let req_id = format!("pdf-save-{}-{}", snapshot_gen, count);
+                state.register_pending_save(
+                    req_id.clone(),
+                    active_path.clone().unwrap_or_else(|| name_clone.clone()),
+                    doc_id.clone(),
+                    snapshot_gen,
+                );
+                let req_id_clone = req_id.clone();
                 let s = state;
                 wasm_bindgen_futures::spawn_local(async move {
                     let outcome = save_file_to_disk_or_download(
@@ -394,7 +404,7 @@ pub fn setup_bridge_listener(
                         &bytes_clone,
                     )
                     .await;
-                    apply_save_outcome(&s, outcome, active_path, doc_id, snapshot_gen, save_as, &bytes_clone);
+                    apply_save_outcome(&s, outcome, &req_id_clone, active_path, doc_id, snapshot_gen, save_as, &bytes_clone);
                 });
             }
         }
@@ -417,16 +427,19 @@ pub fn setup_bridge_listener(
     Ok(())
 }
 
-/// Áp dụng kết quả của tác vụ lưu tệp PDF (Blocker 1: Bound to originating document)
+/// Áp dụng kết quả của tác vụ lưu tệp PDF (Blocker 1: Bound to originating document & Finding 4675800826: Pending Save Lifecycle)
 pub fn apply_save_outcome(
     s: &crate::micro_apps::pdf_studio::state::PdfStudioState,
     outcome: Result<SaveOutcome, String>,
+    request_id: &str,
     originating_path: Option<String>,
     originating_doc_id: Option<String>,
     snapshot_gen: u64,
     save_as: bool,
     bytes: &[u8],
 ) {
+    s.clear_pending_save(request_id);
+
     match outcome {
         Ok(SaveOutcome::Saved { dest_path, committed_revision, new_document_id }) => {
             let target_doc_id = new_document_id.or(originating_doc_id);
@@ -474,6 +487,13 @@ pub fn apply_save_outcome(
             s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
         }
         Ok(SaveOutcome::Canceled) => {
+            if let Some(ref path) = originating_path {
+                let mut map = s.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(path) {
+                    sess.is_dirty = true;
+                }
+                s.document_sessions.set(map);
+            }
             let is_still_active = match originating_path.as_deref() {
                 Some(p) => s.active_file_path().as_deref() == Some(p),
                 None => false,
@@ -484,6 +504,13 @@ pub fn apply_save_outcome(
             s.status_message.set("Đã hủy thao tác lưu tệp.".to_string());
         }
         Ok(SaveOutcome::Failed(err)) => {
+            if let Some(ref path) = originating_path {
+                let mut map = s.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(path) {
+                    sess.is_dirty = true;
+                }
+                s.document_sessions.set(map);
+            }
             let is_still_active = match originating_path.as_deref() {
                 Some(p) => s.active_file_path().as_deref() == Some(p),
                 None => false,
@@ -509,6 +536,13 @@ pub fn apply_save_outcome(
             s.status_message.set("Đã bắt đầu tải về qua trình duyệt.".to_string());
         }
         Err(err) => {
+            if let Some(ref path) = originating_path {
+                let mut map = s.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(path) {
+                    sess.is_dirty = true;
+                }
+                s.document_sessions.set(map);
+            }
             let is_still_active = match originating_path.as_deref() {
                 Some(p) => s.active_file_path().as_deref() == Some(p),
                 None => false,
