@@ -113,7 +113,21 @@ def main():
     parser.add_argument("--all", action="store_true", help="Chạy toàn bộ các tầng kiểm chứng L0 -> L4")
     parser.add_argument("--task", type=str, help="Kiểm chứng theo hợp đồng Task ID (ví dụ: PDF-042)")
     parser.add_argument("--check-vendor-pin", action="store_true", help="Kiểm tra tính toàn vẹn phụ thuộc vendor")
+    parser.add_argument("--verify-artifacts", action="store_true", help="Kiểm tra tính toàn vẹn artifact bản build")
     args = parser.parse_args()
+
+    # Xử lý cờ kiểm tra artifact độc lập nếu được yêu cầu
+    if args.verify_artifacts:
+        print("🔍 Explicit build artifact check requested via --verify-artifacts")
+        ok_art, art_errors = evidence.verify_artifacts(repo_root)
+        if not ok_art:
+            print("\n❌ [Build Artifact Check Failed]")
+            for err in art_errors:
+                print(f"  - {err}")
+            sys.exit(1)
+        print("✅ [Build Artifact Check Passed] All required build artifacts verified cleanly.")
+        if not args.tier and not args.all and not args.check_vendor_pin:
+            sys.exit(0)
 
     # Xử lý cờ kiểm tra vendor pin độc lập nếu được yêu cầu
     if args.check_vendor_pin:

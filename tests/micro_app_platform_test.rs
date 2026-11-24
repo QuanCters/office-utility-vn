@@ -196,7 +196,7 @@ fn test_gridcraft_adapter_protocol_parsing() {
         other => panic!("Expected SaveRequested, got {other:?}"),
     }
 
-    // Export message (gridcraft:export)
+    // Export message (gridcraft:export) - CSV
     let msg_export = RawBridgeMessage {
         type_name: "gridcraft:export".to_string(),
         payload: json!({ "name": "export.csv", "id": "export-1-1" }),
@@ -209,7 +209,23 @@ fn test_gridcraft_adapter_protocol_parsing() {
             assert_eq!(bytes, b"a,b,c\n1,2,3");
             assert_eq!(request_id.as_deref(), Some("export-1-1"));
         }
-        other => panic!("Expected SaveRequested for export, got {other:?}"),
+        other => panic!("Expected SaveRequested for CSV export, got {other:?}"),
+    }
+
+    // Export message (gridcraft:export) - PDF
+    let msg_export_pdf = RawBridgeMessage {
+        type_name: "gridcraft:export".to_string(),
+        payload: json!({ "name": "report.pdf", "intent": "export", "id": "export-pdf-1" }),
+        binary_data: Some(b"%PDF-1.4\n%mock_pdf_stream_content".to_vec()),
+    };
+    match adapter.parse_incoming(&msg_export_pdf).unwrap() {
+        DocumentStateEvent::SaveRequested { name, intent, bytes, request_id } => {
+            assert_eq!(name, "report.pdf");
+            assert_eq!(intent, office_utility_vn_ui::platform::adapter::SaveOperationIntent::Export);
+            assert_eq!(bytes, b"%PDF-1.4\n%mock_pdf_stream_content");
+            assert_eq!(request_id.as_deref(), Some("export-pdf-1"));
+        }
+        other => panic!("Expected SaveRequested for PDF export, got {other:?}"),
     }
 
     // Ambiguous save intent without id or saveAs must fail safely

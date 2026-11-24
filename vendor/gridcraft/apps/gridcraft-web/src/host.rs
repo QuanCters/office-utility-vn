@@ -112,8 +112,12 @@ impl Bridge {
         services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
             if bridge.confirmed {
                 bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec()));
-            } else if let Err(e) = bridge.post_save(name, bytes) {
-                log::error!("couldn't hand {name} to the page: {e}");
+            } else if is_workbook(name) {
+                if let Err(e) = bridge.post_save(name, bytes) {
+                    log::error!("couldn't hand {name} to the page: {e}");
+                }
+            } else if let Err(e) = bridge.post_export(name, bytes) {
+                log::error!("couldn't hand export {name} to the page: {e}");
             }
         }));
         if self.confirmed {
@@ -287,8 +291,8 @@ impl Bridge {
                 if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                     log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                 }
-            } else if let Err(e) = self.host.post_save(&name, &downloaded_bytes, None, false) {
-                log::error!("couldn't hand {name} to the page: {e}");
+            } else if let Err(e) = self.post_export(&name, &downloaded_bytes) {
+                log::error!("couldn't hand export {name} to the page: {e}");
             }
         }
 
@@ -380,6 +384,27 @@ impl Bridge {
         Ok(())
     }
 
+    fn post_export(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
+        let name = file_name(path);
+        let id_num = self.next_save_id.get();
+        self.next_save_id.set(id_num + 1);
+        let export_id = format!("export-{id_num}");
+        let buffer = js_sys::Uint8Array::from(bytes).buffer();
+        let obj = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:export"));
+        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("name"), &wasm_bindgen::JsValue::from_str(&name));
+        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("intent"), &wasm_bindgen::JsValue::from_str("export"));
+        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(&export_id));
+        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("bytes"), &buffer);
+        if let Some(w) = web_sys::window()
+            && let Ok(Some(parent)) = w.parent()
+        {
+            parent.post_message_with_transfer(&obj, "*", &js_sys::Array::of1(&buffer))
+                .map_err(|e| format!("{e:?}"))?;
+        }
+        Ok(())
+    }
+
     fn listen(&self, inbox: Inbox, ctx: egui::Context) {
         let confirmed = self.confirmed;
         let confirmed_saved_ids = self.confirmed_saved_ids.clone();
@@ -404,7 +429,7 @@ impl Bridge {
             let failed_flag = self.failed_save_happened.clone();
             let cur_open_store = self.current_open_id.clone();
             let app_ctx_for_msgs = ctx.clone();
-            let inbox_for_msgs = inbox.clone();
+            let _inbox_for_msgs = inbox.clone();
             let save_intents_store = self.pending_save_intents.clone();
             let app_ctx_for_intents = ctx.clone();
             let on_fail = wasm_bindgen::closure::Closure::<dyn Fn(web_sys::MessageEvent)>::new(

@@ -429,10 +429,30 @@ def validate_evidence_ledger(repo_root: str, ledger_path: str = None) -> tuple[b
 
     return (len(errors) == 0, errors)
 
+def compute_vendor_source_tree_sha256(vendor_dir: str) -> str:
+    """Computes deterministic SHA-256 fingerprint over all vendor source files."""
+    file_entries = []
+    for root, dirs, files in os.walk(vendor_dir):
+        # Exclude generated/untracked/cache dirs
+        dirs[:] = [d for d in dirs if d not in ['target', '.trunk', 'dist', '.git', '__pycache__', '.cargo']]
+        for f in files:
+            if f in ['PROVENANCE.json', '.trunk-lock'] or f.endswith('.tmp') or f.endswith('.log'):
+                continue
+            full_path = os.path.join(root, f)
+            rel_path = os.path.relpath(full_path, vendor_dir)
+            file_sha = get_file_sha256(full_path)
+            file_entries.append((rel_path, file_sha))
+
+    file_entries.sort()
+    tree_hasher = hashlib.sha256()
+    for rel_path, file_sha in file_entries:
+        tree_hasher.update(f"{rel_path}:{file_sha}\n".encode("utf-8"))
+    return tree_hasher.hexdigest()
+
 def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
-    """Pre-build vendor pin and patch integrity verification (P2 #4678429571)."""
+    """Pre-build vendor pin, lockfile, source tree, and patch integrity verification (P2 #4678429571)."""
     errors = []
-    print("🔍 [Pre-build] Verifying pinned vendor sources and patches...")
+    print("🔍 [Pre-build] Verifying pinned vendor sources, lockfiles, and patches...")
 
     manifest_path = os.path.join(repo_root, "vendor", "gridcraft", "PROVENANCE.json")
     if not os.path.exists(manifest_path):
@@ -450,6 +470,9 @@ def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
     expected_commit = vendor_info.get("upstream_commit")
     patch_rel = vendor_info.get("patch_file")
     expected_patch_sha = vendor_info.get("patch_sha256")
+    expected_tree_sha = vendor_info.get("source_tree_sha256")
+    lockfile_rel = vendor_info.get("lockfile_path", "vendor/gridcraft/Cargo.lock")
+    expected_lockfile_sha = vendor_info.get("lockfile_sha256")
 
     # 1. Kiểm tra UPSTREAM_COMMIT.txt
     upstream_meta = os.path.join(repo_root, "vendor", "gridcraft", "UPSTREAM_COMMIT.txt")
@@ -481,7 +504,23 @@ def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
         if actual_patch_sha != expected_patch_sha:
             errors.append(f"Vendor patch checksum mismatch: expected {expected_patch_sha}, got {actual_patch_sha}")
 
-    # 4. Kiểm tra host.rs có chứa giao thức confirmed save
+    # 4. Kiểm tra dependency lockfile checksum
+    lockfile_path = os.path.join(repo_root, lockfile_rel)
+    if not os.path.exists(lockfile_path):
+        errors.append(f"Missing vendor dependency lockfile: {lockfile_path}")
+    elif expected_lockfile_sha:
+        actual_lock_sha = get_file_sha256(lockfile_path)
+        if actual_lock_sha != expected_lockfile_sha:
+            errors.append(f"Vendor lockfile checksum mismatch: expected {expected_lockfile_sha}, got {actual_lock_sha}")
+
+    # 5. Kiểm tra deterministic vendor source-tree fingerprint
+    vendor_dir = os.path.join(repo_root, "vendor", "gridcraft")
+    if os.path.isdir(vendor_dir) and expected_tree_sha:
+        actual_tree_sha = compute_vendor_source_tree_sha256(vendor_dir)
+        if actual_tree_sha != expected_tree_sha:
+            errors.append(f"Vendor source-tree fingerprint mismatch: expected {expected_tree_sha}, computed {actual_tree_sha}")
+
+    # 6. Kiểm tra host.rs có chứa giao thức confirmed save và export protocol
     host_rs = os.path.join(repo_root, "vendor", "gridcraft", "apps", "gridcraft-web", "src", "host.rs")
     if not os.path.exists(host_rs):
         errors.append(f"Missing vendor source file: {host_rs}")
@@ -490,8 +529,10 @@ def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
             host_src = f.read()
         if 'Some("confirmed")' not in host_src or 'Message::Saved { id }' not in host_src:
             errors.append("Vendor host.rs is missing confirmed save protocol support")
+        if 'post_export' not in host_src or 'gridcraft:export' not in host_src:
+            errors.append("Vendor host.rs is missing explicit export protocol support")
 
-    # 5. Reverse dry-run patch để chứng minh tính nhất quán
+    # 7. Reverse dry-run patch để chứng minh tính nhất quán
     if os.path.exists(patch_path) and os.path.exists(os.path.join(repo_root, "vendor", "gridcraft")):
         import subprocess
         res = subprocess.run(
@@ -508,11 +549,13 @@ def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
             print(f"  ❌ {err}")
         return (False, errors)
 
-    print("  ✓ Pinned vendor source and patch integrity verified cleanly.")
+    print("  ✓ Pinned vendor source, lockfile, and patch integrity verified cleanly.")
     return (True, [])
 
-def verify_artifacts(repo_root: str) -> tuple[bool, list[str]]:
-    """Fail-closed post-build artifact verification (P2 #4678429571)."""
+def verify_artifacts(repo_root: str, check_dist: bool = False, dist_required: bool = False) -> tuple[bool, list[str]]:
+    """Fail-closed post-build artifact verification (P2 #4678429571).
+    Verifies public/gridcraft artifacts, and if dist/ exists or check_dist is requested, verifies dist/ assets too.
+    """
     errors = []
     print("📦 [Post-build] Verifying build artifacts and checksums fail-closed...")
 
@@ -532,6 +575,13 @@ def verify_artifacts(repo_root: str) -> tuple[bool, list[str]]:
     if not artifacts:
         errors.append("Provenance manifest contains no artifact entries")
         return (False, errors)
+
+    dist_dir = os.path.join(repo_root, "dist")
+    dist_exists = os.path.isdir(dist_dir)
+    should_verify_dist = check_dist or dist_exists
+
+    if dist_required and not dist_exists:
+        errors.append("Required output directory 'dist/' does not exist")
 
     for item in artifacts:
         rel_path = item.get("path")
@@ -555,6 +605,23 @@ def verify_artifacts(repo_root: str) -> tuple[bool, list[str]]:
         else:
             size_kb = actual_size / 1024
             print(f"  ✓ [Artifact] {os.path.basename(rel_path)} ({size_kb:.1f} KB) SHA256: {actual_sha[:16]}... (VERIFIED)")
+
+        # Verify in dist/ if applicable
+        dist_rel = item.get("dist_path")
+        if should_verify_dist and dist_rel:
+            full_dist_path = os.path.join(repo_root, dist_rel)
+            if not os.path.exists(full_dist_path):
+                if is_required:
+                    errors.append(f"Missing required dist artifact: {dist_rel}")
+            else:
+                dist_sha = get_file_sha256(full_dist_path)
+                dist_size = os.path.getsize(full_dist_path)
+                if dist_sha != expected_sha:
+                    errors.append(f"Dist artifact checksum mismatch for '{dist_rel}': expected {expected_sha}, got {dist_sha}")
+                elif expected_size and dist_size != expected_size:
+                    errors.append(f"Dist artifact size mismatch for '{dist_rel}': expected {expected_size}, got {dist_size}")
+                else:
+                    print(f"  ✓ [Dist Artifact] {dist_rel} ({dist_size / 1024:.1f} KB) SHA256: {dist_sha[:16]}... (VERIFIED)")
 
     if errors:
         for err in errors:
@@ -617,8 +684,26 @@ def main():
             sys.exit(1)
 
     if "--verify-artifacts" in sys.argv:
-        ok = verify_artifacts(repo_root)
-        sys.exit(0 if ok else 1)
+        check_dist = "--check-dist" in sys.argv or "--dist" in sys.argv
+        dist_req = "--require-dist" in sys.argv
+        ok, errs = verify_artifacts(repo_root, check_dist=check_dist, dist_required=dist_req)
+        if not ok:
+            print("❌ Build artifact verification failed:")
+            for e in errs:
+                print(f"  - {e}")
+            sys.exit(1)
+        print("✅ All build artifacts verified cleanly.")
+        sys.exit(0)
+
+    if "--verify-vendor-pin" in sys.argv or "--check-vendor-pin" in sys.argv:
+        ok, errs = verify_vendor_pin(repo_root)
+        if not ok:
+            print("❌ Pinned vendor verification failed:")
+            for e in errs:
+                print(f"  - {e}")
+            sys.exit(1)
+        print("✅ All vendor pins and patches verified cleanly.")
+        sys.exit(0)
 
     print("Evidence module loaded.")
 

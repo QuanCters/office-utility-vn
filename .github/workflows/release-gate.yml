@@ -54,15 +54,11 @@ jobs:
         run: |
           python3 harness/runner/run.py --tier L5 --check-vendor-pin
 
-      - name: Build Tauri Package
+      - name: Build Tauri Package (Packaging Gate Verification Only)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Release candidate ${{ github.ref_name }}'
-          releaseDraft: true
-          prerelease: false
+        # Do not supply tagName or releaseDraft to prevent unauthorized draft/release creation in release-gate
 
       - name: Verify Bundle Integrity & Checksums
         shell: bash

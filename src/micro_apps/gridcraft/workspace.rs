@@ -147,6 +147,30 @@ pub fn handle_gridcraft_save_outcome(
             committed_rev,
             message,
         }) => {
+            if intent == crate::platform::adapter::SaveOperationIntent::Export {
+                // P1 #4676016506 / Finding 4679068393: Xuất file thất bại hoặc ambiguous
+                // TUYỆT ĐỐI KHÔNG:
+                // - Thay thế session tài liệu native đang hoạt động
+                // - Đăng ký export dest_path làm session workbook
+                // - Thay đổi committed revision hay active_file_name của workbook
+                // - Thay đổi trạng thái dirty của workbook
+                s.save_blocked_detail.set(format!(
+                    "⚠️ Xuất tệp thất bại (Ambiguous Commit): {message}"
+                ));
+                s.is_save_blocked_alert.set(true);
+                send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &message, Some(req_id));
+                if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
+                    s.pending_close_request_id.set(None);
+                    if let Some(cm) = close_manager {
+                        cm.cancel_close(&close_req_id);
+                        cm.error_message.set(Some(format!(
+                            "Lỗi xuất tệp (Ambiguous Commit): {message}"
+                        )));
+                    }
+                }
+                return;
+            }
+
             if let Some(coord) = coordinator {
                 coord.update_value(|c| {
                     let _ = c.on_durable_write_failed(req_id, &message);
@@ -192,7 +216,9 @@ pub fn handle_gridcraft_save_outcome(
                     c.on_save_cancelled(req_id);
                 });
             }
-            s.is_dirty.set(true);
+            if intent != crate::platform::adapter::SaveOperationIntent::Export {
+                s.is_dirty.set(true);
+            }
             send_save_failed_to_iframe(
                 GRIDCRAFT_IFRAME_ID,
                 "Đã hủy thao tác lưu",
@@ -206,12 +232,14 @@ pub fn handle_gridcraft_save_outcome(
             }
         }
         Ok(DevSaveResult::Failed(err)) => {
-            if let Some(coord) = coordinator {
-                coord.update_value(|c| {
-                    let _ = c.on_durable_write_failed(req_id, &err);
-                });
+            if intent != crate::platform::adapter::SaveOperationIntent::Export {
+                if let Some(coord) = coordinator {
+                    coord.update_value(|c| {
+                        let _ = c.on_durable_write_failed(req_id, &err);
+                    });
+                }
+                s.is_dirty.set(true);
             }
-            s.is_dirty.set(true);
             s.save_blocked_detail.set(format!("❌ Lỗi ghi đĩa: {err}"));
             s.is_save_blocked_alert.set(true);
             send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &err, Some(req_id));
@@ -224,12 +252,14 @@ pub fn handle_gridcraft_save_outcome(
             }
         }
         Err(err) => {
-            if let Some(coord) = coordinator {
-                coord.update_value(|c| {
-                    let _ = c.on_durable_write_failed(req_id, &err);
-                });
+            if intent != crate::platform::adapter::SaveOperationIntent::Export {
+                if let Some(coord) = coordinator {
+                    coord.update_value(|c| {
+                        let _ = c.on_durable_write_failed(req_id, &err);
+                    });
+                }
+                s.is_dirty.set(true);
             }
-            s.is_dirty.set(true);
             s.save_blocked_detail.set(format!("❌ Lỗi hệ thống: {err}"));
             s.is_save_blocked_alert.set(true);
             send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, &err, Some(req_id));

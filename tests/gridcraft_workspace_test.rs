@@ -949,6 +949,197 @@ fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
 }
 
 #[test]
+fn test_gridcraft_export_failure_and_ambiguous_commit_do_not_replace_workbook_identity() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::DevSaveResult;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let app_state = AppState::default();
+    let state = app_state.gridcraft_state;
+
+    let wb_path = "/data/reports/quarterly_audit.xlsx";
+    let doc_id = "doc-audit-q1";
+
+    // 1. Khởi tạo workbook đang mở ở revision 3, dirty
+    state.register_document_session(WorkbookSession {
+        document_id: doc_id.to_string(),
+        file_path: wb_path.to_string(),
+        file_name: "quarterly_audit.xlsx".to_string(),
+        revision: 3,
+        is_dirty: true,
+        edit_revision: 7,
+    });
+    state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 3);
+    state.active_file_name.set(Some("quarterly_audit.xlsx".to_string()));
+    state.is_dirty.set(true);
+
+    // 2. Thử nghiệm Xuất file PDF gặp lỗi AmbiguousCommit
+    office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::AmbiguousCommit {
+            dest_path: "/data/exports/quarterly_audit.pdf".to_string(),
+            new_doc_id: "doc-export-pdf-temp".to_string(),
+            committed_rev: 999,
+            message: "Mã hóa luồng PDF thành công nhưng thư mục cha không thể fsync".to_string(),
+        }),
+        SaveOperationIntent::Export,
+        "quarterly_audit.pdf",
+        "req-export-fail-1",
+        b"%PDF-1.4\n%stream",
+        7,
+        None,
+        Some(app_state.clone()),
+    );
+
+    // Bất biến: Danh tính workbook và trạng thái dirty TUYỆT ĐỐI KHÔNG BỊ THAY THẾ
+    assert_eq!(
+        state.active_document_id.get(),
+        Some(doc_id.to_string()),
+        "Export AmbiguousCommit must NOT replace active document ID!"
+    );
+    assert_eq!(
+        state.active_file_path.get(),
+        Some(wb_path.to_string()),
+        "Export AmbiguousCommit must NOT replace active file path with export path!"
+    );
+    assert_eq!(
+        state.active_file_name.get(),
+        Some("quarterly_audit.xlsx".to_string()),
+        "Export AmbiguousCommit must NOT replace active file name with PDF name!"
+    );
+    assert_eq!(
+        state.active_revision.get(),
+        3,
+        "Export AmbiguousCommit must NOT advance or modify workbook revision!"
+    );
+    assert!(
+        state.is_dirty.get(),
+        "Source workbook must remain dirty after export ambiguous failure!"
+    );
+
+    // 3. Thử nghiệm Xuất file CSV gặp lỗi DevSaveResult::Failed
+    office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::Failed("EACCES: Permission denied writing CSV".to_string())),
+        SaveOperationIntent::Export,
+        "quarterly_audit.csv",
+        "req-export-fail-2",
+        b"A,B,C",
+        7,
+        None,
+        Some(app_state.clone()),
+    );
+
+    // Bất biến: Danh tính workbook và trạng thái dirty TIẾP TỤC ĐƯỢC BẢO VỆ NGUYÊN VẸN
+    assert_eq!(state.active_document_id.get(), Some(doc_id.to_string()));
+    assert_eq!(state.active_file_path.get(), Some(wb_path.to_string()));
+    assert_eq!(state.active_file_name.get(), Some("quarterly_audit.xlsx".to_string()));
+    assert_eq!(state.active_revision.get(), 3);
+    assert!(state.is_dirty.get());
+}
+
+#[test]
+fn test_gridcraft_ordinary_save_continues_functioning_after_export() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::DevSaveResult;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let app_state = AppState::default();
+    let state = app_state.gridcraft_state;
+
+    let wb_path = "/data/workbooks/financial_projection.xlsx";
+    let doc_id = "doc-fin-proj-1";
+
+    // 1. Workbook đang mở ở revision 1, dirty
+    state.register_document_session(WorkbookSession {
+        document_id: doc_id.to_string(),
+        file_path: wb_path.to_string(),
+        file_name: "financial_projection.xlsx".to_string(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 2,
+    });
+    state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 1);
+    state.active_file_name.set(Some("financial_projection.xlsx".to_string()));
+    state.is_dirty.set(true);
+
+    // Người dùng định đóng cửa sổ
+    state.pending_close_request_id.set(Some("close-req-continue-save".to_string()));
+
+    // 2. Xuất file CSV thành công
+    office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/exports/financial_projection.csv".to_string(),
+            new_doc_id: "doc-csv-export-id".to_string(),
+            committed_rev: 50,
+        }),
+        SaveOperationIntent::Export,
+        "financial_projection.csv",
+        "export-req-1",
+        b"Metric,Value\nRevenue,1000",
+        2,
+        None,
+        Some(app_state.clone()),
+    );
+
+    // Sau khi xuất CSV:
+    // - Workbook vẫn dirty
+    assert!(state.is_dirty.get());
+    // - Close guard vẫn chặn đóng cửa sổ
+    assert!(app_state.has_unsaved_work_or_running_task());
+    assert_eq!(state.active_revision.get(), 1);
+    assert_eq!(state.active_document_id.get(), Some(doc_id.to_string()));
+
+    // 3. Bây giờ thực hiện LƯU BẢNG TÍNH THÔNG THƯỜNG (Save bình thường)
+    office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::Saved {
+            dest_path: wb_path.to_string(),
+            new_doc_id: doc_id.to_string(),
+            committed_rev: 2,
+        }),
+        SaveOperationIntent::Save,
+        "financial_projection.xlsx",
+        "save-req-normal",
+        b"PK\x03\x04...mock_xlsx_bytes...",
+        2,
+        None,
+        Some(app_state.clone()),
+    );
+
+    // Bất biến sau khi Lưu thông thường:
+    // - Workbook đã được lưu (is_dirty = false)
+    assert!(!state.is_dirty.get(), "Ordinary save must mark workbook as clean!");
+    assert_eq!(
+        state.active_revision.get(),
+        2,
+        "Ordinary save must advance committed revision to 2!"
+    );
+    assert_eq!(
+        state.active_document_id.get(),
+        Some(doc_id.to_string()),
+        "Active document ID must remain the workbook!"
+    );
+    assert_eq!(
+        state.active_file_path.get(),
+        Some(wb_path.to_string()),
+        "Active file path must remain the original workbook path!"
+    );
+    // - Cửa sổ bây giờ được phép đóng an toàn vì không còn dữ liệu chưa lưu!
+    assert!(
+        !app_state.has_unsaved_work_or_running_task(),
+        "Window close must be allowed now that the workbook is cleanly saved!"
+    );
+}
+
+#[test]
 fn test_p2_gridcraft_ambiguous_commit_advances_revision_preserves_dirty_and_blocks_close() {
     use office_utility_vn_ui::app::AppState;
     use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
