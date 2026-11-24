@@ -12,6 +12,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PYTHONIOENCODING: "utf-8"
+
 jobs:
   verify-prebuild:
     name: Pre-Build Provenance & Spine Integrity
@@ -108,23 +111,23 @@ jobs:
         run: |
           mkdir -p packaging-evidence
           if [ "${{ matrix.platform }}" = "windows-latest" ]; then
-            EXE_COUNT=$(find src-tauri/target -path "*/bundle/nsis/*.exe" | wc -l)
-            MSI_COUNT=$(find src-tauri/target -path "*/bundle/msi/*.msi" | wc -l)
+            EXE_COUNT=$(find . -path "*/bundle/nsis/*.exe" | wc -l)
+            MSI_COUNT=$(find . -path "*/bundle/msi/*.msi" | wc -l)
             if [ "$EXE_COUNT" -eq 0 ] && [ "$MSI_COUNT" -eq 0 ]; then
               echo "❌ Error: Required Windows packages (*.exe or *.msi) missing from bundle directory!"
               exit 1
             fi
             echo "✓ Verified Windows package artifacts exist (EXE: $EXE_COUNT, MSI: $MSI_COUNT)."
-            find src-tauri/target -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" \) -exec sha256sum {} + > packaging-evidence/windows-checksums.txt
+            find . -path "*/bundle/*" \( -name "*.exe" -o -name "*.msi" \) -exec sha256sum {} + > packaging-evidence/windows-checksums.txt
           elif [ "${{ matrix.platform }}" = "macos-latest" ]; then
-            DMG_COUNT=$(find src-tauri/target -path "*/bundle/dmg/*.dmg" | wc -l)
-            APP_COUNT=$(find src-tauri/target -path "*/bundle/macos/*.app" | wc -l)
+            DMG_COUNT=$(find . -path "*/bundle/dmg/*.dmg" | wc -l)
+            APP_COUNT=$(find . -path "*/bundle/macos/*.app" | wc -l)
             if [ "$DMG_COUNT" -eq 0 ] && [ "$APP_COUNT" -eq 0 ]; then
               echo "❌ Error: Required macOS packages (*.dmg or *.app) missing from bundle directory!"
               exit 1
             fi
             echo "✓ Verified macOS package artifacts exist (DMG: $DMG_COUNT, APP: $APP_COUNT)."
-            find src-tauri/target -path "*/bundle/*" \( -name "*.dmg" -o -name "*.app" \) -exec shasum -a 256 {} + > packaging-evidence/macos-checksums.txt
+            find . -path "*/bundle/*" \( -name "*.dmg" -o -name "*.app" \) -exec shasum -a 256 {} + > packaging-evidence/macos-checksums.txt
           fi
           cat packaging-evidence/*checksums.txt
 
