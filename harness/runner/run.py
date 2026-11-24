@@ -88,7 +88,23 @@ def run_l5() -> bool:
     print("\n==========================================")
     print("📦 [Tier L5] Release Assurance & Pinned Vendor Integrity")
     print("==========================================")
-    evidence.verify_artifacts(repo_root)
+    # 1. Pre-build vendor source & patch verification
+    ok_vendor, vendor_errors = evidence.verify_vendor_pin(repo_root)
+    if not ok_vendor:
+        print("❌ [Tier L5] Pinned vendor verification failed:")
+        for e in vendor_errors:
+            print(f"   - {e}")
+        return False
+
+    # 2. Post-build artifact checksum verification
+    ok_artifacts, art_errors = evidence.verify_artifacts(repo_root)
+    if not ok_artifacts:
+        print("❌ [Tier L5] Build artifact checksum verification failed:")
+        for e in art_errors:
+            print(f"   - {e}")
+        return False
+
+    print("✅ [Tier L5] All vendor pins, patches, and release artifacts verified cleanly.")
     return True
 
 def main():
@@ -98,6 +114,19 @@ def main():
     parser.add_argument("--task", type=str, help="Kiểm chứng theo hợp đồng Task ID (ví dụ: PDF-042)")
     parser.add_argument("--check-vendor-pin", action="store_true", help="Kiểm tra tính toàn vẹn phụ thuộc vendor")
     args = parser.parse_args()
+
+    # Xử lý cờ kiểm tra vendor pin độc lập nếu được yêu cầu
+    if args.check_vendor_pin:
+        print("🔍 Explicit vendor pin check requested via --check-vendor-pin")
+        ok_vendor, vendor_errors = evidence.verify_vendor_pin(repo_root)
+        if not ok_vendor:
+            print("\n❌ [Vendor Pin Check Failed]")
+            for err in vendor_errors:
+                print(f"  - {err}")
+            sys.exit(1)
+        print("✅ [Vendor Pin Check Passed] All pinned vendor sources and patches verified.")
+        if not args.tier and not args.all:
+            sys.exit(0)
 
     # Phân tích rủi ro tự động
     risk_info = policy.classify_risk(repo_root)

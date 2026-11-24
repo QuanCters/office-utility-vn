@@ -1299,12 +1299,22 @@ fn test_pdf_pending_save_lifecycle_five_scenarios() {
 #[test]
 fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed() {
     use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
-        is_mut_grant_active, set_mut_grant, NativeSaveGrantDto,
+        validate_native_save_grant, NativeSaveGrantDto, SaveRequestContext,
     };
 
     let doc_id = "doc-session-A";
     let active_path = "/tmp/doc_a.pdf";
     let expected_rev = 2;
+    let req_id = "req-123";
+
+    let expected_ctx = SaveRequestContext {
+        document_id: doc_id.to_string(),
+        app_instance_id: "pdf-studio-instance".to_string(),
+        session_generation: 1,
+        authorized_dest_path: Some(active_path.to_string()),
+        expected_revision: expected_rev,
+        request_id: req_id.to_string(),
+    };
 
     // 1. Hợp lệ chuẩn tắc: Tất cả các trường khớp chính xác
     let valid_grant = NativeSaveGrantDto {
@@ -1314,20 +1324,22 @@ fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed(
         session_generation: 1,
         authorized_dest_path: active_path.to_string(),
         expected_revision: expected_rev,
-        request_id: "req-123".to_string(),
+        request_id: req_id.to_string(),
     };
-    assert_eq!(valid_grant.authorized_dest_path, active_path);
-    assert_eq!(valid_grant.document_id, doc_id);
-    assert_eq!(valid_grant.expected_revision, expected_rev);
+    assert!(
+        validate_native_save_grant(&valid_grant, &expected_ctx).is_ok(),
+        "Valid grant must pass centralized validation"
+    );
 
-    // 2. Mismatched destination path: Cấp phép cho /tmp/doc_b.pdf nhưng đang chọn /tmp/doc_a.pdf
+    // 2. Mismatched destination path: Cấp phép cho /tmp/doc_b.pdf nhưng context yêu cầu /tmp/doc_a.pdf
     let mismatched_dest_grant = NativeSaveGrantDto {
         authorized_dest_path: "/tmp/doc_b.pdf".to_string(),
         ..valid_grant.clone()
     };
-    assert_ne!(
-        mismatched_dest_grant.authorized_dest_path, active_path,
-        "Destination path mismatch must be detected!"
+    let dest_err = validate_native_save_grant(&mismatched_dest_grant, &expected_ctx).unwrap_err();
+    assert!(
+        dest_err.contains("authorized_dest_path"),
+        "Destination mismatch must be caught by validator: {dest_err}"
     );
 
     // 3. Mismatched document ID
@@ -1335,9 +1347,10 @@ fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed(
         document_id: "doc-session-B".to_string(),
         ..valid_grant.clone()
     };
-    assert_ne!(
-        mismatched_doc_grant.document_id, doc_id,
-        "Document ID mismatch must be detected!"
+    let doc_err = validate_native_save_grant(&mismatched_doc_grant, &expected_ctx).unwrap_err();
+    assert!(
+        doc_err.contains("document_id"),
+        "Document ID mismatch must be caught by validator: {doc_err}"
     );
 
     // 4. Mismatched expected revision
@@ -1345,12 +1358,24 @@ fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed(
         expected_revision: 999,
         ..valid_grant.clone()
     };
-    assert_ne!(
-        mismatched_rev_grant.expected_revision, expected_rev,
-        "Revision mismatch must be detected!"
+    let rev_err = validate_native_save_grant(&mismatched_rev_grant, &expected_ctx).unwrap_err();
+    assert!(
+        rev_err.contains("expected_revision"),
+        "Revision mismatch must be caught by validator: {rev_err}"
     );
 
-    // 5. Malformed / missing required fields: Deserialization failure
+    // 5. Mismatched request ID
+    let mismatched_req_grant = NativeSaveGrantDto {
+        request_id: "req-OTHER".to_string(),
+        ..valid_grant.clone()
+    };
+    let req_err = validate_native_save_grant(&mismatched_req_grant, &expected_ctx).unwrap_err();
+    assert!(
+        req_err.contains("request_id"),
+        "Request ID mismatch must be caught by validator: {req_err}"
+    );
+
+    // 6. Malformed / missing required fields: Deserialization failure
     let malformed_json = serde_json::json!({
         "grant_id": "grant-123",
         // Thiếu authorized_dest_path, document_id, session_generation...
@@ -1360,17 +1385,6 @@ fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed(
         parse_res.is_err(),
         "Malformed grant with missing required fields must fail deserialization!"
     );
-
-    // 6. MUT-GRANT Verification:
-    // Kiểm tra cờ đột biến MUT-GRANT có thể bật/tắt và bị phát hiện chính xác
-    assert!(!is_mut_grant_active(), "MUT-GRANT must be inactive by default");
-    set_mut_grant(true);
-    assert!(is_mut_grant_active(), "MUT-GRANT activated");
-    // Khi mutation bật, nó bỏ qua kiểm tra authorized_dest_path
-    let skipped_dest_check = is_mut_grant_active();
-    assert!(skipped_dest_check, "MUT-GRANT skips destination check");
-    set_mut_grant(false);
-    assert!(!is_mut_grant_active(), "MUT-GRANT restored to inactive");
 }
 
 #[test]
@@ -1455,10 +1469,6 @@ fn test_p1_pdf_remove_active_file_synchronizes_session_and_preserves_unrelated_f
 
 #[test]
 fn test_p1_pdf_save_as_preserves_originating_context_throughout_lifecycle() {
-    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
-        is_mut_save_as_active, set_mut_save_as,
-    };
-
     let state = office_utility_vn_ui::micro_apps::pdf_studio::state::PdfStudioState::new();
 
     let path_a = "/tmp/test_save_as_orig_a.pdf";
@@ -1569,16 +1579,82 @@ fn test_p1_pdf_save_as_preserves_originating_context_throughout_lifecycle() {
     assert_eq!(sess_b.document_id, Some("doc-session-B-new".to_string()));
     assert_eq!(sess_b.revision, 2);
     assert!(!sess_b.is_dirty);
+}
 
-    // 4. MUT-SAVE-AS Verification:
-    assert!(!is_mut_save_as_active(), "MUT-SAVE-AS must be inactive by default");
-    set_mut_save_as(true);
-    assert!(is_mut_save_as_active(), "MUT-SAVE-AS activated");
-    // Khi mutation bật, nó làm mất originating context
-    let lost_orig = is_mut_save_as_active();
-    assert!(lost_orig, "MUT-SAVE-AS drops originating context");
-    set_mut_save_as(false);
-    assert!(!is_mut_save_as_active(), "MUT-SAVE-AS restored to inactive");
+#[test]
+fn test_p2_pdf_ambiguous_commit_advances_revision_preserves_dirty_and_blocks_close() {
+    let state = office_utility_vn_ui::micro_apps::pdf_studio::state::PdfStudioState::new();
+
+    let path_a = "/tmp/test_ambiguous_doc_a.pdf";
+    let doc_id = "doc-session-ambiguous-A";
+
+    state.add_file(path_a);
+    state.register_document_session(path_a, Some(doc_id.to_string()), 1);
+    state.set_unsaved_changes(true);
+    state.select_file(0);
+
+    assert_eq!(state.active_revision(), 1);
+    assert!(state.has_unsaved_changes());
+
+    // 1. Chuẩn bị context lưu với expected_committed_revision = 2
+    let gen_a = state.edit_generation.get_untracked();
+    let ctx = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: "req-ambiguous-1".to_string(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some(doc_id.to_string()),
+        originating_path: Some(path_a.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_a,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-ambiguous".to_string(),
+        authorized_dest_path: Some(path_a.to_string()),
+    };
+    state.register_pending_save("req-ambiguous-1".to_string(), ctx.clone());
+
+    // 2. Nhận kết quả AmbiguousCommit từ backend (hoán đổi thành công nhưng sync thư mục cha lỗi)
+    let outcome = SaveOutcome::AmbiguousCommit {
+        dest_path: path_a.to_string(),
+        committed_revision: 2,
+        new_document_id: Some(doc_id.to_string()),
+        message: "AmbiguousCommit: fsync failed".to_string(),
+    };
+
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(outcome),
+        &ctx,
+        b"%PDF-1.7 SOME BYTES",
+    );
+
+    // BẤT BIẾN P2 #4678429561:
+    // - Session revision được nâng lên 2 để ngăn stale revision write
+    assert_eq!(
+        state.active_revision(),
+        2,
+        "Active revision must advance to committed revision (2) on AmbiguousCommit"
+    );
+    let sess = state.get_document_session(path_a).expect("session exists");
+    assert_eq!(sess.revision, 2, "Stored session revision must be 2");
+
+    // - Trạng thái dirty BẮT BUỘC giữ nguyên true
+    assert!(
+        state.has_unsaved_changes(),
+        "has_unsaved_changes MUST remain true after AmbiguousCommit"
+    );
+    assert!(
+        sess.is_dirty,
+        "Stored session is_dirty MUST remain true after AmbiguousCommit"
+    );
+
+    // - Pending save phải được clear
+    assert!(
+        !state.has_pending_saves_for_file(path_a),
+        "Pending save for req-ambiguous-1 must be cleared"
+    );
+
+    // - Thao tác lưu retry tiếp theo sẽ yêu cầu revision 3 (active_revision + 1)
+    let next_expected_rev = state.active_revision() + 1;
+    assert_eq!(next_expected_rev, 3, "Retry save must target revision 3");
 }
 
 #[test]

@@ -3691,8 +3691,6 @@ mod tests {
 
     #[test]
     fn test_p2_preserve_established_session_after_save_failure_and_allow_retry() {
-        use std::os::unix::fs::PermissionsExt;
-
         let temp_dir = tempfile::tempdir().unwrap();
         let parent_dir = temp_dir.path().join("save_dir");
         std::fs::create_dir(&parent_dir).unwrap();
@@ -3722,15 +3720,14 @@ mod tests {
             )
             .unwrap();
 
-        // 3. Khóa thư mục cha thành read-only để gây lỗi I/O thực sự trong native_atomic_durable_write trước khi rename
-        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+        // 3. Tiêm lỗi I/O có phạm vi chính xác trước khi rename bằng fault injector (Deterministic, root-safe)
+        set_pre_rename_fault_for_path(file_path.clone(), PreRenameFault::SetPermissionsFailure);
 
         let attempted_bytes = b"PK\x03\x04ATTEMPTED_DATA_THAT_FAILS_PRE_RENAME";
         let res1 = manager.execute_granted_save(&grant1.grant_id, "req-attempt-1", attempted_bytes);
         assert!(res1.is_err(), "Pre-rename I/O failure must return Err");
 
-        // Mở khóa thư mục cha để tiếp tục các thao tác sau
-        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        clear_pre_rename_fault_for_path(&file_path);
 
         // 4. Verify disk bytes unchanged
         let current_bytes = std::fs::read(&file_path).unwrap();
@@ -3772,8 +3769,6 @@ mod tests {
 
     #[test]
     fn test_p2_provisional_save_as_session_cleaned_up_on_pre_rename_failure() {
-        use std::os::unix::fs::PermissionsExt;
-
         let temp_dir = tempfile::tempdir().unwrap();
         let parent_dir = temp_dir.path().join("save_as_dir");
         std::fs::create_dir(&parent_dir).unwrap();
@@ -3804,15 +3799,14 @@ mod tests {
             assert!(s.is_provisional, "Save As session must be provisional before commit");
         }
 
-        // Khóa thư mục cha để gây lỗi I/O thực sự trong native_atomic_durable_write trước khi rename
-        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+        // Tiêm lỗi I/O có phạm vi chính xác trước khi rename bằng fault injector (Deterministic, root-safe)
+        set_pre_rename_fault_for_path(target_path.clone(), PreRenameFault::SetPermissionsFailure);
 
         let attempted_bytes = b"PK\x03\x04PROVISIONAL_ATTEMPT_DATA";
         let res = manager.execute_granted_save(&sa_handle.grant.grant_id, &sa_handle.grant.request_id, attempted_bytes);
         assert!(res.is_err(), "Write must fail in native_atomic_durable_write");
 
-        // Mở lại quyền thư mục cha
-        std::fs::set_permissions(&parent_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        clear_pre_rename_fault_for_path(&target_path);
 
         // Bất biến: Phiên provisional BẮT BUỘC bị dọn dẹp khỏi sessions
         {
@@ -3829,8 +3823,14 @@ mod tests {
     fn test_gridcraft_behavioral_save_and_exit_with_execute_granted_save() {
         let temp_dir = tempfile::tempdir().unwrap();
         let file_path = temp_dir.path().join("financial_report.xlsx");
-        let initial_bytes = b"PK\x03\x04ORIGINAL_REAL_EXCEL_WORKBOOK_DATA";
+        let initial_bytes = include_bytes!("../../fixtures/stage2c_v1.xlsx");
         std::fs::write(&file_path, initial_bytes).unwrap();
+
+        let cancel_flag = std::sync::atomic::AtomicBool::new(false);
+        let initial_rows = office_engine::data_lab::excel_reader::read_tabular_rows(initial_bytes, &cancel_flag)
+            .expect("parse initial genuine xlsx fixture");
+        assert_eq!(initial_rows[0][0], "98765");
+        assert_eq!(initial_rows[0][1], "197530");
 
         let manager = NativeSaveGrantManager::new();
         // 1. Mở workbook qua native dialog để thiết lập session chính thức
@@ -3845,8 +3845,8 @@ mod tests {
         let doc_id = open_res.document_id;
         assert_eq!(manager.get_session_revision(&doc_id), Some(0));
 
-        // 2. Người dùng sửa đổi workbook trong ứng dụng đóng gói
-        let edited_bytes = b"PK\x03\x04EDITED_REAL_EXCEL_WORKBOOK_DATA_REVISION_1";
+        // 2. Người dùng sửa đổi workbook trong ứng dụng đóng gói: Cập nhật dữ liệu ô bảng tính thực sự
+        let edited_bytes = include_bytes!("../../fixtures/stage2c_v2.xlsx");
         let expected_fp = compute_fingerprint(edited_bytes);
 
         // 3. Người dùng chọn đóng cửa sổ -> Kích hoạt Host-initiated Save & Exit
@@ -3884,6 +3884,15 @@ mod tests {
         assert_eq!(on_disk_bytes, edited_bytes);
         let actual_disk_fp = compute_fingerprint(&on_disk_bytes);
         assert_eq!(actual_disk_fp, expected_fp);
+
+        // Độc lập phân tích các ô dữ liệu của workbook XLSX sau khi lưu trên đĩa
+        let parsed_rows = office_engine::data_lab::excel_reader::read_tabular_rows(&on_disk_bytes, &cancel_flag)
+            .expect("independently parse saved xlsx workbook cells");
+        assert_eq!(parsed_rows.len(), 1);
+        assert_eq!(parsed_rows[0][0], "98765");
+        assert_eq!(parsed_rows[0][1], "197530");
+        assert_eq!(parsed_rows[0][2], "100");
+        assert_eq!(parsed_rows[0][3], "999");
 
         // 6. Xác minh session cập nhật committed_revision lên 1 và không phải provisional
         assert_eq!(manager.get_session_revision(&doc_id), Some(1));

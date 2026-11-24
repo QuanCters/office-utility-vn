@@ -429,21 +429,140 @@ def validate_evidence_ledger(repo_root: str, ledger_path: str = None) -> tuple[b
 
     return (len(errors) == 0, errors)
 
-def verify_artifacts(repo_root: str) -> bool:
-    dist_dir = os.path.join(repo_root, "dist")
-    print("📦 Verifying build artifacts and checksums...")
-    found_any = False
+def verify_vendor_pin(repo_root: str) -> tuple[bool, list[str]]:
+    """Pre-build vendor pin and patch integrity verification (P2 #4678429571)."""
+    errors = []
+    print("🔍 [Pre-build] Verifying pinned vendor sources and patches...")
 
-    if os.path.exists(dist_dir):
-        for fname in os.listdir(dist_dir):
-            if fname.endswith((".wasm", ".js")):
-                fpath = os.path.join(dist_dir, fname)
-                sha256 = get_file_sha256(fpath)
-                size_kb = os.path.getsize(fpath) / 1024
-                print(f"  - [Artifact] {fname} ({size_kb:.1f} KB) SHA256: {sha256[:16]}...")
-                found_any = True
+    manifest_path = os.path.join(repo_root, "vendor", "gridcraft", "PROVENANCE.json")
+    if not os.path.exists(manifest_path):
+        errors.append(f"Missing vendor provenance manifest: {manifest_path}")
+        return (False, errors)
 
-    return found_any
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            prov = json.load(f)
+    except Exception as e:
+        errors.append(f"Failed to read vendor provenance manifest: {e}")
+        return (False, errors)
+
+    vendor_info = prov.get("vendor", {})
+    expected_commit = vendor_info.get("upstream_commit")
+    patch_rel = vendor_info.get("patch_file")
+    expected_patch_sha = vendor_info.get("patch_sha256")
+
+    # 1. Kiểm tra UPSTREAM_COMMIT.txt
+    upstream_meta = os.path.join(repo_root, "vendor", "gridcraft", "UPSTREAM_COMMIT.txt")
+    if not os.path.exists(upstream_meta):
+        errors.append(f"Missing upstream metadata file: {upstream_meta}")
+    else:
+        with open(upstream_meta, "r", encoding="utf-8") as f:
+            content = f.read()
+        actual_commit = None
+        for line in content.splitlines():
+            if line.startswith("COMMIT_SHA:"):
+                actual_commit = line.split(":", 1)[1].strip()
+                break
+        if actual_commit != expected_commit:
+            errors.append(f"Upstream commit mismatch: expected {expected_commit}, got {actual_commit}")
+
+    # 2. Kiểm tra licenses
+    mit_lic = os.path.join(repo_root, "vendor", "gridcraft", "LICENSE-MIT")
+    apache_lic = os.path.join(repo_root, "vendor", "gridcraft", "LICENSE-APACHE")
+    if not os.path.exists(mit_lic) and not os.path.exists(apache_lic):
+        errors.append("Missing vendor license files (LICENSE-MIT / LICENSE-APACHE)")
+
+    # 3. Kiểm tra patch file checksum
+    patch_path = os.path.join(repo_root, patch_rel) if patch_rel else ""
+    if not os.path.exists(patch_path):
+        errors.append(f"Missing patch file: {patch_path}")
+    else:
+        actual_patch_sha = get_file_sha256(patch_path)
+        if actual_patch_sha != expected_patch_sha:
+            errors.append(f"Vendor patch checksum mismatch: expected {expected_patch_sha}, got {actual_patch_sha}")
+
+    # 4. Kiểm tra host.rs có chứa giao thức confirmed save
+    host_rs = os.path.join(repo_root, "vendor", "gridcraft", "apps", "gridcraft-web", "src", "host.rs")
+    if not os.path.exists(host_rs):
+        errors.append(f"Missing vendor source file: {host_rs}")
+    else:
+        with open(host_rs, "r", encoding="utf-8") as f:
+            host_src = f.read()
+        if 'Some("confirmed")' not in host_src or 'Message::Saved { id }' not in host_src:
+            errors.append("Vendor host.rs is missing confirmed save protocol support")
+
+    # 5. Reverse dry-run patch để chứng minh tính nhất quán
+    if os.path.exists(patch_path) and os.path.exists(os.path.join(repo_root, "vendor", "gridcraft")):
+        import subprocess
+        res = subprocess.run(
+            ["patch", "-p1", "--dry-run", "-R"],
+            input=open(patch_path, "rb").read(),
+            cwd=os.path.join(repo_root, "vendor", "gridcraft"),
+            capture_output=True,
+        )
+        if res.returncode != 0:
+            errors.append(f"Vendor patch reverse dry-run failed: {res.stderr.decode('utf-8', errors='replace')}")
+
+    if errors:
+        for err in errors:
+            print(f"  ❌ {err}")
+        return (False, errors)
+
+    print("  ✓ Pinned vendor source and patch integrity verified cleanly.")
+    return (True, [])
+
+def verify_artifacts(repo_root: str) -> tuple[bool, list[str]]:
+    """Fail-closed post-build artifact verification (P2 #4678429571)."""
+    errors = []
+    print("📦 [Post-build] Verifying build artifacts and checksums fail-closed...")
+
+    manifest_path = os.path.join(repo_root, "vendor", "gridcraft", "PROVENANCE.json")
+    if not os.path.exists(manifest_path):
+        errors.append(f"Missing provenance manifest: {manifest_path}")
+        return (False, errors)
+
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            prov = json.load(f)
+    except Exception as e:
+        errors.append(f"Failed to read provenance manifest: {e}")
+        return (False, errors)
+
+    artifacts = prov.get("artifacts", [])
+    if not artifacts:
+        errors.append("Provenance manifest contains no artifact entries")
+        return (False, errors)
+
+    for item in artifacts:
+        rel_path = item.get("path")
+        expected_sha = item.get("sha256")
+        expected_size = item.get("size")
+        is_required = item.get("required", True)
+
+        full_path = os.path.join(repo_root, rel_path)
+        if not os.path.exists(full_path):
+            if is_required:
+                errors.append(f"Missing required artifact: {rel_path}")
+            continue
+
+        actual_sha = get_file_sha256(full_path)
+        actual_size = os.path.getsize(full_path)
+
+        if actual_sha != expected_sha:
+            errors.append(f"Artifact checksum mismatch for '{rel_path}': expected {expected_sha}, got {actual_sha}")
+        elif expected_size and actual_size != expected_size:
+            errors.append(f"Artifact size mismatch for '{rel_path}': expected {expected_size}, got {actual_size}")
+        else:
+            size_kb = actual_size / 1024
+            print(f"  ✓ [Artifact] {os.path.basename(rel_path)} ({size_kb:.1f} KB) SHA256: {actual_sha[:16]}... (VERIFIED)")
+
+    if errors:
+        for err in errors:
+            print(f"  ❌ {err}")
+        return (False, errors)
+
+    print("  ✓ All required artifacts matched provenance checksums.")
+    return (True, [])
 
 def main():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))

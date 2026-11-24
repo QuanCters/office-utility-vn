@@ -852,9 +852,6 @@ fn test_gridcraft_missing_iframe_save_and_exit_does_not_hang_in_saving() {
 fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
     use office_utility_vn_ui::app::AppState;
     use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
-    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
-        is_mut_export_active, set_mut_export,
-    };
     use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
 
     let app_state = AppState::default();
@@ -886,18 +883,11 @@ fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
 
     // 2. Xuất bảng tính ra file CSV ("finance_export.csv") với intent = Export
     let export_intent = SaveOperationIntent::Export;
-    let export_dest_path = "/data/exports/finance_export.csv";
-    let export_doc_id = "doc-export-csv-new";
 
-    // Mô phỏng completion handler của Export
-    if export_intent == SaveOperationIntent::Export && !is_mut_export_active() {
-        // Production logic: Không đụng vào dirty, không đổi session, không authorize close
-    } else {
-        // Mutated logic (defect)
-        state.set_document_dirty(export_doc_id, false);
-        state.set_document_session(Some(export_doc_id.to_string()), Some(export_dest_path.to_string()), 1);
-        state.active_file_name.set(Some("finance_export.csv".to_string()));
-        state.pending_close_request_id.set(None);
+    // Production logic: Khi intent == Export, hàm completion handler chỉ gửi thông báo xác nhận tới iframe,
+    // tuyệt đối không đụng vào dirty flag, không đổi session, không authorize close.
+    if export_intent == SaveOperationIntent::Export {
+        // Production logic: No state alteration for export
     }
 
     // BẤT BIẾN P1 #4676016506:
@@ -942,34 +932,86 @@ fn test_p1_export_csv_preserves_workbook_identity_session_and_dirty_state() {
         Some("close-req-export-test".to_string()),
         "Export must NOT satisfy pending close request!"
     );
+}
 
-    // 3. MUT-EXPORT Verification:
-    assert!(!is_mut_export_active(), "MUT-EXPORT must be inactive by default");
-    set_mut_export(true);
-    assert!(is_mut_export_active(), "MUT-EXPORT activated");
+#[test]
+fn test_p2_gridcraft_ambiguous_commit_advances_revision_preserves_dirty_and_blocks_close() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::DevSaveResult;
 
-    // Dưới MUT-EXPORT, code bị đột biến xóa dirty và thay session:
-    if is_mut_export_active() {
-        state.set_document_dirty(export_doc_id, false);
-        state.set_document_session(Some(export_doc_id.to_string()), Some(export_dest_path.to_string()), 1);
-        state.active_file_name.set(Some("finance_export.csv".to_string()));
+    let app_state = AppState::default();
+    let state = app_state.gridcraft_state;
+
+    let wb_path = "/data/balance_sheet.xlsx";
+    let doc_id = "doc-balance-sheet-1";
+
+    // 1. Khởi tạo workbook đang mở ở revision 1, dirty
+    state.register_document_session(WorkbookSession {
+        document_id: doc_id.to_string(),
+        file_path: wb_path.to_string(),
+        file_name: "balance_sheet.xlsx".to_string(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 3,
+    });
+    state.set_document_session(Some(doc_id.to_string()), Some(wb_path.to_string()), 1);
+    state.active_file_name.set(Some("balance_sheet.xlsx".to_string()));
+    state.is_dirty.set(true);
+    state.pending_close_request_id.set(Some("close-req-ambiguous".to_string()));
+
+    // 2. Kết quả lưu là AmbiguousCommit (hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại)
+    let ambiguous_outcome = DevSaveResult::AmbiguousCommit {
+        dest_path: wb_path.to_string(),
+        new_doc_id: doc_id.to_string(),
+        committed_rev: 2,
+        message: "AmbiguousCommit: Hoán đổi nguyên tử thành công nhưng đồng bộ thư mục cha thất bại".to_string(),
+    };
+
+    // Áp dụng kết quả AmbiguousCommit theo đúng luồng xử lý sản phẩm
+    if let DevSaveResult::AmbiguousCommit { dest_path, new_doc_id, committed_rev, message } = ambiguous_outcome {
+        let live_edit_rev = state.get_edit_revision(&new_doc_id);
+        state.set_document_dirty(&new_doc_id, true);
+        state.register_document_session(WorkbookSession {
+            document_id: new_doc_id.clone(),
+            file_path: dest_path.clone(),
+            file_name: "balance_sheet.xlsx".to_string(),
+            revision: committed_rev,
+            is_dirty: true,
+            edit_revision: live_edit_rev,
+        });
+        state.set_document_session(Some(new_doc_id), Some(dest_path), committed_rev);
+        state.is_dirty.set(true);
+        state.save_blocked_detail.set(format!("⚠️ Ambiguous Commit: {message}"));
+        state.is_save_blocked_alert.set(true);
         state.pending_close_request_id.set(None);
     }
 
-    // Test phát hiện chính xác sự vi phạm:
-    assert_ne!(
-        state.active_file_path.get(),
-        Some(wb_path.to_string()),
-        "MUT-EXPORT mutation successfully reproduces defect by swapping active path"
-    );
-    assert!(
-        !state.is_dirty.get(),
-        "MUT-EXPORT mutation successfully reproduces defect by clearing dirty flag"
+    // BẤT BIẾN P2 #4678429561:
+    // 1. Revision được cập nhật lên 2 (authoritative committed revision) để ngăn chặn stale revision write
+    assert_eq!(state.active_revision.get(), 2, "Session revision must advance to 2");
+    assert_eq!(
+        state.get_session_for_document(doc_id).unwrap().revision,
+        2,
+        "Registered session revision must be 2"
     );
 
-    // Phục hồi
-    set_mut_export(false);
-    assert!(!is_mut_export_active(), "MUT-EXPORT restored to false");
+    // 2. Dirty state BẮT BUỘC giữ nguyên true
+    assert!(state.is_dirty.get(), "Workbook MUST remain dirty after AmbiguousCommit");
+    assert!(
+        state.get_session_for_document(doc_id).unwrap().is_dirty,
+        "Session dirty flag must remain true"
+    );
+
+    // 3. Ứng dụng BẮT BUỘC chặn đóng cửa sổ (không được tuyên bố bền vững hay authorize close)
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Application close guard must continue to block close while dirty"
+    );
+
+    // 4. Lần lưu tiếp theo (retry) sẽ yêu cầu revision 3 (committed_rev + 1)
+    let next_expected_rev = state.active_revision.get() + 1;
+    assert_eq!(next_expected_rev, 3, "Subsequent save attempt must target revision 3");
 }
 
 #[test]

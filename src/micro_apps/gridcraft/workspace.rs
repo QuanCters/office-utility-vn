@@ -21,18 +21,6 @@ extern "C" {
 pub const GRIDCRAFT_IFRAME_SRC: &str =
     "/gridcraft/index.html?host=parent&save=confirmed&chrome=notitlebar";
 
-static MUT_EXPORT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-#[doc(hidden)]
-pub fn set_mut_export(active: bool) {
-    MUT_EXPORT.store(active, std::sync::atomic::Ordering::SeqCst);
-}
-
-#[doc(hidden)]
-pub fn is_mut_export_active() -> bool {
-    MUT_EXPORT.load(std::sync::atomic::Ordering::SeqCst)
-}
-
 /// ID phần tử iframe
 pub const GRIDCRAFT_IFRAME_ID: &str = "gridcraft-workspace-frame";
 
@@ -43,6 +31,12 @@ pub enum DevSaveResult {
         dest_path: String,
         new_doc_id: String,
         committed_rev: u64,
+    },
+    AmbiguousCommit {
+        dest_path: String,
+        new_doc_id: String,
+        committed_rev: u64,
+        message: String,
     },
     Canceled,
     Failed(String),
@@ -444,9 +438,7 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                 new_doc_id,
                                                 committed_rev,
                                             }) => {
-                                                let force_mut_export = is_mut_export_active();
-
-                                                if intent == crate::platform::adapter::SaveOperationIntent::Export && !force_mut_export {
+                                                if intent == crate::platform::adapter::SaveOperationIntent::Export {
                                                     // P1 #4676016506: Xuất file (Export) TUYỆT ĐỐI KHÔNG:
                                                     // - Xóa trạng thái dirty của workbook nguồn
                                                     // - Thay thế session tài liệu native đang hoạt động
@@ -497,6 +489,60 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                     close_manager,
                                                     app_state,
                                                 );
+                                            }
+                                            Ok(DevSaveResult::AmbiguousCommit {
+                                                dest_path,
+                                                new_doc_id,
+                                                committed_rev,
+                                                message,
+                                            }) => {
+                                                // P2 #4678429561: Hoán đổi nguyên tử thành công nhưng đồng bộ thư mục cha thất bại.
+                                                // Cập nhật session lên committed_rev để tránh stale revision write ở lần lưu tiếp theo,
+                                                // nhưng BẮT BUỘC giữ trạng thái dirty, KHÔNG tuyên bố lưu bền vững thành công,
+                                                // và KHÔNG cho phép đóng cửa sổ.
+                                                coordinator.update_value(|c| {
+                                                    let _ = c.on_durable_write_failed(&req_clone, &message);
+                                                });
+                                                let live_edit_rev = s.get_edit_revision(&new_doc_id);
+                                                s.set_document_dirty(&new_doc_id, true);
+                                                s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
+                                                    document_id: new_doc_id.clone(),
+                                                    file_path: dest_path.clone(),
+                                                    file_name: name_clone.clone(),
+                                                    revision: committed_rev,
+                                                    is_dirty: true,
+                                                    edit_revision: live_edit_rev,
+                                                });
+                                                s.set_document_session(
+                                                    Some(new_doc_id),
+                                                    Some(dest_path.clone()),
+                                                    committed_rev,
+                                                );
+                                                s.active_file_name.set(Some(name_clone));
+                                                s.is_dirty.set(true);
+
+                                                s.save_blocked_detail.set(format!(
+                                                    "⚠️ Hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại (Ambiguous Commit): {message}"
+                                                ));
+                                                s.is_save_blocked_alert.set(true);
+                                                send_save_failed_to_iframe(
+                                                    GRIDCRAFT_IFRAME_ID,
+                                                    &message,
+                                                    Some(&req_clone),
+                                                );
+
+                                                // Hủy pending close request: KHÔNG cho phép đóng ứng dụng
+                                                if let Some(close_req_id) =
+                                                    s.pending_close_request_id.get_untracked()
+                                                {
+                                                    s.pending_close_request_id.set(None);
+                                                    if let Some(cm) = close_manager {
+                                                        cm.cancel_close(&close_req_id);
+                                                        cm.error_message.set(Some(format!(
+                                                            "Lỗi ghi đĩa (Ambiguous Commit): {message}"
+                                                        )));
+                                                    }
+                                                }
                                             }
                                             Ok(DevSaveResult::Canceled) => {
                                                 coordinator.update_value(|c| {
@@ -994,6 +1040,15 @@ pub async fn execute_gridcraft_save(
                 });
             }
             Err(e) => {
+                let err_str = format!("{e:?}");
+                if err_str.contains("AmbiguousCommit") {
+                    return Ok(DevSaveResult::AmbiguousCommit {
+                        dest_path: _path.to_string(),
+                        new_doc_id: doc_id.to_string(),
+                        committed_rev: expected_rev,
+                        message: err_str,
+                    });
+                }
                 return Ok(DevSaveResult::Failed(format!("Lỗi ghi đĩa: {e:?}")));
             }
         }
@@ -1067,6 +1122,15 @@ pub async fn execute_gridcraft_save(
                         });
                     }
                     Err(e) => {
+                        let err_str = format!("{e:?}");
+                        if err_str.contains("AmbiguousCommit") {
+                            return Ok(DevSaveResult::AmbiguousCommit {
+                                dest_path,
+                                new_doc_id: handle.document_id,
+                                committed_rev: 1,
+                                message: err_str,
+                            });
+                        }
                         return Ok(DevSaveResult::Failed(format!("Lỗi ghi đĩa: {e:?}")));
                     }
                 }

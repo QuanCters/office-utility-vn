@@ -53,6 +53,14 @@ pub enum SaveOutcome {
         #[serde(default)]
         new_document_id: Option<String>,
     },
+    /// Hoán đổi nguyên tử thành công nhưng đồng bộ thư mục cha thất bại (P2 #4678429561)
+    AmbiguousCommit {
+        dest_path: String,
+        committed_revision: u64,
+        #[serde(default)]
+        new_document_id: Option<String>,
+        message: String,
+    },
     /// Người dùng bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> Giữ nguyên dirty và session
     Canceled,
     /// Thao tác lưu thất bại có thông báo lỗi chi tiết -> Giữ nguyên dirty
@@ -65,30 +73,6 @@ pub enum SaveOutcome {
 pub use crate::platform::save_grant::{
     validate_native_save_grant, NativeSaveGrantDto, SaveAsHandleDto, SaveRequestContext,
 };
-
-static MUT_GRANT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-#[doc(hidden)]
-pub fn set_mut_grant(active: bool) {
-    MUT_GRANT.store(active, std::sync::atomic::Ordering::SeqCst);
-}
-
-#[doc(hidden)]
-pub fn is_mut_grant_active() -> bool {
-    MUT_GRANT.load(std::sync::atomic::Ordering::SeqCst)
-}
-
-static MUT_SAVE_AS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-#[doc(hidden)]
-pub fn set_mut_save_as(active: bool) {
-    MUT_SAVE_AS.store(active, std::sync::atomic::Ordering::SeqCst);
-}
-
-#[doc(hidden)]
-pub fn is_mut_save_as_active() -> bool {
-    MUT_SAVE_AS.load(std::sync::atomic::Ordering::SeqCst)
-}
 
 static AUTHORIZED_PDF_CACHE: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
@@ -417,8 +401,6 @@ pub fn setup_bridge_listener(
                 let req_id = format!("pdf-save-{}-{}", snapshot_gen, count);
                 let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
 
-                let strip_orig = is_mut_save_as_active();
-
                 let ctx = crate::micro_apps::pdf_studio::state::SaveRequestContext {
                     request_id: req_id.clone(),
                     operation_intent: if save_as {
@@ -426,8 +408,8 @@ pub fn setup_bridge_listener(
                     } else {
                         crate::platform::adapter::SaveOperationIntent::Save
                     },
-                    originating_document_id: if strip_orig { None } else { orig_doc_id.clone() },
-                    originating_path: if strip_orig { None } else { orig_path.clone() },
+                    originating_document_id: orig_doc_id.clone(),
+                    originating_path: orig_path.clone(),
                     session_generation: 1,
                     snapshot_edit_generation: snapshot_gen,
                     expected_committed_revision: cur_rev + 1,
@@ -544,6 +526,41 @@ pub fn apply_save_outcome(
                 // Giữ nguyên active state của tài liệu đang chọn.
             }
             s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
+        }
+        Ok(SaveOutcome::AmbiguousCommit { dest_path, committed_revision, new_document_id, message }) => {
+            let target_doc_id = new_document_id.or_else(|| ctx.originating_document_id.clone());
+            let is_still_active_target = s.active_file_path().as_deref() == ctx.originating_path.as_deref()
+                || s.active_file_path().as_deref() == Some(&dest_path);
+
+            // Cập nhật phiên và revision lên committed_revision để ngăn chặn stale revision write,
+            // nhưng BẮT BUỘC giữ is_dirty = true
+            let mut map = s.document_sessions.get_untracked();
+            if let Some(sess) = map.get_mut(&dest_path) {
+                sess.document_id = target_doc_id.clone();
+                sess.revision = committed_revision;
+                sess.is_dirty = true;
+            } else {
+                map.insert(
+                    dest_path.clone(),
+                    crate::micro_apps::pdf_studio::state::PdfDocumentSession {
+                        file_path: dest_path.clone(),
+                        document_id: target_doc_id.clone(),
+                        revision: committed_revision,
+                        is_dirty: true,
+                        edit_generation: ctx.snapshot_edit_generation,
+                    },
+                );
+            }
+            s.document_sessions.set(map);
+
+            if is_still_active_target {
+                s.active_document_id.set(target_doc_id);
+                s.active_revision.set(committed_revision);
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set(format!(
+                "⚠️ Hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại (Ambiguous Commit): {message}"
+            ));
         }
         Ok(SaveOutcome::Canceled) => {
             if let Some(ref path) = ctx.originating_path {
@@ -771,11 +788,8 @@ pub async fn save_file_to_disk_or_download(
                 request_id: req_id.clone(),
             };
 
-            let skip_dest = is_mut_grant_active();
-            if !skip_dest {
-                if let Err(err) = validate_native_save_grant(&grant, &ctx) {
-                    return Ok(SaveOutcome::Failed(format!("Lỗi bất biến: {err}")));
-                }
+            if let Err(err) = validate_native_save_grant(&grant, &ctx) {
+                return Ok(SaveOutcome::Failed(format!("Lỗi bất biến: {err}")));
             }
 
             let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
@@ -802,6 +816,15 @@ pub async fn save_file_to_disk_or_download(
                     });
                 }
                 Err(e) => {
+                    let err_str = format!("{e:?}");
+                    if err_str.contains("AmbiguousCommit") {
+                        return Ok(SaveOutcome::AmbiguousCommit {
+                            dest_path: _path.to_string(),
+                            committed_revision: expected_rev,
+                            new_document_id: Some(doc_id.to_string()),
+                            message: err_str,
+                        });
+                    }
                     return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
                 }
             }
@@ -855,6 +878,15 @@ pub async fn save_file_to_disk_or_download(
                             });
                         }
                         Err(e) => {
+                            let err_str = format!("{e:?}");
+                            if err_str.contains("AmbiguousCommit") {
+                                return Ok(SaveOutcome::AmbiguousCommit {
+                                    dest_path: handle.file_path,
+                                    committed_revision: 1,
+                                    new_document_id: Some(handle.document_id),
+                                    message: err_str,
+                                });
+                            }
                             return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
                         }
                     }
