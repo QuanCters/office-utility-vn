@@ -3421,6 +3421,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "sha2",
  "tachys",
  "tempfile",
  "wasm-bindgen",

@@ -40,6 +40,47 @@ const SENSITIVE_SYSTEM_PREFIXES: &[&str] = &[
     "/etc", "/usr", "/boot", "/bin", "/sbin", "/dev", "/proc", "/sys",
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostRenameFault {
+    DirOpenFailure,
+    DirSyncFailure,
+}
+
+static POST_RENAME_FAULT_INJECTION: Mutex<Option<HashMap<PathBuf, PostRenameFault>>> = Mutex::new(None);
+
+pub fn set_post_rename_fault_for_path(path: PathBuf, fault: PostRenameFault) {
+    let mut guard = POST_RENAME_FAULT_INJECTION.lock().unwrap_or_else(|e| e.into_inner());
+    let map = guard.get_or_insert_with(HashMap::new);
+    map.insert(path, fault);
+}
+
+pub fn clear_post_rename_fault_for_path(path: &Path) {
+    let mut guard = POST_RENAME_FAULT_INJECTION.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = guard.as_mut() {
+        map.remove(path);
+    }
+}
+
+#[allow(dead_code)]
+fn check_post_rename_fault(dest_path: &Path) -> Option<CommandError> {
+    let guard = POST_RENAME_FAULT_INJECTION.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = guard.as_ref() {
+        for (target, fault) in map.iter() {
+            if dest_path == target || dest_path.ends_with(target) {
+                match fault {
+                    PostRenameFault::DirOpenFailure => return Some(CommandError::IoError {
+                        details: "AmbiguousCommit: Không thể mở thư mục cha để đồng bộ (Lỗi tiêm thử nghiệm: DirOpenFailure)".to_string(),
+                    }),
+                    PostRenameFault::DirSyncFailure => return Some(CommandError::IoError {
+                        details: "AmbiguousCommit: Đồng bộ thư mục cha thất bại (Lỗi tiêm thử nghiệm: DirSyncFailure)".to_string(),
+                    }),
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Trạng thái phiên ghi của một đường dẫn đích cụ thể
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DestinationState {
@@ -312,11 +353,27 @@ pub fn native_atomic_durable_write(dest_path_str: &str, bytes: &[u8]) -> Result<
     // Đã hoán đổi thành công -> Hủy kích hoạt guard để không xóa tệp đích
     guard.disarm();
 
-    // Bước 10: Đồng bộ thư mục cha trên POSIX / Unix
+    // Bước 10: Đồng bộ thư mục cha trên POSIX / Unix (hoặc mô phỏng lỗi kiểm thử)
+    #[cfg(test)]
+    if let Some(fault) = check_post_rename_fault(&dest_path) {
+        return Err(fault);
+    }
+
     #[cfg(unix)]
     {
-        if let Ok(dir_file) = File::open(parent_dir) {
-            let _ = dir_file.sync_all();
+        match File::open(parent_dir) {
+            Ok(dir_file) => {
+                if let Err(e) = dir_file.sync_all() {
+                    return Err(CommandError::IoError {
+                        details: format!("AmbiguousCommit: Hoán đổi nguyên tử thành công nhưng đồng bộ thư mục cha thất bại: {e}"),
+                    });
+                }
+            }
+            Err(e) => {
+                return Err(CommandError::IoError {
+                    details: format!("AmbiguousCommit: Hoán đổi nguyên tử thành công nhưng không thể mở thư mục cha để đồng bộ: {e}"),
+                });
+            }
         }
     }
 
@@ -1031,15 +1088,28 @@ impl NativeSaveGrantManager {
                 })
             }
             Err(e) => {
+                let is_post_rename_ambiguous = matches!(&e, CommandError::IoError { details } if details.contains("AmbiguousCommit"));
                 if let Some(grant) = grants.get_mut(grant_id) {
-                    grant.status = GrantStatus::Failed;
+                    if is_post_rename_ambiguous {
+                        grant.status = GrantStatus::AmbiguousCommit;
+                    } else {
+                        grant.status = GrantStatus::Failed;
+                    }
                 }
-                // Dọn dẹp phiên tài liệu tạm thời (Provisional Session Cleanup):
-                // Nếu đây là phiên Save As mới (chưa từng cam kết ghi đĩa, last_committed_revision == 0),
-                // thì việc ghi hỏng phải dọn dẹp/hủy bỏ phiên này để không làm ô nhiễm bộ nhớ.
-                if let Some(session) = sessions.get(&session_id) {
-                    if session.last_committed_revision == 0 {
-                        sessions.remove(&session_id);
+                if is_post_rename_ambiguous {
+                    // Tệp đích đã bị hoán đổi thành công trên đĩa nhưng độ bền chưa được xác nhận hoàn toàn.
+                    // Cập nhật last_committed_revision để phản ánh tệp đích đã thay đổi và ngăn replay ghi đè cũ.
+                    if let Some(session) = sessions.get_mut(&session_id) {
+                        if expected_revision > session.last_committed_revision {
+                            session.last_committed_revision = expected_revision;
+                        }
+                    }
+                } else {
+                    // Thất bại trước rename -> Tệp đích chưa bị thay đổi -> Dọn dẹp session nếu là phiên tạm
+                    if let Some(session) = sessions.get(&session_id) {
+                        if session.last_committed_revision == 0 {
+                            sessions.remove(&session_id);
+                        }
                     }
                 }
                 Err(e)
@@ -3195,5 +3265,171 @@ mod tests {
             }
             other => panic!("Expected ValidationFailed, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_post_rename_dir_open_failure_reports_ambiguous_commit() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("ambiguous_open.xlsx");
+        std::fs::write(&dest_path, b"ORIGINAL_BYTES").expect("write original");
+
+        let manager = NativeSaveGrantManager::new();
+        manager
+            .register_document_session("doc-amb-1", "app-1", 1, &dest_path, 0)
+            .expect("register session");
+
+        let grant = manager
+            .issue_save_grant(
+                "doc-amb-1",
+                "app-1",
+                1,
+                "req-amb-1",
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .expect("issue grant");
+
+        // Kích hoạt lỗi tiêm thử nghiệm: DirOpenFailure sau rename (chỉ scoped riêng cho dest_path này)
+        set_post_rename_fault_for_path(dest_path.clone(), PostRenameFault::DirOpenFailure);
+
+        let new_payload = b"PK\x03\x04NEW_AMBIGUOUS_BYTES";
+        let res = manager.execute_granted_save(&grant.grant_id, "req-amb-1", new_payload);
+
+        clear_post_rename_fault_for_path(&dest_path); // Dọn dẹp cờ fault
+
+        // 1. Phải trả về lỗi AmbiguousCommit, KHÔNG được trả về Ok thành công giả
+        assert!(res.is_err(), "Post-rename failure must NOT report Ok success!");
+        let err = res.unwrap_err();
+        assert!(
+            matches!(&err, CommandError::IoError { details } if details.contains("AmbiguousCommit")),
+            "Error must be AmbiguousCommit IoError, got: {err:?}"
+        );
+
+        // 2. Grant status phải chuyển thành AmbiguousCommit (KHÔNG phải Failed, KHÔNG phải Consumed)
+        let grants = manager.grants.lock().unwrap();
+        let g = grants.get(&grant.grant_id).expect("grant exists");
+        assert_eq!(
+            g.status,
+            GrantStatus::AmbiguousCommit,
+            "Grant status must be AmbiguousCommit!"
+        );
+        drop(grants);
+
+        // 3. Tệp trên đĩa THỰC TẾ đã được hoán đổi sang bytes mới (vì rename đã hoàn tất)
+        let disk_bytes = std::fs::read(&dest_path).expect("read dest");
+        assert_eq!(
+            disk_bytes,
+            new_payload,
+            "Destination file on disk must contain the new bytes because rename succeeded!"
+        );
+
+        // 4. Thử replay/ghi lại với grant AmbiguousCommit phải bị TỪ CHỐI
+        let replay_res = manager.execute_granted_save(&grant.grant_id, "req-amb-1", new_payload);
+        assert!(replay_res.is_err(), "Replay on AmbiguousCommit grant must be rejected");
+        assert!(
+            matches!(&replay_res.unwrap_err(), CommandError::IoError { details } if details.contains("AmbiguousCommit"))
+        );
+    }
+
+    #[test]
+    fn test_post_rename_dir_sync_failure_reports_ambiguous_commit() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("ambiguous_sync.xlsx");
+        std::fs::write(&dest_path, b"ORIGINAL_BYTES").expect("write original");
+
+        let manager = NativeSaveGrantManager::new();
+        manager
+            .register_document_session("doc-amb-2", "app-1", 1, &dest_path, 0)
+            .expect("register session");
+
+        let grant = manager
+            .issue_save_grant(
+                "doc-amb-2",
+                "app-1",
+                1,
+                "req-amb-2",
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .expect("issue grant");
+
+        // Kích hoạt lỗi tiêm thử nghiệm: DirSyncFailure sau rename (chỉ scoped riêng cho dest_path này)
+        set_post_rename_fault_for_path(dest_path.clone(), PostRenameFault::DirSyncFailure);
+
+        let new_payload = b"PK\x03\x04NEW_AMBIGUOUS_SYNC_BYTES";
+        let res = manager.execute_granted_save(&grant.grant_id, "req-amb-2", new_payload);
+
+        clear_post_rename_fault_for_path(&dest_path); // Dọn dẹp cờ fault
+
+        // 1. Phải trả về lỗi AmbiguousCommit
+        assert!(res.is_err(), "Post-rename failure must NOT report Ok success!");
+        let err = res.unwrap_err();
+        assert!(
+            matches!(&err, CommandError::IoError { details } if details.contains("AmbiguousCommit")),
+            "Error must be AmbiguousCommit IoError, got: {err:?}"
+        );
+
+        // 2. Grant status phải là AmbiguousCommit
+        let grants = manager.grants.lock().unwrap();
+        let g = grants.get(&grant.grant_id).expect("grant exists");
+        assert_eq!(g.status, GrantStatus::AmbiguousCommit);
+        drop(grants);
+
+        // 3. Tệp trên đĩa thực tế đã ghi nhận bytes mới
+        let disk_bytes = std::fs::read(&dest_path).expect("read dest");
+        assert_eq!(disk_bytes, new_payload);
+    }
+
+    #[test]
+    fn test_pre_rename_failure_does_not_report_ambiguous_commit() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let dest_path = dir.path().join("pre_rename_target.xlsx");
+        let original_bytes = b"ORIGINAL_PRE_RENAME_BYTES";
+        std::fs::write(&dest_path, original_bytes).expect("write original");
+
+        let manager = NativeSaveGrantManager::new();
+        manager
+            .register_document_session("doc-pre-1", "app-1", 1, &dest_path, 0)
+            .expect("register session");
+
+        let grant = manager
+            .issue_save_grant(
+                "doc-pre-1",
+                "app-1",
+                1,
+                "req-pre-1",
+                1,
+                GrantOperationType::Save,
+                OverwritePolicy::AllowOverwrite,
+                60,
+            )
+            .expect("issue grant");
+
+        // Tạo lỗi trước rename: parent_dir là một tệp thông thường, không thể tạo thư mục
+        let parent_file = dir.path().join("parent_is_file");
+        std::fs::write(&parent_file, b"not_a_dir").expect("create file");
+        let invalid_path = parent_file.join("impossible_sub/test.xlsx");
+        let mut grants = manager.grants.lock().unwrap();
+        if let Some(g) = grants.get_mut(&grant.grant_id) {
+            g.authorized_dest_path = invalid_path;
+        }
+        drop(grants);
+
+        let res = manager.execute_granted_save(&grant.grant_id, "req-pre-1", b"PK\x03\x04SOME_BYTES");
+        assert!(res.is_err(), "Pre-rename failure must return Err");
+
+        // Grant status phải là Failed, KHÔNG phải AmbiguousCommit
+        let grants = manager.grants.lock().unwrap();
+        let g = grants.get(&grant.grant_id).expect("grant exists");
+        assert_eq!(g.status, GrantStatus::Failed, "Pre-rename failure must result in Failed status");
+        drop(grants);
+
+        // Tệp gốc vẫn giữ nguyên tuyệt đối
+        let disk_bytes = std::fs::read(&dest_path).expect("read dest");
+        assert_eq!(disk_bytes, original_bytes);
     }
 }

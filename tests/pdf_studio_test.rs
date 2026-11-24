@@ -940,4 +940,124 @@ fn test_pdf_studio_switching_and_saving_preserves_other_document_bytes() {
     assert_eq!(sha_b_before, sha_b_after, "B's content must be 100% unchanged!");
 }
 
+#[test]
+fn test_pdf_studio_save_completion_cross_document_interleaving_safety() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::SaveOutcome;
+    use sha2::{Digest, Sha256};
+
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let path_a = dir.path().join("A.pdf");
+    let path_b = dir.path().join("B.pdf");
+
+    let initial_bytes_a = b"%PDF-1.7 INITIAL_CONTENT_FOR_DOC_A";
+    let initial_bytes_b = b"%PDF-1.7 INITIAL_CONTENT_FOR_DOC_B";
+
+    std::fs::write(&path_a, initial_bytes_a).expect("write initial A");
+    std::fs::write(&path_b, initial_bytes_b).expect("write initial B");
+
+    let sha256_oracle = |bytes: &[u8]| -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        format!("{:x}", hasher.finalize())
+    };
+
+    let oracle_initial_b = sha256_oracle(initial_bytes_b);
+
+    let state = PdfStudioState::new();
+
+    // 1. Mở A.pdf và đăng ký session
+    let path_a_str = path_a.to_str().unwrap().to_string();
+    state.add_file(&path_a_str);
+    state.set_active_document_session(Some("doc-session-A".to_string()), 1);
+    state.set_unsaved_changes(true);
+
+    // 2. Mở B.pdf và đăng ký session
+    let path_b_str = path_b.to_str().unwrap().to_string();
+    state.add_file(&path_b_str);
+    state.set_active_document_session(Some("doc-session-B".to_string()), 1);
+    state.set_unsaved_changes(false);
+
+    // 3. Người dùng chọn lại file A
+    state.select_file(0);
+    assert_eq!(state.active_file_path(), Some(path_a_str.clone()));
+    assert_eq!(state.active_document_id(), Some("doc-session-A".to_string()));
+
+    // 4. Bắt đầu lưu A.pdf: Chụp lại thông tin snapshot
+    let originating_path_a = state.active_file_path().unwrap();
+    let originating_doc_id_a = state.active_document_id().unwrap();
+    let snapshot_gen_a = state.edit_generation.get_untracked();
+    let new_bytes_a = b"%PDF-1.7 NEW_CONTENT_FOR_A_POST_EDIT";
+
+    // 5. TRƯỚC KHI tác vụ lưu của A hoàn tất, người dùng chuyển sang file B
+    state.select_file(1);
+    assert_eq!(state.active_file_path(), Some(path_b_str.clone()));
+    assert_eq!(state.active_document_id(), Some("doc-session-B".to_string()));
+    // Người dùng chỉnh sửa file B
+    state.set_unsaved_changes(true);
+
+    // 6. Tác vụ lưu bất đồng bộ của A hoàn tất
+    let outcome_a = SaveOutcome::Saved {
+        dest_path: originating_path_a.clone(),
+        committed_revision: 2,
+        new_document_id: Some("doc-session-A".to_string()),
+    };
+
+    // Áp dụng completion handler của bridge
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(outcome_a),
+        Some(originating_path_a.clone()),
+        Some(originating_doc_id_a.clone()),
+        snapshot_gen_a,
+        false,
+        new_bytes_a,
+    );
+    std::fs::write(&originating_path_a, new_bytes_a).expect("write new A");
+
+    // 7. BẮT BUỘC: Sau khi A lưu xong, active session của B VẪN PHẢI LÀ B!
+    // Không được bị ghi đè thành doc-session-A!
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-B".to_string()),
+        "B's active document session identity must remain B, even after A's save completes!"
+    );
+    assert_eq!(state.active_revision(), 1);
+    assert!(state.has_unsaved_changes(), "B must remain dirty after A saves!");
+
+    // 8. Bây giờ người dùng lưu file B
+    let new_bytes_b = b"%PDF-1.7 NEW_CONTENT_FOR_B_POST_EDIT";
+    let originating_path_b = state.active_file_path().unwrap();
+    let originating_doc_id_b = state.active_document_id().unwrap();
+    assert_eq!(originating_doc_id_b, "doc-session-B", "Grant for B must reference B's session!");
+    assert_ne!(originating_doc_id_b, "doc-session-A", "Grant for B must NEVER reference A's session!");
+
+    let outcome_b = SaveOutcome::Saved {
+        dest_path: originating_path_b.clone(),
+        committed_revision: 2,
+        new_document_id: Some("doc-session-B".to_string()),
+    };
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(outcome_b),
+        Some(originating_path_b.clone()),
+        Some(originating_doc_id_b),
+        state.edit_generation.get_untracked(),
+        false,
+        new_bytes_b,
+    );
+    std::fs::write(&originating_path_b, new_bytes_b).expect("write new B");
+
+    // 9. Xác thực SHA-256 độc lập cho nội dung cuối cùng của cả hai tệp
+    let read_a = std::fs::read(&path_a).expect("read final A");
+    let read_b = std::fs::read(&path_b).expect("read final B");
+
+    let oracle_final_a = sha256_oracle(&read_a);
+    let oracle_final_b = sha256_oracle(&read_b);
+
+    assert_eq!(oracle_final_a, sha256_oracle(new_bytes_a), "A must contain new A bytes!");
+    assert_eq!(oracle_final_b, sha256_oracle(new_bytes_b), "B must contain new B bytes!");
+    assert_ne!(oracle_final_a, oracle_final_b, "A and B must have distinct SHA-256!");
+    assert_ne!(oracle_final_b, oracle_initial_b, "B was updated with new bytes!");
+}
+
 

@@ -107,6 +107,8 @@ pub struct PdfDocumentSession {
     pub file_path: String,
     pub document_id: Option<String>,
     pub revision: u64,
+    pub is_dirty: bool,
+    pub edit_generation: u64,
 }
 
 /// Trạng thái hoạt động dùng chung (Shared Context) của Micro-App PDF Studio.
@@ -194,12 +196,17 @@ impl PdfStudioState {
     /// Đăng ký hoặc cập nhật phiên tài liệu cho một đường dẫn tệp cụ thể (Finding 1)
     pub fn register_document_session(&self, path: &str, doc_id: Option<String>, rev: u64) {
         let mut map = self.document_sessions.get_untracked();
+        let existing = map.get(path);
+        let is_dirty = existing.map(|s| s.is_dirty).unwrap_or(false);
+        let edit_gen = existing.map(|s| s.edit_generation).unwrap_or(0);
         map.insert(
             path.to_string(),
             PdfDocumentSession {
                 file_path: path.to_string(),
                 document_id: doc_id,
                 revision: rev,
+                is_dirty,
+                edit_generation: edit_gen,
             },
         );
         self.document_sessions.set(map);
@@ -229,6 +236,17 @@ impl PdfStudioState {
         if path_str.trim().is_empty() {
             return;
         }
+        if let Some(current_path) = self.active_file_path() {
+            let current_dirty = self.has_unsaved_changes.get_untracked();
+            let current_gen = self.edit_generation.get_untracked();
+            let mut map = self.document_sessions.get_untracked();
+            if let Some(sess) = map.get_mut(&current_path) {
+                sess.is_dirty = current_dirty;
+                sess.edit_generation = current_gen;
+            }
+            self.document_sessions.set(map);
+        }
+
         let mut idx = 0;
         self.loaded_files.update(|f| {
             if let Some(pos) = f.iter().position(|p| p == &path_str) {
@@ -242,6 +260,17 @@ impl PdfStudioState {
         if let Some(sess) = self.get_document_session(&path_str) {
             self.active_document_id.set(sess.document_id);
             self.active_revision.set(sess.revision);
+            self.has_unsaved_changes.set(sess.is_dirty);
+            self.edit_generation.set(sess.edit_generation);
+        } else if self.active_document_id.get_untracked().is_some() {
+            let cur_doc_id = self.active_document_id.get_untracked();
+            let cur_rev = self.active_revision.get_untracked();
+            self.register_document_session(&path_str, cur_doc_id, cur_rev);
+        } else {
+            self.active_document_id.set(None);
+            self.active_revision.set(0);
+            self.has_unsaved_changes.set(false);
+            self.edit_generation.set(0);
         }
     }
 
@@ -316,17 +345,32 @@ impl PdfStudioState {
     }
 
     /// Chọn một tệp cụ thể trong danh sách theo chỉ số index.
-    /// Khôi phục chính xác ID phiên tài liệu và revision của tệp được chọn (Finding 1).
+    /// Khôi phục chính xác ID phiên tài liệu, revision, dirty state và edit generation (Finding 1 & Blocker 1).
     pub fn select_file(&self, index: usize) {
         let opt_path = self.loaded_files.with_untracked(|f| f.get(index).cloned());
         if let Some(path) = opt_path {
+            if let Some(current_path) = self.active_file_path() {
+                let current_dirty = self.has_unsaved_changes.get_untracked();
+                let current_gen = self.edit_generation.get_untracked();
+                let mut map = self.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(&current_path) {
+                    sess.is_dirty = current_dirty;
+                    sess.edit_generation = current_gen;
+                }
+                self.document_sessions.set(map);
+            }
+
             self.active_file_index.set(Some(index));
             if let Some(sess) = self.get_document_session(&path) {
                 self.active_document_id.set(sess.document_id);
                 self.active_revision.set(sess.revision);
+                self.has_unsaved_changes.set(sess.is_dirty);
+                self.edit_generation.set(sess.edit_generation);
             } else {
                 self.active_document_id.set(None);
                 self.active_revision.set(0);
+                self.has_unsaved_changes.set(false);
+                self.edit_generation.set(0);
             }
         }
     }

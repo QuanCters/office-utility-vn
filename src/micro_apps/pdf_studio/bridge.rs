@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-
-#[cfg(target_arch = "wasm32")]
 use leptos::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -387,7 +385,7 @@ pub fn setup_bridge_listener(
                 let snapshot_gen = state.edit_generation.get_untracked();
                 let s = state;
                 wasm_bindgen_futures::spawn_local(async move {
-                    match save_file_to_disk_or_download(
+                    let outcome = save_file_to_disk_or_download(
                         &name_clone,
                         active_path.as_deref(),
                         doc_id.as_deref(),
@@ -395,49 +393,8 @@ pub fn setup_bridge_listener(
                         save_as,
                         &bytes_clone,
                     )
-                    .await
-                    {
-                        Ok(SaveOutcome::Saved { dest_path, committed_revision, new_document_id }) => {
-                            let current_gen = s.edit_generation.get_untracked();
-                            if current_gen == snapshot_gen {
-                                s.has_unsaved_changes.set(false);
-                            } else {
-                                s.has_unsaved_changes.set(true);
-                            }
-                            let target_doc_id = new_document_id.or(doc_id);
-                            if save_as || active_path.is_none() {
-                                s.add_file(&dest_path);
-                            }
-                            s.register_document_session(&dest_path, target_doc_id.clone(), committed_revision);
-                            s.set_active_document_session(target_doc_id, committed_revision);
-                            cache_authorized_pdf_bytes(&dest_path, bytes_clone.clone());
-                            s.cache_document_bytes(&dest_path, bytes_clone);
-                            s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
-                        }
-                        Ok(SaveOutcome::Canceled) => {
-                            // Người dùng bấm Hủy -> Giữ nguyên dirty = true, không chuyển clean
-                            s.has_unsaved_changes.set(true);
-                            s.status_message.set("Đã hủy thao tác lưu tệp.".to_string());
-                        }
-                        Ok(SaveOutcome::Failed(err)) => {
-                            // Lưu thất bại -> Giữ nguyên dirty = true
-                            s.has_unsaved_changes.set(true);
-                            s.status_message.set(format!("❌ Lưu tệp thất bại: {err}"));
-                        }
-                        Ok(SaveOutcome::BrowserDownloadInitiated) => {
-                            let current_gen = s.edit_generation.get_untracked();
-                            if current_gen == snapshot_gen {
-                                s.has_unsaved_changes.set(false);
-                            } else {
-                                s.has_unsaved_changes.set(true);
-                            }
-                            s.status_message.set("Đã bắt đầu tải về qua trình duyệt.".to_string());
-                        }
-                        Err(err) => {
-                            s.has_unsaved_changes.set(true);
-                            s.status_message.set(format!("❌ Lỗi hệ thống: {err}"));
-                        }
-                    }
+                    .await;
+                    apply_save_outcome(&s, outcome, active_path, doc_id, snapshot_gen, save_as, &bytes_clone);
                 });
             }
         }
@@ -458,6 +415,110 @@ pub fn setup_bridge_listener(
     _bridge: Option<PdfCraftBridge>,
 ) -> Result<(), String> {
     Ok(())
+}
+
+/// Áp dụng kết quả của tác vụ lưu tệp PDF (Blocker 1: Bound to originating document)
+pub fn apply_save_outcome(
+    s: &crate::micro_apps::pdf_studio::state::PdfStudioState,
+    outcome: Result<SaveOutcome, String>,
+    originating_path: Option<String>,
+    originating_doc_id: Option<String>,
+    snapshot_gen: u64,
+    save_as: bool,
+    bytes: &[u8],
+) {
+    match outcome {
+        Ok(SaveOutcome::Saved { dest_path, committed_revision, new_document_id }) => {
+            let target_doc_id = new_document_id.or(originating_doc_id);
+            if save_as || originating_path.is_none() {
+                s.add_file(&dest_path);
+            }
+
+            // 1. Luôn cập nhật phiên và bộ nhớ cache cho tài liệu gốc đã được lưu
+            let mut map = s.document_sessions.get_untracked();
+            if let Some(sess) = map.get_mut(&dest_path) {
+                sess.document_id = target_doc_id.clone();
+                sess.revision = committed_revision;
+                if sess.edit_generation == snapshot_gen {
+                    sess.is_dirty = false;
+                }
+            } else {
+                map.insert(
+                    dest_path.clone(),
+                    crate::micro_apps::pdf_studio::state::PdfDocumentSession {
+                        file_path: dest_path.clone(),
+                        document_id: target_doc_id.clone(),
+                        revision: committed_revision,
+                        is_dirty: false,
+                        edit_generation: snapshot_gen,
+                    },
+                );
+            }
+            s.document_sessions.set(map);
+
+            cache_authorized_pdf_bytes(&dest_path, bytes.to_vec());
+            s.cache_document_bytes(&dest_path, bytes.to_vec());
+
+            // 2. Chỉ cập nhật tín hiệu active NẾU tài liệu đang chọn VẪN LÀ tài liệu vừa hoàn tất lưu
+            let is_still_active = s.active_file_path().as_deref() == Some(&dest_path);
+            if is_still_active {
+                s.active_document_id.set(target_doc_id);
+                s.active_revision.set(committed_revision);
+                let current_gen = s.edit_generation.get_untracked();
+                if current_gen == snapshot_gen {
+                    s.has_unsaved_changes.set(false);
+                } else {
+                    s.has_unsaved_changes.set(true);
+                }
+            }
+            s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
+        }
+        Ok(SaveOutcome::Canceled) => {
+            let is_still_active = match originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set("Đã hủy thao tác lưu tệp.".to_string());
+        }
+        Ok(SaveOutcome::Failed(err)) => {
+            let is_still_active = match originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set(format!("❌ Lưu tệp thất bại: {err}"));
+        }
+        Ok(SaveOutcome::BrowserDownloadInitiated) => {
+            let is_still_active = match originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                let current_gen = s.edit_generation.get_untracked();
+                if current_gen == snapshot_gen {
+                    s.has_unsaved_changes.set(false);
+                } else {
+                    s.has_unsaved_changes.set(true);
+                }
+            }
+            s.status_message.set("Đã bắt đầu tải về qua trình duyệt.".to_string());
+        }
+        Err(err) => {
+            let is_still_active = match originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set(format!("❌ Lỗi hệ thống: {err}"));
+        }
+    }
 }
 
 /// Nạp tệp PDF thông qua Native OS File Dialog có kiểm soát an ninh (Stage 4C-0D UAT Support).
