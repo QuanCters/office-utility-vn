@@ -6,11 +6,12 @@ impl SheetApp {
         if result.get("path").is_some() {
             return;
         }
-        if let Some(dl) = &self.services.download
+        if self.services.has_download()
             && let Some(b) = result.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
         {
             let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-            dl(&std::path::Path::new(&title).with_extension("pdf").to_string_lossy(), &b);
+            let name = std::path::Path::new(&title).with_extension("pdf").to_string_lossy().into_owned();
+            self.services.deliver_download(&name, &b, crate::services::DownloadIntent::Export);
         }
     }
 

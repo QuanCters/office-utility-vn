@@ -79,7 +79,7 @@ mod services;
 mod state;
 
 pub use clock::{monotonic_ms, now_ms};
-pub use services::{Chrome, Inbox, Services};
+pub use services::{Chrome, DownloadIntent, Inbox, Services};
 pub use state::{DeferredActionIntent, NoticeKind, OpenWindow, PendingDeferredAction, SaveAnswer, SheetView};
 pub mod desktop_theme;
 

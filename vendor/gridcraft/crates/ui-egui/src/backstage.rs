@@ -696,12 +696,12 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
     });
     ui.add_space(14.0);
     // Desktop: the system Save dialog. Web: the file downloads.
-    let web = app.services.pick_save.is_none() && app.services.download.is_some();
+    let web = app.services.pick_save.is_none() && app.services.has_download();
     let label = if web { format!("{} (.{fmt})", lang.tr("Download")) } else { lang.tr("Browse…").to_string() };
     if square_button(ui, Icon::OpenFolder, &label).clicked() && app.commit_edit(0, 0, false, false) {
         if fmt == "xlsx" {
             let before = app.session.active().map(|d| (d.path.clone(), d.is_dirty()));
-            app.open_dialog("saveAs", json!({}));
+            app.open_dialog("saveAs", json!({"saveAs": true}));
             let after = app.session.active().map(|d| (d.path.clone(), d.is_dirty()));
             if after != before || app.services.pick_save.is_none() {
                 out.close = true;
@@ -759,7 +759,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
             }
         };
     }
-    if app.services.download.is_none() {
+    if !app.services.has_download() {
         app.message = Some(("GridCraft".into(), "Exporting needs a file picker, which this window doesn't have.".into()));
         return false;
     }
@@ -778,12 +778,9 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
         Ok(r) => {
             let bytes = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode);
             let name = r.get("name").and_then(Json::as_str).map_or_else(|| format!("{stem}.{fmt}"), str::to_string);
-            match (bytes, &app.services.download) {
-                (Some(b), Some(dl)) => {
-                    dl(&name, &b);
-                    true
-                }
-                _ => false,
+            match bytes {
+                Some(b) => app.services.deliver_download(&name, &b, crate::services::DownloadIntent::Export),
+                None => false,
             }
         }
         Err(e) => {

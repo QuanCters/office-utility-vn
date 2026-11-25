@@ -11,8 +11,9 @@
 +use std::sync::Arc;
  
  use craft_web_host::web::{FileData, Host, Message};
+-use gridcraft_ui_egui::{Inbox, Services, SheetApp};
 +use gridcraft_engine::model::Workbook;
- use gridcraft_ui_egui::{Inbox, Services, SheetApp};
++use gridcraft_ui_egui::{DownloadIntent, Inbox, Services, SheetApp};
 +use wasm_bindgen::JsCast as _;
 +use web_sys::js_sys;
  
@@ -54,7 +55,7 @@
 +    pending_saves: Rc<RefCell<HashMap<String, PendingSave>>>,
 +    confirmed_saved_acks: Rc<RefCell<Vec<ConfirmedSavedAck>>>,
 +    last_saved_revisions: Rc<RefCell<HashMap<u64, u64>>>,
-+    pending_downloads: Rc<RefCell<Vec<(String, Vec<u8>)>>>,
++    pending_downloads: Rc<RefCell<Vec<(String, Vec<u8>, DownloadIntent)>>>,
 +    current_open_id: Rc<RefCell<Option<String>>>,
 +    failed_save_happened: Rc<Cell<bool>>,
 +    pending_save_intents: Rc<RefCell<Vec<HostSaveIntent>>>,
@@ -94,7 +95,31 @@
      }
  
      /// Send saved and exported files to the host instead of downloading them, and hear files
-@@ -152,7 +211,7 @@
+@@ -63,9 +122,22 @@
+     pub fn connect(&self, services: &mut Services, inbox: Inbox, ctx: egui::Context) {
+         self.listen(inbox, ctx);
+         let bridge = self.clone();
++        services.download_with_intent = Some(Box::new(move |name: &str, bytes: &[u8], intent: DownloadIntent| {
++            if bridge.confirmed {
++                bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec(), intent));
++            } else if is_workbook(name) && intent != DownloadIntent::Export {
++                if let Err(e) = bridge.post_save(name, bytes) {
++                    log::error!("couldn't hand {name} to the page: {e}");
++                }
++            } else if let Err(e) = bridge.post_export(name, bytes) {
++                log::error!("couldn't hand export {name} to the page: {e}");
++            }
++        }));
++        let bridge = self.clone();
+         services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
+             if bridge.confirmed {
+-                bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec()));
++                let fallback_intent = if is_workbook(name) { DownloadIntent::Save } else { DownloadIntent::Export };
++                bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec(), fallback_intent));
+             } else if is_workbook(name) {
+                 if let Err(e) = bridge.post_save(name, bytes) {
+                     log::error!("couldn't hand {name} to the page: {e}");
+@@ -152,7 +224,7 @@
                      doc.title = name.clone();
                  }
              }
@@ -103,7 +128,7 @@
              return;
          }
  
-@@ -164,7 +223,34 @@
+@@ -164,7 +236,34 @@
          let save_intents = std::mem::take(&mut *self.pending_save_intents.borrow_mut());
          for intent in save_intents {
              if app.session.active().is_some() {
@@ -139,7 +164,7 @@
                  app.store_view_state();
  
                  if let Some(doc) = app.session.active() {
-@@ -201,6 +287,17 @@
+@@ -201,6 +300,17 @@
                              name: file_name(&name),
                          },
                      );
@@ -157,7 +182,29 @@
                      if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                          log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                      }
-@@ -242,6 +339,17 @@
+@@ -210,9 +320,9 @@
+ 
+         // --- Confirmed save mode ---
+         let downloads = std::mem::take(&mut *self.pending_downloads.borrow_mut());
+-        for (name, downloaded_bytes) in downloads {
++        for (name, downloaded_bytes, dl_intent) in downloads {
+             let is_wb = is_workbook(&name);
+-            if is_wb && let Some(doc) = app.session.active() {
++            if is_wb && dl_intent != DownloadIntent::Export && let Some(doc) = app.session.active() {
+                 let id_num = self.next_save_id.get();
+                 self.next_save_id.set(id_num + 1);
+                 let id = format!("save-{}-{}", doc.uid, id_num);
+@@ -223,8 +333,7 @@
+                 // được tuần tự hóa trực tiếp từ chính snapshot được chụp.
+                 // TUYỆT ĐỐI KHÔNG fallback về downloaded_bytes nếu thất bại, vì downloaded_bytes
+                 // có thể là phiên bản cũ, vi phạm tính đồng nhất snapshot/bytes.
+-                let is_save_as = app.dialog.as_ref().is_some_and(|d| d.name == "saveAs")
+-                    || app.session.journal.last().is_some_and(|(cmd, _)| cmd == "file.saveAs");
++                let is_save_as = dl_intent == DownloadIntent::SaveAs;
+                 let bytes = match gridcraft_engine::io::save_bytes(&snapshot, &name) {
+                     Ok(b) => b,
+                     Err(e) => {
+@@ -242,6 +351,17 @@
                          name: file_name(&name),
                      },
                  );
@@ -175,7 +222,7 @@
                  if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                      log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                  }
-@@ -250,10 +358,10 @@
+@@ -250,10 +370,10 @@
              }
          }
  
@@ -189,7 +236,7 @@
                  let mut last_revs = self.last_saved_revisions.borrow_mut();
                  let last_rev = last_revs.get(&pending.doc_uid).copied().unwrap_or(0);
                  if pending.revision >= last_rev {
-@@ -263,16 +371,26 @@
+@@ -263,16 +383,26 @@
                          if cur == i {
                              if let Some(doc) = app.session.active_mut() {
                                  doc.saved = pending.snapshot.clone();
@@ -220,7 +267,7 @@
                                  }
                              }
                              app.session.set_active(cur);
-@@ -319,16 +437,118 @@
+@@ -319,16 +449,118 @@
                      });
                  } else {
                      log::warn!(
@@ -342,7 +389,7 @@
      }
  
      fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
-@@ -361,7 +581,8 @@
+@@ -361,7 +593,8 @@
  
      fn listen(&self, inbox: Inbox, ctx: egui::Context) {
          let confirmed = self.confirmed;
@@ -352,7 +399,7 @@
          let pending_saves_for_fail = self.pending_saves.clone();
          let app_ctx_for_open = ctx.clone();
          let app_ctx_for_saved = ctx.clone();
-@@ -373,7 +594,15 @@
+@@ -373,7 +606,15 @@
              }
              Message::Saved { id } => {
                  if confirmed {
@@ -369,7 +416,7 @@
                      app_ctx_for_saved.request_repaint();
                  }
              }
-@@ -428,6 +657,35 @@
+@@ -428,6 +669,35 @@
                                  save_as,
                              });
                              app_ctx_for_intents.request_repaint();
@@ -405,3 +452,279 @@
                          }
                      }
                  },
+diff --git a/crates/engine/src/cmd/file.rs b/crates/engine/src/cmd/file.rs
+index aafb085..2c10e68 100644
+--- a/crates/engine/src/cmd/file.rs
++++ b/crates/engine/src/cmd/file.rs
+@@ -110,7 +110,7 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
+     let path = match str_param(p, "path").map(str::to_string).or_else(|| s.active().and_then(|d| d.path.clone())) {
+         Some(p) => p,
+         None => {
+-            s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({})));
++            s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({"saveAs": false})));
+             return ok();
+         }
+     };
+@@ -147,7 +147,7 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
+ 
+ fn save_as(s: &mut Session, p: &Json) -> Result<Json> {
+     if str_param(p, "path").is_none() {
+-        s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({})));
++        s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({"saveAs": true})));
+         return ok();
+     }
+     save(s, p)
+diff --git a/crates/ui-egui/src/app/commands.rs b/crates/ui-egui/src/app/commands.rs
+index 7953061..370cdb4 100644
+--- a/crates/ui-egui/src/app/commands.rs
++++ b/crates/ui-egui/src/app/commands.rs
+@@ -444,13 +444,17 @@ impl SheetApp {
+                         let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
+                         self.run_or_alert("file.save", json!({"path": path}));
+                     }
+-                } else if self.services.download.is_some()
++                } else if self.services.has_download()
+                     && let Ok(r) = self.run("file.saveBytes", json!({"format": "xlsx"}))
+-                    && let Some(dl) = &self.services.download
+                     && let Some(b) = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
+                 {
+                     let name = r.get("name").and_then(Json::as_str).unwrap_or("Book.xlsx").to_string();
+-                    dl(&name, &b);
++                    let intent = if params.get("saveAs").and_then(Json::as_bool) == Some(false) {
++                        crate::services::DownloadIntent::Save
++                    } else {
++                        crate::services::DownloadIntent::SaveAs
++                    };
++                    self.services.deliver_download(&name, &b, intent);
+                 }
+             }
+             // File › Options (`file.options`) and the File tab itself open the Backstage view.
+diff --git a/crates/ui-egui/src/app/print.rs b/crates/ui-egui/src/app/print.rs
+index 0cf6785..aebe54c 100644
+--- a/crates/ui-egui/src/app/print.rs
++++ b/crates/ui-egui/src/app/print.rs
+@@ -6,11 +6,12 @@ impl SheetApp {
+         if result.get("path").is_some() {
+             return;
+         }
+-        if let Some(dl) = &self.services.download
++        if self.services.has_download()
+             && let Some(b) = result.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
+         {
+             let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
+-            dl(&std::path::Path::new(&title).with_extension("pdf").to_string_lossy(), &b);
++            let name = std::path::Path::new(&title).with_extension("pdf").to_string_lossy().into_owned();
++            self.services.deliver_download(&name, &b, crate::services::DownloadIntent::Export);
+         }
+     }
+ 
+diff --git a/crates/ui-egui/src/backstage.rs b/crates/ui-egui/src/backstage.rs
+index 194533d..b1ae30d 100644
+--- a/crates/ui-egui/src/backstage.rs
++++ b/crates/ui-egui/src/backstage.rs
+@@ -696,12 +696,12 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
+     });
+     ui.add_space(14.0);
+     // Desktop: the system Save dialog. Web: the file downloads.
+-    let web = app.services.pick_save.is_none() && app.services.download.is_some();
++    let web = app.services.pick_save.is_none() && app.services.has_download();
+     let label = if web { format!("{} (.{fmt})", lang.tr("Download")) } else { lang.tr("Browse…").to_string() };
+     if square_button(ui, Icon::OpenFolder, &label).clicked() && app.commit_edit(0, 0, false, false) {
+         if fmt == "xlsx" {
+             let before = app.session.active().map(|d| (d.path.clone(), d.is_dirty()));
+-            app.open_dialog("saveAs", json!({}));
++            app.open_dialog("saveAs", json!({"saveAs": true}));
+             let after = app.session.active().map(|d| (d.path.clone(), d.is_dirty()));
+             if after != before || app.services.pick_save.is_none() {
+                 out.close = true;
+@@ -759,7 +759,7 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+             }
+         };
+     }
+-    if app.services.download.is_none() {
++    if !app.services.has_download() {
+         app.message = Some(("GridCraft".into(), "Exporting needs a file picker, which this window doesn't have.".into()));
+         return false;
+     }
+@@ -778,12 +778,9 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+         Ok(r) => {
+             let bytes = r.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode);
+             let name = r.get("name").and_then(Json::as_str).map_or_else(|| format!("{stem}.{fmt}"), str::to_string);
+-            match (bytes, &app.services.download) {
+-                (Some(b), Some(dl)) => {
+-                    dl(&name, &b);
+-                    true
+-                }
+-                _ => false,
++            match bytes {
++                Some(b) => app.services.deliver_download(&name, &b, crate::services::DownloadIntent::Export),
++                None => false,
+             }
+         }
+         Err(e) => {
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index c125fcf..616db6e 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -79,7 +79,7 @@ mod services;
+ mod state;
+ 
+ pub use clock::{monotonic_ms, now_ms};
+-pub use services::{Chrome, Inbox, Services};
++pub use services::{Chrome, DownloadIntent, Inbox, Services};
+ pub use state::{DeferredActionIntent, NoticeKind, OpenWindow, PendingDeferredAction, SaveAnswer, SheetView};
+ pub mod desktop_theme;
+ 
+diff --git a/crates/ui-egui/src/services.rs b/crates/ui-egui/src/services.rs
+index ebbb72b..e5dbb49 100644
+--- a/crates/ui-egui/src/services.rs
++++ b/crates/ui-egui/src/services.rs
+@@ -4,8 +4,20 @@ type PickSave = Box<dyn Fn(&str) -> Option<String>>;
+ type OpenUrl = Box<dyn Fn(&str)>;
+ type CopyHtml = Box<dyn FnMut(&str, &str) -> Result<(), String>>;
+ type Download = Box<dyn Fn(&str, &[u8])>;
++type DownloadWithIntent = Box<dyn Fn(&str, &[u8], DownloadIntent)>;
+ type PrintPdf = Box<dyn Fn(&[u8])>;
+ 
++/// Explicit persistence intent carried with a hosted/web download request (P1 #4690963440).
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum DownloadIntent {
++    /// Ordinary Save on the active workbook (`file.save`).
++    Save,
++    /// Explicit Save As requiring a new destination (`file.saveAs` or Backstage Save As).
++    SaveAs,
++    /// Non-workbook export (PDF, CSV, HTML) leaving the active workbook identity unchanged.
++    Export,
++}
++
+ /// Host services the platform shell provides (file pickers, opening URLs).
+ #[derive(Default)]
+ pub struct Services {
+@@ -37,6 +49,8 @@ pub struct Services {
+     pub paste_image: Option<Box<dyn FnMut() -> Option<image::RgbaImage>>>,
+     /// Web: deliver a file to the user (name, bytes).
+     pub download: Option<Download>,
++    /// Hosted/Web: deliver a file together with its explicit Save / SaveAs / Export intent (P1 #4690963440).
++    pub download_with_intent: Option<DownloadWithIntent>,
+     /// Web: start an asynchronous file pick; the bytes arrive later in `inbox`.
+     pub open_async: Option<Box<dyn Fn()>>,
+     /// Files delivered asynchronously (name, bytes), opened on the next frame.
+@@ -54,6 +68,24 @@ pub struct Services {
+     pub close_cancelled: Option<Box<dyn Fn()>>,
+ }
+ 
++impl Services {
++    pub fn has_download(&self) -> bool {
++        self.download_with_intent.is_some() || self.download.is_some()
++    }
++
++    pub fn deliver_download(&self, name: &str, bytes: &[u8], intent: DownloadIntent) -> bool {
++        if let Some(dl) = &self.download_with_intent {
++            dl(name, bytes, intent);
++            true
++        } else if let Some(dl) = &self.download {
++            dl(name, bytes);
++            true
++        } else {
++            false
++        }
++    }
++}
++
+ /// Shared queue of files read asynchronously (browser file picker, drag and drop).
+ pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
+ 
+diff --git a/crates/ui-egui/tests/it/file_menu.rs b/crates/ui-egui/tests/it/file_menu.rs
+index 9f12b20..d1b7273 100644
+--- a/crates/ui-egui/tests/it/file_menu.rs
++++ b/crates/ui-egui/tests/it/file_menu.rs
+@@ -1218,3 +1218,89 @@ fn test_p1_4690386917_and_4690386920_uncommitted_draft_and_rejected_commit_behav
+     );
+ }
+ 
++#[test]
++fn test_p1_4690963440_backstage_save_as_carries_explicit_save_as_intent() {
++    use gridcraft_ui_egui::DownloadIntent;
++
++    let captured = Arc::new(Mutex::new(Vec::<(String, DownloadIntent)>::new()));
++    let cap = captured.clone();
++    let services = Services {
++        open_async: Some(Box::new(|| {})),
++        download_with_intent: Some(Box::new(move |name, _bytes, intent| {
++            cap.lock().unwrap().push((name.to_string(), intent));
++        })),
++        ..Default::default()
++    };
++    let mut h = harness(services);
++
++    // 1. Open/simulate an existing workbook and edit a cell so journal.last() is "cell.set", NOT "file.saveAs"
++    h.state_mut()
++        .run("cell.set", serde_json::json!({"cell": "A1", "input": "Edited Value"}))
++        .unwrap();
++    h.run_steps(2);
++    assert_eq!(
++        h.state().session.journal.last().map(|(c, _)| c.as_str()),
++        Some("cell.set")
++    );
++
++    // 2. Real UI path: File -> Save As -> Download (.xlsx) via Backstage
++    choose(&mut h, "Save As");
++    assert_eq!(page(&h), Some("saveAs"));
++    click(&mut h, "Download (.xlsx)");
++
++    // 3. Ordinary Save via real toolbar "Save" button (for contrast)
++    h.state_mut()
++        .run("cell.set", serde_json::json!({"cell": "A2", "input": "Second Edit"}))
++        .unwrap();
++    h.run_steps(2);
++    let undo_rect = h
++        .get_by_role_and_label(egui::accesskit::Role::Button, "Undo")
++        .rect();
++    let save_btn_pos = egui::pos2(undo_rect.left() - 18.0, undo_rect.center().y);
++    h.input_mut().events.push(egui::Event::PointerMoved(save_btn_pos));
++    h.input_mut().events.push(egui::Event::PointerButton {
++        pos: save_btn_pos,
++        button: egui::PointerButton::Primary,
++        pressed: true,
++        modifiers: egui::Modifiers::NONE,
++    });
++    h.input_mut().events.push(egui::Event::PointerButton {
++        pos: save_btn_pos,
++        button: egui::PointerButton::Primary,
++        pressed: false,
++        modifiers: egui::Modifiers::NONE,
++    });
++    h.run_steps(3);
++
++    // 4. Explicit Save As via F12 (file.saveAs)
++    h.key_press(egui::Key::F12);
++    h.run_steps(3);
++
++    // 5. Export via Backstage Export -> CSV
++    choose(&mut h, "Export");
++    click(&mut h, "CSV (Comma delimited)");
++
++    let calls = captured.lock().unwrap();
++    assert_eq!(calls.len(), 4, "Expected 4 hosted downloads/exports, got: {calls:?}");
++    assert_eq!(
++        calls[0].1,
++        DownloadIntent::SaveAs,
++        "Backstage File -> Save As -> Download (.xlsx) MUST carry DownloadIntent::SaveAs even when journal.last() is cell.set"
++    );
++    assert_eq!(
++        calls[1].1,
++        DownloadIntent::Save,
++        "Toolbar Save MUST carry DownloadIntent::Save"
++    );
++    assert_eq!(
++        calls[2].1,
++        DownloadIntent::SaveAs,
++        "F12 / file.saveAs MUST carry DownloadIntent::SaveAs"
++    );
++    assert_eq!(
++        calls[3].1,
++        DownloadIntent::Export,
++        "Backstage Export CSV MUST carry DownloadIntent::Export"
++    );
++}
++

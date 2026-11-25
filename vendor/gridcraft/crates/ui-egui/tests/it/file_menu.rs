@@ -1218,3 +1218,89 @@ fn test_p1_4690386917_and_4690386920_uncommitted_draft_and_rejected_commit_behav
     );
 }
 
+#[test]
+fn test_p1_4690963440_backstage_save_as_carries_explicit_save_as_intent() {
+    use gridcraft_ui_egui::DownloadIntent;
+
+    let captured = Arc::new(Mutex::new(Vec::<(String, DownloadIntent)>::new()));
+    let cap = captured.clone();
+    let services = Services {
+        open_async: Some(Box::new(|| {})),
+        download_with_intent: Some(Box::new(move |name, _bytes, intent| {
+            cap.lock().unwrap().push((name.to_string(), intent));
+        })),
+        ..Default::default()
+    };
+    let mut h = harness(services);
+
+    // 1. Open/simulate an existing workbook and edit a cell so journal.last() is "cell.set", NOT "file.saveAs"
+    h.state_mut()
+        .run("cell.set", serde_json::json!({"cell": "A1", "input": "Edited Value"}))
+        .unwrap();
+    h.run_steps(2);
+    assert_eq!(
+        h.state().session.journal.last().map(|(c, _)| c.as_str()),
+        Some("cell.set")
+    );
+
+    // 2. Real UI path: File -> Save As -> Download (.xlsx) via Backstage
+    choose(&mut h, "Save As");
+    assert_eq!(page(&h), Some("saveAs"));
+    click(&mut h, "Download (.xlsx)");
+
+    // 3. Ordinary Save via real toolbar "Save" button (for contrast)
+    h.state_mut()
+        .run("cell.set", serde_json::json!({"cell": "A2", "input": "Second Edit"}))
+        .unwrap();
+    h.run_steps(2);
+    let undo_rect = h
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Undo")
+        .rect();
+    let save_btn_pos = egui::pos2(undo_rect.left() - 18.0, undo_rect.center().y);
+    h.input_mut().events.push(egui::Event::PointerMoved(save_btn_pos));
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: save_btn_pos,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: save_btn_pos,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+
+    // 4. Explicit Save As via F12 (file.saveAs)
+    h.key_press(egui::Key::F12);
+    h.run_steps(3);
+
+    // 5. Export via Backstage Export -> CSV
+    choose(&mut h, "Export");
+    click(&mut h, "CSV (Comma delimited)");
+
+    let calls = captured.lock().unwrap();
+    assert_eq!(calls.len(), 4, "Expected 4 hosted downloads/exports, got: {calls:?}");
+    assert_eq!(
+        calls[0].1,
+        DownloadIntent::SaveAs,
+        "Backstage File -> Save As -> Download (.xlsx) MUST carry DownloadIntent::SaveAs even when journal.last() is cell.set"
+    );
+    assert_eq!(
+        calls[1].1,
+        DownloadIntent::Save,
+        "Toolbar Save MUST carry DownloadIntent::Save"
+    );
+    assert_eq!(
+        calls[2].1,
+        DownloadIntent::SaveAs,
+        "F12 / file.saveAs MUST carry DownloadIntent::SaveAs"
+    );
+    assert_eq!(
+        calls[3].1,
+        DownloadIntent::Export,
+        "Backstage Export CSV MUST carry DownloadIntent::Export"
+    );
+}
+

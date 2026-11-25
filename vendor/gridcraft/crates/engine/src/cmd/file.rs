@@ -110,7 +110,7 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
     let path = match str_param(p, "path").map(str::to_string).or_else(|| s.active().and_then(|d| d.path.clone())) {
         Some(p) => p,
         None => {
-            s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({})));
+            s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({"saveAs": false})));
             return ok();
         }
     };
@@ -147,7 +147,7 @@ fn save(s: &mut Session, p: &Json) -> Result<Json> {
 
 fn save_as(s: &mut Session, p: &Json) -> Result<Json> {
     if str_param(p, "path").is_none() {
-        s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({})));
+        s.ui_requests.push(crate::UiRequest::Dialog("saveAs".into(), json!({"saveAs": true})));
         return ok();
     }
     save(s, p)

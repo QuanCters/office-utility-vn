@@ -4,7 +4,19 @@ type PickSave = Box<dyn Fn(&str) -> Option<String>>;
 type OpenUrl = Box<dyn Fn(&str)>;
 type CopyHtml = Box<dyn FnMut(&str, &str) -> Result<(), String>>;
 type Download = Box<dyn Fn(&str, &[u8])>;
+type DownloadWithIntent = Box<dyn Fn(&str, &[u8], DownloadIntent)>;
 type PrintPdf = Box<dyn Fn(&[u8])>;
+
+/// Explicit persistence intent carried with a hosted/web download request (P1 #4690963440).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DownloadIntent {
+    /// Ordinary Save on the active workbook (`file.save`).
+    Save,
+    /// Explicit Save As requiring a new destination (`file.saveAs` or Backstage Save As).
+    SaveAs,
+    /// Non-workbook export (PDF, CSV, HTML) leaving the active workbook identity unchanged.
+    Export,
+}
 
 /// Host services the platform shell provides (file pickers, opening URLs).
 #[derive(Default)]
@@ -37,6 +49,8 @@ pub struct Services {
     pub paste_image: Option<Box<dyn FnMut() -> Option<image::RgbaImage>>>,
     /// Web: deliver a file to the user (name, bytes).
     pub download: Option<Download>,
+    /// Hosted/Web: deliver a file together with its explicit Save / SaveAs / Export intent (P1 #4690963440).
+    pub download_with_intent: Option<DownloadWithIntent>,
     /// Web: start an asynchronous file pick; the bytes arrive later in `inbox`.
     pub open_async: Option<Box<dyn Fn()>>,
     /// Files delivered asynchronously (name, bytes), opened on the next frame.
@@ -52,6 +66,24 @@ pub struct Services {
     pub close_confirmed: Option<Box<dyn Fn()>>,
     /// Web: callback signaled when a quit/close sequence is cancelled by the user.
     pub close_cancelled: Option<Box<dyn Fn()>>,
+}
+
+impl Services {
+    pub fn has_download(&self) -> bool {
+        self.download_with_intent.is_some() || self.download.is_some()
+    }
+
+    pub fn deliver_download(&self, name: &str, bytes: &[u8], intent: DownloadIntent) -> bool {
+        if let Some(dl) = &self.download_with_intent {
+            dl(name, bytes, intent);
+            true
+        } else if let Some(dl) = &self.download {
+            dl(name, bytes);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Shared queue of files read asynchronously (browser file picker, drag and drop).

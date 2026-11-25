@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use craft_web_host::web::{FileData, Host, Message};
 use gridcraft_engine::model::Workbook;
-use gridcraft_ui_egui::{Inbox, Services, SheetApp};
+use gridcraft_ui_egui::{DownloadIntent, Inbox, Services, SheetApp};
 use wasm_bindgen::JsCast as _;
 use web_sys::js_sys;
 
@@ -79,7 +79,7 @@ pub struct Bridge {
     pending_saves: Rc<RefCell<HashMap<String, PendingSave>>>,
     confirmed_saved_acks: Rc<RefCell<Vec<ConfirmedSavedAck>>>,
     last_saved_revisions: Rc<RefCell<HashMap<u64, u64>>>,
-    pending_downloads: Rc<RefCell<Vec<(String, Vec<u8>)>>>,
+    pending_downloads: Rc<RefCell<Vec<(String, Vec<u8>, DownloadIntent)>>>,
     current_open_id: Rc<RefCell<Option<String>>>,
     failed_save_happened: Rc<Cell<bool>>,
     pending_save_intents: Rc<RefCell<Vec<HostSaveIntent>>>,
@@ -122,9 +122,22 @@ impl Bridge {
     pub fn connect(&self, services: &mut Services, inbox: Inbox, ctx: egui::Context) {
         self.listen(inbox, ctx);
         let bridge = self.clone();
+        services.download_with_intent = Some(Box::new(move |name: &str, bytes: &[u8], intent: DownloadIntent| {
+            if bridge.confirmed {
+                bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec(), intent));
+            } else if is_workbook(name) && intent != DownloadIntent::Export {
+                if let Err(e) = bridge.post_save(name, bytes) {
+                    log::error!("couldn't hand {name} to the page: {e}");
+                }
+            } else if let Err(e) = bridge.post_export(name, bytes) {
+                log::error!("couldn't hand export {name} to the page: {e}");
+            }
+        }));
+        let bridge = self.clone();
         services.download = Some(Box::new(move |name: &str, bytes: &[u8]| {
             if bridge.confirmed {
-                bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec()));
+                let fallback_intent = if is_workbook(name) { DownloadIntent::Save } else { DownloadIntent::Export };
+                bridge.pending_downloads.borrow_mut().push((name.to_string(), bytes.to_vec(), fallback_intent));
             } else if is_workbook(name) {
                 if let Err(e) = bridge.post_save(name, bytes) {
                     log::error!("couldn't hand {name} to the page: {e}");
@@ -307,9 +320,9 @@ impl Bridge {
 
         // --- Confirmed save mode ---
         let downloads = std::mem::take(&mut *self.pending_downloads.borrow_mut());
-        for (name, downloaded_bytes) in downloads {
+        for (name, downloaded_bytes, dl_intent) in downloads {
             let is_wb = is_workbook(&name);
-            if is_wb && let Some(doc) = app.session.active() {
+            if is_wb && dl_intent != DownloadIntent::Export && let Some(doc) = app.session.active() {
                 let id_num = self.next_save_id.get();
                 self.next_save_id.set(id_num + 1);
                 let id = format!("save-{}-{}", doc.uid, id_num);
@@ -320,8 +333,7 @@ impl Bridge {
                 // được tuần tự hóa trực tiếp từ chính snapshot được chụp.
                 // TUYỆT ĐỐI KHÔNG fallback về downloaded_bytes nếu thất bại, vì downloaded_bytes
                 // có thể là phiên bản cũ, vi phạm tính đồng nhất snapshot/bytes.
-                let is_save_as = app.dialog.as_ref().is_some_and(|d| d.name == "saveAs")
-                    || app.session.journal.last().is_some_and(|(cmd, _)| cmd == "file.saveAs");
+                let is_save_as = dl_intent == DownloadIntent::SaveAs;
                 let bytes = match gridcraft_engine::io::save_bytes(&snapshot, &name) {
                     Ok(b) => b,
                     Err(e) => {
