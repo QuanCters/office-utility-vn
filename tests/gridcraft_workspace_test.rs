@@ -3213,3 +3213,234 @@ fn test_p1_4690659358_unmanaged_workbook_pending_save_and_window_close_guard() {
     );
     assert!(app_state.has_unsaved_work_or_running_task());
 }
+
+#[test]
+fn test_p1_4691834725_draft_created_while_save_and_exit_pending_prevents_close() {
+    use leptos::prelude::StoredValue;
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        DevSaveResult, GridCraftSaveRequestContext, handle_gridcraft_save_outcome,
+        sync_coordinator_on_dirty_notification,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::coordinator::{DocumentState, HostDocumentCoordinator};
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-draft-during-save".into(),
+        file_path: "/data/draft_race.xlsx".into(),
+        file_name: "draft_race.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 2,
+        iframe_doc_uid: Some(960),
+    });
+    state.set_document_session(
+        Some("doc-draft-during-save".into()),
+        Some("/data/draft_race.xlsx".into()),
+        1,
+    );
+
+    let mut coord = HostDocumentCoordinator::new();
+    coord.on_document_opened("doc-draft-during-save", "/data/draft_race.xlsx", "fp-0");
+    coord.on_user_edit();
+    let payload = b"PK\x03\x04_SAVING_REV2".to_vec();
+    let _ = coord.on_save_requested(
+        1,
+        "doc-draft-during-save",
+        "req-draft-race",
+        payload.clone(),
+        1000,
+    );
+    assert!(matches!(coord.state(), DocumentState::Saving { .. }));
+
+    close_mgr.handle_native_close_requested("close-draft-race".into(), true, "draft_race.xlsx");
+    close_mgr.is_saving.set(true);
+    state
+        .pending_close_request_id
+        .set(Some("close-draft-race".into()));
+    state.register_pending_save_request("req-draft-race", Some("doc-draft-during-save"));
+
+    // While native persistence is pending, user starts typing a new cell value WITHOUT pressing Enter:
+    // iframe reports dirty=true, has_draft=true, while committed revision stays 2!
+    let mut adv = Vec::new();
+    if let Some((doc_id, true)) =
+        state.sync_workbook_state_tracked(Some("draft_race.xlsx"), Some(960), true, Some(2), true)
+    {
+        adv.push(doc_id);
+    }
+    sync_coordinator_on_dirty_notification(
+        &mut coord,
+        true,
+        true,
+        &adv,
+        Some("doc-draft-during-save"),
+        Some("/data/draft_race.xlsx"),
+    );
+
+    let coord_sv = StoredValue::new(coord);
+    let ctx = GridCraftSaveRequestContext {
+        request_id: "req-draft-race".into(),
+        operation_intent: SaveOperationIntent::Save,
+        originating_document_id: Some("doc-draft-during-save".into()),
+        originating_path: Some("/data/draft_race.xlsx".into()),
+        originating_name: "draft_race.xlsx".into(),
+        iframe_doc_uid: Some(960),
+        snapshot_edit_revision: 2,
+        base_committed_revision: 1,
+        session_generation: 1,
+    };
+
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coord_sv),
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/draft_race.xlsx".into(),
+            new_doc_id: "doc-draft-during-save".into(),
+            committed_rev: 2,
+        }),
+        &ctx,
+        &payload,
+        Some(close_mgr),
+        Some(app_state.clone()),
+    );
+
+    // P1 #4691834725 invariant: uncommitted draft typed during save MUST block window close and keep session dirty!
+    assert!(
+        !close_mgr.is_authorized.get_untracked(),
+        "Window MUST NOT close while an uncommitted cell draft typed during persistence exists!"
+    );
+    assert!(close_mgr.is_cancelled.get_untracked());
+    assert!(state.is_dirty.get_untracked());
+    assert!(
+        state
+            .get_session_for_document("doc-draft-during-save")
+            .expect("session")
+            .is_dirty
+    );
+    assert!(
+        coord_sv.with_value(|c| c.is_dirty()),
+        "Coordinator MUST remain Dirty when an uncommitted draft was typed during save!"
+    );
+}
+
+#[test]
+fn test_p2_4691834732_snapshot_metadata_revision_overrides_stale_cached_edit_revision() {
+    use leptos::prelude::StoredValue;
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        DevSaveResult, GridCraftSaveRequestContext,
+        capture_save_snapshot_revision_and_sync_baseline, handle_gridcraft_save_outcome,
+        sync_coordinator_on_dirty_notification,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::coordinator::{DocumentState, HostDocumentCoordinator};
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+
+    // Opened workbook cached at edit_revision = 5, currently holding an uncommitted cell draft
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-meta-rev".into(),
+        file_path: "/data/meta_rev.xlsx".into(),
+        file_name: "meta_rev.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 5,
+        iframe_doc_uid: Some(970),
+    });
+    state.set_document_session(
+        Some("doc-meta-rev".into()),
+        Some("/data/meta_rev.xlsx".into()),
+        1,
+    );
+
+    let mut coord = HostDocumentCoordinator::new();
+    coord.on_document_opened("doc-meta-rev", "/data/meta_rev.xlsx", "fp-0");
+    coord.on_user_edit();
+    let payload = b"PK\x03\x04_COMMITTED_DRAFT_REV6".to_vec();
+    let _ = coord.on_save_requested(1, "doc-meta-rev", "req-meta-6", payload.clone(), 1000);
+    assert!(matches!(coord.state(), DocumentState::Saving { .. }));
+
+    // Save & Exit commits the draft (bumping iframe doc.revision 5 -> 6) and sends save_metadata with rev=6
+    let snapshot_edit_rev = capture_save_snapshot_revision_and_sync_baseline(
+        &state,
+        Some(6),
+        Some(5),
+        Some(970),
+        Some("doc-meta-rev"),
+        "doc-meta-rev",
+    );
+    assert_eq!(
+        snapshot_edit_rev, 6,
+        "Captured snapshot_edit_revision MUST use save_metadata rev (6) rather than stale cached host rev (5)"
+    );
+
+    // Next message from the same Bridge::sync tick is gridcraft:dirty with revision=6, has_draft=false
+    let mut adv = Vec::new();
+    if let Some((doc_id, true)) =
+        state.sync_workbook_state_tracked(Some("meta_rev.xlsx"), Some(970), true, Some(6), false)
+    {
+        adv.push(doc_id);
+    }
+    assert!(
+        adv.is_empty(),
+        "Initial dirty snapshot matching committed save_metadata rev=6 MUST NOT look like a post-save edit"
+    );
+    sync_coordinator_on_dirty_notification(
+        &mut coord,
+        true,
+        true,
+        &adv,
+        Some("doc-meta-rev"),
+        Some("/data/meta_rev.xlsx"),
+    );
+
+    close_mgr.handle_native_close_requested("close-meta-6".into(), true, "meta_rev.xlsx");
+    close_mgr.is_saving.set(true);
+    state
+        .pending_close_request_id
+        .set(Some("close-meta-6".into()));
+    state.register_pending_save_request("req-meta-6", Some("doc-meta-rev"));
+
+    let coord_sv = StoredValue::new(coord);
+    let ctx = GridCraftSaveRequestContext {
+        request_id: "req-meta-6".into(),
+        operation_intent: SaveOperationIntent::Save,
+        originating_document_id: Some("doc-meta-rev".into()),
+        originating_path: Some("/data/meta_rev.xlsx".into()),
+        originating_name: "meta_rev.xlsx".into(),
+        iframe_doc_uid: Some(970),
+        snapshot_edit_revision: snapshot_edit_rev,
+        base_committed_revision: 1,
+        session_generation: 1,
+    };
+
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coord_sv),
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/meta_rev.xlsx".into(),
+            new_doc_id: "doc-meta-rev".into(),
+            committed_rev: 2,
+        }),
+        &ctx,
+        &payload,
+        Some(close_mgr),
+        Some(app_state.clone()),
+    );
+
+    assert!(
+        close_mgr.is_authorized.get_untracked(),
+        "Save & Exit persisting draft at rev=6 MUST authorize close cleanly without false intervening-edit cancellation"
+    );
+    assert!(!state.is_dirty.get_untracked());
+}

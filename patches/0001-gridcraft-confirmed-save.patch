@@ -267,7 +267,7 @@
                                  }
                              }
                              app.session.set_active(cur);
-@@ -319,16 +449,118 @@
+@@ -319,16 +449,131 @@
                      });
                  } else {
                      log::warn!(
@@ -289,14 +289,17 @@
 +
 +    fn post_dirty_state(&self, app: &SheetApp) {
 +        let active_uid = app.session.active().map(|d| d.uid);
-+        let doc_is_dirty_or_draft = |doc_uid: u64, base_dirty: bool| -> bool {
-+            // P1 #4690386917: Bao gồm draft chưa nhấn Enter trong `app.editor` / `text_box_editor` để Alt+F4 không bỏ qua dữ liệu đang gõ
++        let doc_has_draft = |doc_uid: u64| -> bool {
++            // P1 #4690386917 & #4691834725: Bao gồm draft chưa nhấn Enter trong `app.editor` / `text_box_editor` để Alt+F4 không bỏ qua dữ liệu đang gõ
 +            let cell_draft_changed = app
 +                .editor
 +                .as_ref()
 +                .is_some_and(|ed| ed.doc == doc_uid && ed.original.as_deref() != Some(ed.text.as_str()));
 +            let text_box_draft = app.text_box_editor.is_some() && active_uid == Some(doc_uid);
-+            base_dirty || cell_draft_changed || text_box_draft
++            cell_draft_changed || text_box_draft
++        };
++        let doc_is_dirty_or_draft = |doc_uid: u64, base_dirty: bool| -> bool {
++            base_dirty || doc_has_draft(doc_uid)
 +        };
 +        let any_dirty = app
 +            .session
@@ -333,6 +336,11 @@
 +                );
 +                let _ = js_sys::Reflect::set(
 +                    &obj,
++                    &wasm_bindgen::JsValue::from_str("has_draft"),
++                    &wasm_bindgen::JsValue::from_bool(doc_has_draft(active_doc.uid)),
++                );
++                let _ = js_sys::Reflect::set(
++                    &obj,
 +                    &wasm_bindgen::JsValue::from_str("doc_uid"),
 +                    &wasm_bindgen::JsValue::from_f64(active_doc.uid as f64),
 +                );
@@ -363,6 +371,11 @@
 +                );
 +                let _ = js_sys::Reflect::set(
 +                    &doc_obj,
++                    &wasm_bindgen::JsValue::from_str("has_draft"),
++                    &wasm_bindgen::JsValue::from_bool(doc_has_draft(doc.uid)),
++                );
++                let _ = js_sys::Reflect::set(
++                    &doc_obj,
 +                    &wasm_bindgen::JsValue::from_str("doc_uid"),
 +                    &wasm_bindgen::JsValue::from_f64(doc.uid as f64),
 +                );
@@ -389,7 +402,7 @@
      }
  
      fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
-@@ -361,7 +593,8 @@
+@@ -361,7 +606,8 @@
  
      fn listen(&self, inbox: Inbox, ctx: egui::Context) {
          let confirmed = self.confirmed;
@@ -399,7 +412,7 @@
          let pending_saves_for_fail = self.pending_saves.clone();
          let app_ctx_for_open = ctx.clone();
          let app_ctx_for_saved = ctx.clone();
-@@ -373,7 +606,15 @@
+@@ -373,7 +619,15 @@
              }
              Message::Saved { id } => {
                  if confirmed {
@@ -416,7 +429,7 @@
                      app_ctx_for_saved.request_repaint();
                  }
              }
-@@ -428,6 +669,35 @@
+@@ -428,6 +682,35 @@
                                  save_as,
                              });
                              app_ctx_for_intents.request_repaint();

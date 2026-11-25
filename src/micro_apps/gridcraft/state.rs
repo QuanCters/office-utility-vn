@@ -38,6 +38,8 @@ pub struct GridCraftState {
     pub pending_save_requests: RwSignal<std::collections::HashMap<String, Option<String>>>,
     /// Trạng thái dirty & edit revision cho các workbook live trong iframe chưa có phiên native (P1 #4689114183)
     pub unmanaged_dirty_uids: RwSignal<std::collections::HashMap<u64, (bool, u64)>>,
+    /// Tập iframe_doc_uid đang có draft ô/text-box chưa commit (P1 #4691834725), tách biệt với committed revision
+    pub draft_uids: RwSignal<std::collections::HashSet<u64>>,
 }
 
 /// Dữ liệu phiên làm việc của một workbook độc lập (Stage 4C-1 Workbook Session Identity)
@@ -92,6 +94,7 @@ impl GridCraftState {
             document_sessions: RwSignal::new(std::collections::HashMap::new()),
             pending_save_requests: RwSignal::new(std::collections::HashMap::new()),
             unmanaged_dirty_uids: RwSignal::new(std::collections::HashMap::new()),
+            draft_uids: RwSignal::new(std::collections::HashSet::new()),
         }
     }
 
@@ -286,6 +289,14 @@ impl GridCraftState {
                 unmanaged_modified = true;
             }
         });
+        let mut draft_modified = false;
+        self.draft_uids.update(|s| {
+            let before = s.len();
+            s.retain(|uid| live_uids.contains(uid));
+            if s.len() != before {
+                draft_modified = true;
+            }
+        });
 
         if modified {
             self.document_sessions.set(sessions);
@@ -296,7 +307,7 @@ impl GridCraftState {
                 self.active_revision.set(0);
             }
             self.recompute_aggregate_dirty();
-        } else if unmanaged_modified {
+        } else if unmanaged_modified || draft_modified {
             self.recompute_aggregate_dirty();
         }
     }
@@ -309,7 +320,7 @@ impl GridCraftState {
         dirty: bool,
         revision: Option<u64>,
     ) {
-        let _ = self.sync_workbook_dirty_and_revision_tracked(name, doc_uid, dirty, revision);
+        let _ = self.sync_workbook_state_tracked(name, doc_uid, dirty, revision, false);
     }
 
     /// Đồng bộ trạng thái dirty/revision cho workbook và trả về `(document_id, revision_advanced)` nếu khớp phiên native (P2 #4690136471)
@@ -320,6 +331,27 @@ impl GridCraftState {
         dirty: bool,
         revision: Option<u64>,
     ) -> Option<(String, bool)> {
+        self.sync_workbook_state_tracked(name, doc_uid, dirty, revision, false)
+    }
+
+    /// Đồng bộ đầy đủ trạng thái dirty, committed revision và cờ draft chưa commit (P1 #4691834725)
+    pub fn sync_workbook_state_tracked(
+        &self,
+        name: Option<&str>,
+        doc_uid: Option<u64>,
+        dirty: bool,
+        revision: Option<u64>,
+        has_draft: bool,
+    ) -> Option<(String, bool)> {
+        if let Some(uid) = doc_uid {
+            self.draft_uids.update(|set| {
+                if has_draft {
+                    set.insert(uid);
+                } else {
+                    set.remove(&uid);
+                }
+            });
+        }
         let mut sessions = self.document_sessions.get_untracked();
         let mut matched_id = None;
         let mut revision_advanced = false;
@@ -519,6 +551,63 @@ impl GridCraftState {
             .set(std::collections::HashMap::new());
         self.unmanaged_dirty_uids
             .set(std::collections::HashMap::new());
+        self.draft_uids.set(std::collections::HashSet::new());
+    }
+
+    /// Kiểm tra xem workbook nguồn (theo document_id hoặc iframe_doc_uid) có đang giữ draft chưa commit hay không (P1 #4691834725)
+    pub fn has_draft_for_workbook(&self, document_id: Option<&str>, doc_uid: Option<u64>) -> bool {
+        let resolved_uid = doc_uid.or_else(|| {
+            document_id.and_then(|id| {
+                self.document_sessions
+                    .with_untracked(|m| m.get(id).and_then(|s| s.iframe_doc_uid))
+            })
+        });
+        resolved_uid.is_some_and(|uid| self.draft_uids.with_untracked(|set| set.contains(&uid)))
+    }
+
+    /// Đồng bộ mốc edit_revision của phiên/unmanaged UID với snapshot đã serialize khi chấp nhận lưu (P2 #4691834732)
+    pub fn sync_snapshot_revision_baseline(
+        &self,
+        document_id: Option<&str>,
+        doc_uid: Option<u64>,
+        snapshot_edit_rev: u64,
+    ) {
+        let mut sessions = self.document_sessions.get_untracked();
+        let mut matched_uid = doc_uid;
+        let mut updated = false;
+        if let Some(doc_id) = document_id {
+            if let Some(sess) = sessions.get_mut(doc_id) {
+                sess.edit_revision = sess.edit_revision.max(snapshot_edit_rev);
+                matched_uid = matched_uid.or(sess.iframe_doc_uid);
+                updated = true;
+            }
+        }
+        if !updated {
+            if let Some(uid) = matched_uid {
+                for sess in sessions.values_mut() {
+                    if sess.iframe_doc_uid == Some(uid) {
+                        sess.edit_revision = sess.edit_revision.max(snapshot_edit_rev);
+                        updated = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if updated {
+            self.document_sessions.set(sessions);
+        } else if let Some(uid) = matched_uid {
+            self.unmanaged_dirty_uids.update(|m| {
+                if let Some((dirty, rev)) = m.get_mut(&uid) {
+                    *rev = (*rev).max(snapshot_edit_rev);
+                    let _ = dirty;
+                }
+            });
+        }
+        if let Some(uid) = matched_uid {
+            self.draft_uids.update(|set| {
+                set.remove(&uid);
+            });
+        }
     }
 
     /// Lấy edit revision của một unmanaged UID live trong iframe (nếu có)
@@ -534,7 +623,9 @@ impl GridCraftState {
         let any_unmanaged_dirty = self
             .unmanaged_dirty_uids
             .with_untracked(|m| m.values().any(|&(dirty, _)| dirty));
-        self.is_dirty.set(any_session_dirty || any_unmanaged_dirty);
+        let any_draft = self.draft_uids.with_untracked(|set| !set.is_empty());
+        self.is_dirty
+            .set(any_session_dirty || any_unmanaged_dirty || any_draft);
     }
 
     /// Cập nhật phiên tài liệu đã mở hoặc lưu

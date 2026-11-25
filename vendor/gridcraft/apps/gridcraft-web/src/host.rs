@@ -464,14 +464,17 @@ impl Bridge {
 
     fn post_dirty_state(&self, app: &SheetApp) {
         let active_uid = app.session.active().map(|d| d.uid);
-        let doc_is_dirty_or_draft = |doc_uid: u64, base_dirty: bool| -> bool {
-            // P1 #4690386917: Bao gồm draft chưa nhấn Enter trong `app.editor` / `text_box_editor` để Alt+F4 không bỏ qua dữ liệu đang gõ
+        let doc_has_draft = |doc_uid: u64| -> bool {
+            // P1 #4690386917 & #4691834725: Bao gồm draft chưa nhấn Enter trong `app.editor` / `text_box_editor` để Alt+F4 không bỏ qua dữ liệu đang gõ
             let cell_draft_changed = app
                 .editor
                 .as_ref()
                 .is_some_and(|ed| ed.doc == doc_uid && ed.original.as_deref() != Some(ed.text.as_str()));
             let text_box_draft = app.text_box_editor.is_some() && active_uid == Some(doc_uid);
-            base_dirty || cell_draft_changed || text_box_draft
+            cell_draft_changed || text_box_draft
+        };
+        let doc_is_dirty_or_draft = |doc_uid: u64, base_dirty: bool| -> bool {
+            base_dirty || doc_has_draft(doc_uid)
         };
         let any_dirty = app
             .session
@@ -508,6 +511,11 @@ impl Bridge {
                 );
                 let _ = js_sys::Reflect::set(
                     &obj,
+                    &wasm_bindgen::JsValue::from_str("has_draft"),
+                    &wasm_bindgen::JsValue::from_bool(doc_has_draft(active_doc.uid)),
+                );
+                let _ = js_sys::Reflect::set(
+                    &obj,
                     &wasm_bindgen::JsValue::from_str("doc_uid"),
                     &wasm_bindgen::JsValue::from_f64(active_doc.uid as f64),
                 );
@@ -535,6 +543,11 @@ impl Bridge {
                     &doc_obj,
                     &wasm_bindgen::JsValue::from_str("dirty"),
                     &wasm_bindgen::JsValue::from_bool(doc_is_dirty_or_draft(doc.uid, doc.is_dirty())),
+                );
+                let _ = js_sys::Reflect::set(
+                    &doc_obj,
+                    &wasm_bindgen::JsValue::from_str("has_draft"),
+                    &wasm_bindgen::JsValue::from_bool(doc_has_draft(doc.uid)),
                 );
                 let _ = js_sys::Reflect::set(
                     &doc_obj,

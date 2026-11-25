@@ -57,6 +57,29 @@ pub struct GridCraftSaveRequestContext {
     pub session_generation: u64,
 }
 
+/// Chụp snapshot_edit_revision khi chấp nhận yêu cầu lưu và đồng bộ mốc revision cho phiên (P2 #4691834732)
+pub fn capture_save_snapshot_revision_and_sync_baseline(
+    s: &GridCraftState,
+    meta_rev: Option<u64>,
+    resolved_edit_rev: Option<u64>,
+    resolved_uid: Option<u64>,
+    _target_doc_id: Option<&str>,
+    effective_doc_id: &str,
+) -> u64 {
+    // P2 #4691834732: Ưu tiên meta_rev (revision thực tế sau khi draft được commit bởi save_metadata)
+    // thay vì resolved_edit_rev (revision cache cũ của host tại thời điểm đăng ký phiên).
+    let snapshot_rev = meta_rev
+        .or(resolved_edit_rev)
+        .or_else(|| resolved_uid.and_then(|uid| s.get_unmanaged_edit_revision(uid)))
+        .unwrap_or_else(|| s.get_edit_revision(effective_doc_id));
+
+    // Đồng bộ baseline edit_revision của phiên với snapshot đã chụp, tránh dirty notification
+    // ngay sau khi lưu (revision = snapshot_rev) bị hiểu nhầm là edit mới.
+    s.sync_snapshot_revision_baseline(_target_doc_id, resolved_uid, snapshot_rev);
+
+    snapshot_rev
+}
+
 /// Đồng bộ trạng thái coordinator dựa trên thông báo dirty/revision thực tế (P2 #4690136471).
 /// Khi đang `DocumentState::Saving`, chỉ kích hoạt `on_user_edit()` (đặt `dirty_during_save = true`)
 /// nếu revision của chính workbook đang lưu thực sự tăng thêm — tuyệt đối không kích hoạt theo snapshot lặp định kỳ!
@@ -246,6 +269,11 @@ pub fn handle_gridcraft_save_outcome(
                 .to_string();
 
             let live_edit_rev = lookup_origin_live_edit_rev();
+            // P1 #4691834725: Uncommitted cell drafts (has_draft=true in dirty notification) typed
+            // during save MUST keep coordinator & session dirty and block window close even when
+            // committed revision hasn't advanced yet.
+            let has_draft =
+                s.has_draft_for_workbook(originating_doc_id.as_deref(), originating_uid);
             let mut coord_dirty_for_origin = false;
 
             if let Some(coord) = coordinator {
@@ -261,14 +289,16 @@ pub fn handle_gridcraft_save_outcome(
                         coord_dirty_for_origin = c.is_dirty();
                         // P1 #4679604052: Đồng bộ hóa Coordinator với session và đường dẫn mới sau Save As
                         c.on_document_opened(&new_doc_id, &dest_path, &fp);
-                        if coord_dirty_for_origin || live_edit_rev > snapshot_edit_rev {
+                        if has_draft || coord_dirty_for_origin || live_edit_rev > snapshot_edit_rev
+                        {
                             c.on_user_edit();
                         }
                     }
                 });
             }
 
-            let is_still_dirty = coord_dirty_for_origin || (live_edit_rev > snapshot_edit_rev);
+            let is_still_dirty =
+                has_draft || coord_dirty_for_origin || (live_edit_rev > snapshot_edit_rev);
 
             let cur_active_id = s.active_document_id.get_untracked();
             let should_update_active_signals = cur_active_id.is_none()
@@ -626,16 +656,26 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                             .ok()
                                             .and_then(|v| v.as_f64())
                                             .map(|v| v as u64);
+                                            // P1 #4691834725: Đọc cờ has_draft từ từng document object
+                                            // để theo dõi draft chưa commit riêng biệt với revision
+                                            let has_draft = js_sys::Reflect::get(
+                                                &obj,
+                                                &wasm_bindgen::JsValue::from_str("has_draft"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false);
 
                                             if let Some(uid_val) = u {
                                                 live_uids.push(uid_val);
                                             }
                                             if let Some((matched_doc_id, true)) = s
-                                                .sync_workbook_dirty_and_revision_tracked(
+                                                .sync_workbook_state_tracked(
                                                     n.as_deref(),
                                                     u,
                                                     d,
                                                     r,
+                                                    has_draft,
                                                 )
                                             {
                                                 advanced_doc_ids.push(matched_doc_id);
@@ -995,14 +1035,16 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         }
                                     }
 
-                                    // Finding 2 & P1 #4684931088: Chụp ngữ cảnh yêu cầu lưu bất biến tại thời điểm chấp nhận yêu cầu
-                                    let snapshot_edit_rev = resolved_edit_rev
-                                        .or_else(|| meta_pair.map(|(_, rev)| rev))
-                                        .or_else(|| {
-                                            resolved_uid
-                                                .and_then(|uid| s.get_unmanaged_edit_revision(uid))
-                                        })
-                                        .unwrap_or_else(|| s.get_edit_revision(effective_doc_id));
+                                    // Finding 2, P1 #4684931088 & P2 #4691834732: Chụp ngữ cảnh yêu cầu lưu bất biến tại thời điểm chấp nhận yêu cầu
+                                    let snapshot_edit_rev =
+                                        capture_save_snapshot_revision_and_sync_baseline(
+                                            &s,
+                                            meta_pair.map(|(_, rev)| rev),
+                                            resolved_edit_rev,
+                                            resolved_uid,
+                                            target_doc_id.as_deref(),
+                                            effective_doc_id,
+                                        );
                                     let effective_intent = if requires_format_safe_save_as(
                                         intent,
                                         target_path.as_deref(),
