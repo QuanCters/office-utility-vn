@@ -642,17 +642,47 @@ pub fn apply_save_outcome(
             message,
         }) => {
             let target_doc_id = new_document_id.or_else(|| ctx.originating_document_id.clone());
-            let is_still_active_target = s.active_file_path().as_deref()
-                == ctx.originating_path.as_deref()
-                || s.active_file_path().as_deref() == Some(&dest_path);
+            let is_save_as =
+                ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::SaveAs;
+            let is_originating_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => s.active_file_path().is_none(),
+            };
+            let is_still_active_target =
+                is_originating_active || s.active_file_path().as_deref() == Some(&dest_path);
 
-            // Cập nhật phiên và revision lên committed_revision để ngăn chặn stale revision write,
-            // nhưng BẮT BUỘC giữ is_dirty = true
+            let live_originating_gen = if is_originating_active {
+                s.edit_generation.get_untracked()
+            } else if let Some(ref p) = ctx.originating_path {
+                s.get_document_session(p)
+                    .map(|sess| sess.edit_generation)
+                    .unwrap_or(ctx.snapshot_edit_generation)
+            } else {
+                ctx.snapshot_edit_generation
+            };
+            let dest_gen = live_originating_gen.max(ctx.snapshot_edit_generation);
+            let is_cross_file_save_as = (is_save_as || ctx.originating_path.is_none())
+                && ctx
+                    .originating_path
+                    .as_deref()
+                    .map(|orig| orig != dest_path.as_str())
+                    .unwrap_or(false);
+
+            // P2 #4689901525: Rename sang dest_path đã diễn ra trên đĩa; đồng bộ phiên đích, path và canvas binding nhất quán
+            // để lần Save thường tiếp theo thử lại đúng cặp (dest_path, new_document_id, committed_revision), đồng thời BẮT BUỘC giữ is_dirty = true.
             let mut map = s.document_sessions.get_untracked();
+            if is_cross_file_save_as {
+                if let Some(ref orig_path) = ctx.originating_path {
+                    if let Some(orig_sess) = map.get_mut(orig_path) {
+                        orig_sess.is_dirty = false;
+                    }
+                }
+            }
             if let Some(sess) = map.get_mut(&dest_path) {
                 sess.document_id = target_doc_id.clone();
                 sess.revision = committed_revision;
                 sess.is_dirty = true;
+                sess.edit_generation = dest_gen;
             } else {
                 map.insert(
                     dest_path.clone(),
@@ -661,16 +691,41 @@ pub fn apply_save_outcome(
                         document_id: target_doc_id.clone(),
                         revision: committed_revision,
                         is_dirty: true,
-                        edit_generation: ctx.snapshot_edit_generation,
+                        edit_generation: dest_gen,
                     },
                 );
             }
             s.document_sessions.set(map);
 
+            if is_save_as || ctx.originating_path.is_none() {
+                if is_still_active_target {
+                    if is_cross_file_save_as && is_originating_active {
+                        s.has_unsaved_changes.set(false);
+                    }
+                    s.add_file(&dest_path);
+                } else {
+                    let cur_idx = s.active_file_index.get_untracked();
+                    s.loaded_files.update(|f| {
+                        if !f.iter().any(|p| p == &dest_path) {
+                            f.push(dest_path.clone());
+                        }
+                    });
+                    s.active_file_index.set(cur_idx);
+                }
+            }
+
             if is_still_active_target {
                 s.active_document_id.set(target_doc_id);
                 s.active_revision.set(committed_revision);
+                s.edit_generation.set(dest_gen);
                 s.has_unsaved_changes.set(true);
+                if let Some(inst_id) = s.active_canvas_instance_id.get_untracked() {
+                    if !s.mark_canvas_bound(inst_id, &dest_path) {
+                        s.invalidate_canvas_binding();
+                    }
+                } else {
+                    s.invalidate_canvas_binding();
+                }
             }
             s.status_message.set(format!(
                 "⚠️ Hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại (Ambiguous Commit): {message}"

@@ -2220,3 +2220,80 @@ fn test_p2_4689114193_reconcile_originating_pdf_session_after_clean_save_as() {
         "Window close guard must NOT remain blocked after clean Save As from A.pdf to B.pdf!"
     );
 }
+
+#[test]
+fn test_p2_4689901525_ambiguous_save_as_keeps_pdf_path_and_session_consistent() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{SaveOutcome, apply_save_outcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::{PdfStudioState, SaveRequestContext};
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::{NativeSaveGrantDto, validate_native_save_grant};
+
+    let state = PdfStudioState::new();
+    let inst_1 = state.begin_canvas_instance();
+    state.set_canvas_ready(true);
+
+    // 1. Mở A.pdf và chỉnh sửa
+    state.add_file("/docs/A.pdf");
+    state.register_document_session("/docs/A.pdf", Some("doc-A".into()), 1);
+    state.set_active_document_session(Some("doc-A".into()), 1);
+    assert!(state.mark_canvas_bound(inst_1, "/docs/A.pdf"));
+    state.set_unsaved_changes(true);
+
+    // 2. Save As A.pdf -> B.pdf bị AmbiguousCommit (rename xong nhưng parent dir sync fail)
+    let ctx_save_as = SaveRequestContext {
+        request_id: "req-pdf-ambig-saveas".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-A".into()),
+        originating_path: Some("/docs/A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-ab-ambig".into(),
+        authorized_dest_path: Some("/docs/B.pdf".into()),
+    };
+    state.register_pending_save("req-pdf-ambig-saveas".into(), ctx_save_as.clone());
+
+    apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::AmbiguousCommit {
+            dest_path: "/docs/B.pdf".into(),
+            committed_revision: 1,
+            new_document_id: Some("doc-B".into()),
+            message: "AmbiguousCommit: dir fsync failed".into(),
+        }),
+        &ctx_save_as,
+        b"%PDF-1.7 SAVED_AS_B",
+    );
+
+    // BẤT BIẾN P2 #4689901525: Active path, document_id, revision và canvas binding PHẢI đồng bộ sang B.pdf,
+    // đồng thời BẮT BUỘC giữ is_dirty = true để lần ordinary Save thử lại thành công!
+    assert_eq!(state.active_file_path().as_deref(), Some("/docs/B.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-B"));
+    assert_eq!(state.active_revision(), 1);
+    assert!(state.has_unsaved_changes());
+    assert!(state.is_path_bound_to_active_canvas("/docs/B.pdf"));
+    assert!(!state.get_document_session("/docs/A.pdf").unwrap().is_dirty);
+
+    // Mô phỏng lần Ordinary Save tiếp theo trên state hiện hành: cặp (active_file_path, active_document_id, active_revision + 1)
+    // PHẢI khớp 100% với grant cho B.pdf ở revision 2!
+    let next_expected_rev = state.active_revision() + 1;
+    let retry_grant = NativeSaveGrantDto {
+        grant_id: "grant-retry-b".into(),
+        document_id: "doc-B".into(),
+        app_instance_id: "pdf-studio-instance".into(),
+        session_generation: 1,
+        authorized_dest_path: "/docs/B.pdf".into(),
+        expected_revision: next_expected_rev,
+        request_id: "req-retry-b".into(),
+    };
+    let retry_ctx = office_utility_vn_ui::platform::SaveRequestContext {
+        document_id: state.active_document_id().unwrap(),
+        app_instance_id: "pdf-studio-instance".into(),
+        session_generation: 1,
+        authorized_dest_path: state.active_file_path(),
+        expected_revision: next_expected_rev,
+        request_id: "req-retry-b".into(),
+    };
+    validate_native_save_grant(&retry_grant, &retry_ctx)
+        .expect("Ordinary Save retry after ambiguous Save As MUST match dest_path and doc-B!");
+}
