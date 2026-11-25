@@ -33,8 +33,9 @@ pub struct GridCraftState {
     pub edit_revision: RwSignal<u64>,
     /// Ánh xạ các phiên workbook theo ID hoặc tên tệp (Finding 2: Multi-Workbook Save Isolation)
     pub document_sessions: RwSignal<std::collections::HashMap<String, WorkbookSession>>,
-    /// Tập các request_id -> document_id đang có lệnh lưu native pending (P2 #4683038858)
-    pub pending_save_requests: RwSignal<std::collections::HashMap<String, String>>,
+    /// Tập các request_id -> Option<document_id> đang có lệnh lưu native pending (P2 #4683038858 & P1 #4690659358)
+    /// Ghi nhận cả workbook chưa có phiên native (`None`) để chặn đóng cửa sổ khi ghi đĩa đang chạy.
+    pub pending_save_requests: RwSignal<std::collections::HashMap<String, Option<String>>>,
     /// Trạng thái dirty & edit revision cho các workbook live trong iframe chưa có phiên native (P1 #4689114183)
     pub unmanaged_dirty_uids: RwSignal<std::collections::HashMap<u64, (bool, u64)>>,
 }
@@ -215,13 +216,11 @@ impl GridCraftState {
         self.recompute_aggregate_dirty();
     }
 
-    /// Ghi nhận một tác vụ lưu native đang pending cho document_id (P2 #4683038858)
+    /// Ghi nhận một tác vụ lưu native đang pending cho document_id hoặc workbook chưa có phiên native (P2 #4683038858 & P1 #4690659358)
     pub fn register_pending_save_request(&self, request_id: &str, document_id: Option<&str>) {
-        if let Some(doc_id) = document_id {
-            self.pending_save_requests.update(|map| {
-                map.insert(request_id.to_string(), doc_id.to_string());
-            });
-        }
+        self.pending_save_requests.update(|map| {
+            map.insert(request_id.to_string(), document_id.map(str::to_string));
+        });
     }
 
     /// Giải phóng tác vụ lưu native đã hoàn tất
@@ -234,7 +233,16 @@ impl GridCraftState {
     /// Kiểm tra xem có tác vụ lưu nào đang pending cho document_id không
     pub fn has_pending_save_for_document(&self, document_id: &str) -> bool {
         self.pending_save_requests
-            .with_untracked(|map| map.values().any(|id| id == document_id))
+            .with_untracked(|map| map.values().any(|id| id.as_deref() == Some(document_id)))
+    }
+
+    /// Kiểm tra xem có bất kỳ tác vụ lưu native nào đang pending không,
+    /// bất kể workbook hiện tại có is_dirty hay không (P1 #4690659358).
+    /// Trường hợp: người dùng undo về trạng thái sạch trong khi native write đang in-flight
+    /// → is_dirty = false nhưng write vẫn chưa hoàn tất → không được phép đóng cửa sổ.
+    pub fn has_pending_saves(&self) -> bool {
+        self.pending_save_requests
+            .with_untracked(|map| !map.is_empty())
     }
 
     /// Đối soát và dọn dẹp các phiên workbook đã bị đóng hoặc hủy trong iframe (P2 #4683038858)
@@ -245,7 +253,7 @@ impl GridCraftState {
         let mut sessions = self.document_sessions.get_untracked();
         let pending_docs: std::collections::HashSet<String> = self
             .pending_save_requests
-            .with_untracked(|m| m.values().cloned().collect());
+            .with_untracked(|m| m.values().filter_map(|v| v.clone()).collect());
         let mut modified = false;
 
         let to_remove: Vec<String> = sessions
@@ -381,11 +389,15 @@ impl GridCraftState {
             self.recompute_aggregate_dirty();
             Some((doc_id.clone(), revision_advanced))
         } else if let Some(uid) = doc_uid {
-            // P1 #4689114183: Theo dõi dirty + edit_revision cho các workbook live chưa có native session
+            // P1 #4689114183 & #4690659358: Theo dõi dirty + edit_revision cho các workbook live chưa có native session.
+            // Nếu revert về sạch kèm revision mới (vd: Undo khi đang lưu), giữ lại (false, rev) đến khi đóng workbook.
             self.unmanaged_dirty_uids.update(|m| {
                 if dirty {
                     let prev_rev = m.get(&uid).map(|&(_, r)| r).unwrap_or(0);
                     m.insert(uid, (true, revision.unwrap_or(prev_rev)));
+                } else if let Some(rev) = revision {
+                    let prev_rev = m.get(&uid).map(|&(_, r)| r).unwrap_or(0);
+                    m.insert(uid, (false, rev.max(prev_rev)));
                 } else {
                     m.remove(&uid);
                 }

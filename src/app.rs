@@ -8,9 +8,9 @@ use wasm_bindgen::prelude::*;
 
 use crate::launcher::LauncherView;
 use crate::micro_apps::{
-    gridcraft::GridCraftState, tool_slug_to_micro_app, vn_office::VnLegalRegulations, DataLabApp,
-    DataLabState, MediaStudioApp, MediaStudioState, MicroAppId, PdfStudioApp, PdfStudioState,
-    VnOfficeApp, VnOfficeState,
+    DataLabApp, DataLabState, MediaStudioApp, MediaStudioState, MicroAppId, PdfStudioApp,
+    PdfStudioState, VnOfficeApp, VnOfficeState, gridcraft::GridCraftState, tool_slug_to_micro_app,
+    vn_office::VnLegalRegulations,
 };
 use crate::platform::window_close::{WindowCloseDecision, WindowCloseManager};
 
@@ -521,12 +521,17 @@ impl AppState {
 
     /// Kiểm tra xem ứng dụng có bất kỳ tài liệu nào chưa lưu hoặc tác vụ đang chạy dở dang hay không.
     pub fn has_unsaved_work_or_running_task(&self) -> bool {
-        // 1. GridCraft dirty state
-        if self.gridcraft_state.is_dirty.get_untracked() {
+        // 1. GridCraft dirty state OR in-flight pending native write (P1 #4690659358):
+        // User may undo edits to reach a "clean" state while a native save is still in-flight.
+        // is_dirty becomes false but the write is not done — closing would interrupt persistence.
+        if self.gridcraft_state.is_dirty.get_untracked() || self.gridcraft_state.has_pending_saves()
+        {
             return true;
         }
         // 2. PDF Studio unsaved changes, inactive dirty documents, hoặc đang có pending saves (Finding 4675800826)
-        if self.pdf_studio_state.has_unsaved_documents_or_pending_saves()
+        if self
+            .pdf_studio_state
+            .has_unsaved_documents_or_pending_saves()
             || self.pdf_studio_state.is_running.get_untracked()
         {
             return true;
@@ -548,15 +553,25 @@ impl AppState {
     /// Tóm tắt các tác vụ / dữ liệu chưa lưu thành chuỗi văn bản thân thiện với người dùng
     pub fn unsaved_work_summary(&self) -> String {
         let mut parts = Vec::new();
-        if self.gridcraft_state.is_dirty.get_untracked() {
+        let gc_dirty = self.gridcraft_state.is_dirty.get_untracked();
+        let gc_pending = self.gridcraft_state.has_pending_saves();
+        if gc_dirty || gc_pending {
             let name = self
                 .gridcraft_state
                 .active_file_name
                 .get_untracked()
                 .unwrap_or_else(|| "Bảng tính GridCraft".to_string());
-            parts.push(format!("Bảng tính ({name})"));
+            if gc_pending && !gc_dirty {
+                // In-flight write but workbook reverted to clean state (P1 #4690659358)
+                parts.push(format!("Bảng tính ({name}) (đang lưu)"));
+            } else {
+                parts.push(format!("Bảng tính ({name})"));
+            }
         }
-        if self.pdf_studio_state.has_unsaved_documents_or_pending_saves() {
+        if self
+            .pdf_studio_state
+            .has_unsaved_documents_or_pending_saves()
+        {
             if self.pdf_studio_state.has_pending_saves() {
                 parts.push("Tài liệu PDF Studio (đang lưu)".to_string());
             } else {
@@ -676,9 +691,12 @@ impl AppState {
     pub fn reset_app_state(&self, app_id: MicroAppId) {
         match app_id {
             MicroAppId::VnOffice => {
-                self.vn_office_state.select_tool("vietnamese-number-to-words");
+                self.vn_office_state
+                    .select_tool("vietnamese-number-to-words");
                 self.vn_office_state.clear_calculation_history();
-                self.vn_office_state.regulations.set(VnLegalRegulations::default());
+                self.vn_office_state
+                    .regulations
+                    .set(VnLegalRegulations::default());
                 self.vn_office_state.sidebar_filter.set(String::new());
                 self.vn_office_state.is_legal_panel_open.set(true);
                 self.vn_office_state.is_running.set(false);
@@ -734,7 +752,8 @@ pub fn App() -> impl IntoView {
 
     #[cfg(target_arch = "wasm32")]
     {
-        let unlisten_opt = crate::platform::window_close::register_window_close_listener(close_manager, app_state);
+        let unlisten_opt =
+            crate::platform::window_close::register_window_close_listener(close_manager, app_state);
         if let Some(unlisten) = unlisten_opt {
             on_cleanup(move || {
                 unlisten.run();
@@ -770,7 +789,9 @@ pub fn App() -> impl IntoView {
                     )));
                 }
             } else if manual {
-                set_update_toast.set(Some("Không thể kết nối máy chủ cập nhật lúc này.".to_string()));
+                set_update_toast.set(Some(
+                    "Không thể kết nối máy chủ cập nhật lúc này.".to_string(),
+                ));
             }
             set_is_checking_update.set(false);
         });
@@ -787,7 +808,8 @@ pub fn App() -> impl IntoView {
         spawn_local(async move {
             let promise = js_sys::Promise::new(&mut |resolve, _| {
                 if let Some(win) = web_sys::window() {
-                    let _ = win.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 3000);
+                    let _ =
+                        win.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 3000);
                 }
             });
             let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
@@ -857,7 +879,11 @@ pub fn App() -> impl IntoView {
         {
             let has_dirty = app_state.has_unsaved_work_or_running_task();
             let summary = app_state.unsaved_work_summary();
-            close_manager.handle_native_close_requested("shell-close-req".into(), has_dirty, &summary);
+            close_manager.handle_native_close_requested(
+                "shell-close-req".into(),
+                has_dirty,
+                &summary,
+            );
         }
     };
     let open_output_dir = move || {
@@ -873,7 +899,8 @@ pub fn App() -> impl IntoView {
         set_is_always_on_top.set(new_state);
         #[cfg(target_arch = "wasm32")]
         spawn_local(async move {
-            let args = serde_wasm_bindgen::to_value(&AlwaysOnTopArgs { enabled: new_state }).unwrap();
+            let args =
+                serde_wasm_bindgen::to_value(&AlwaysOnTopArgs { enabled: new_state }).unwrap();
             let _ = invoke("toggle_always_on_top", args).await;
         });
     };

@@ -254,7 +254,9 @@ pub fn handle_gridcraft_save_outcome(
                     c.on_durable_write_completed(req_id, &fp);
                     let coord_matches_origin = c.active_document_id().is_none()
                         || c.active_document_id() == originating_doc_id.as_deref()
-                        || c.active_document_id() == Some(new_doc_id.as_str());
+                        || c.active_document_id() == Some(new_doc_id.as_str())
+                        || (originating_doc_id.is_none()
+                            && c.active_document_id() == Some("gridcraft-doc"));
                     if coord_matches_origin {
                         coord_dirty_for_origin = c.is_dirty();
                         // P1 #4679604052: Đồng bộ hóa Coordinator với session và đường dẫn mới sau Save As
@@ -665,9 +667,7 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     });
                                 } else {
                                     s.recompute_aggregate_dirty();
-                                    if !s.is_dirty.get_untracked()
-                                        && s.pending_save_requests.with_untracked(|m| m.is_empty())
-                                    {
+                                    if !s.is_dirty.get_untracked() && !s.has_pending_saves() {
                                         coordinator.update_value(|c| c.reset_if_dirty_on_close());
                                     }
                                 }

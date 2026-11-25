@@ -3053,3 +3053,163 @@ fn test_p1_4690386920_host_save_aborted_on_invalid_draft_cancels_close_and_keeps
         Some("Data validation rejected value")
     );
 }
+
+/// P1 #4690659358 — Pending GridCraft writes must block window close even when is_dirty is false.
+///
+/// Scenario: workbook is saved (native write in-flight), user then undoes all edits so
+/// is_dirty is cleared by iframe's dirty-state message. While the native write is still pending,
+/// `has_unsaved_work_or_running_task()` must still return true (write must not be interrupted).
+/// Once the write completes and pending_save_requests is drained, it must return false.
+#[test]
+fn test_p1_4690659358_pending_save_blocks_close_when_workbook_reverts_to_clean() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-undo-1".into(),
+        file_path: "/data/revert.xlsx".into(),
+        file_name: "revert.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(777),
+    });
+
+    // Simulate: user triggers save → native write is in-flight
+    state.register_pending_save_request("req-undo-1", Some("doc-undo-1"));
+
+    // is_dirty still true initially → guard blocks close (baseline)
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Dirty workbook must block close"
+    );
+
+    // Simulate: user undoes all edits while write is in-flight → iframe reports clean
+    state.set_document_dirty("doc-undo-1", false);
+    state.recompute_aggregate_dirty();
+
+    // is_dirty is now false but write is still pending → guard MUST still block close (the fix)
+    assert!(
+        !state.is_dirty.get_untracked(),
+        "Precondition: is_dirty should be false after undo"
+    );
+    assert!(
+        state.has_pending_saves(),
+        "Precondition: pending save request must still be registered"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "In-flight write must block close even when workbook reverted to clean (P1 #4690659358)"
+    );
+
+    // Simulate: native write completes → pending request cleared
+    state.clear_pending_save_request("req-undo-1");
+
+    // Now both is_dirty=false and no pending writes → guard must allow close
+    assert!(
+        !state.has_pending_saves(),
+        "Pending saves should be empty after completion"
+    );
+    assert!(
+        !app_state.has_unsaved_work_or_running_task(),
+        "After write completes with workbook clean, close must be allowed"
+    );
+}
+
+#[test]
+fn test_p1_4690659358_unmanaged_workbook_pending_save_and_window_close_guard() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        DevSaveResult, GridCraftSaveRequestContext, handle_gridcraft_save_outcome,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::window_close::{WindowCloseDecision, WindowCloseManager};
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+
+    // 1. Workbook without native session (e.g., new Book1, uid = 888) is edited (rev 2)
+    state.sync_workbook_dirty_and_revision(Some("Book1.xlsx"), Some(888), true, Some(2));
+    assert!(state.is_dirty.get_untracked());
+
+    // 2. Start Save As while originating_document_id is None (no native session yet)
+    state.register_pending_save_request("req-unmanaged-1", None);
+    assert!(
+        state.has_pending_saves(),
+        "Pending save MUST be tracked even when originating workbook has no native session"
+    );
+
+    // 3. User undoes all edits back to clean state (dirty=false, rev=3) while native write is in-flight
+    state.sync_workbook_dirty_and_revision(Some("Book1.xlsx"), Some(888), false, Some(3));
+    assert!(
+        !state.is_dirty.get_untracked(),
+        "Precondition: is_dirty clears when unmanaged workbook is undone to clean"
+    );
+    assert_eq!(
+        state.get_unmanaged_edit_revision(888),
+        Some(3),
+        "Live edit_revision must be preserved across undo to clean while workbook remains open"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Close guard MUST still block close when unmanaged workbook save is pending"
+    );
+    assert!(
+        app_state.unsaved_work_summary().contains("đang lưu"),
+        "Summary should indicate in-flight save, got: {}",
+        app_state.unsaved_work_summary()
+    );
+
+    // 4. Native close request must open dialog (not authorize) and Save decision must not authorize while in-flight
+    close_mgr.handle_native_close_requested(
+        "close-unmanaged-1".into(),
+        app_state.has_unsaved_work_or_running_task(),
+        &app_state.unsaved_work_summary(),
+    );
+    assert!(close_mgr.is_dialog_open.get_untracked());
+    assert!(!close_mgr.is_authorized.get_untracked());
+
+    close_mgr.on_user_decision(WindowCloseDecision::Save, app_state.clone());
+    assert!(
+        !close_mgr.is_authorized.get_untracked(),
+        "Close MUST NOT be authorized while unmanaged native save is still pending"
+    );
+    assert!(close_mgr.is_cancelled.get_untracked());
+
+    // 5. When the in-flight snapshot (rev 2) completes after user already undid to rev 3,
+    // handle_gridcraft_save_outcome clears pending request and preserves dirty=true because rev 3 > rev 2
+    let ctx = GridCraftSaveRequestContext {
+        request_id: "req-unmanaged-1".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: None,
+        originating_path: None,
+        originating_name: "Book1.xlsx".into(),
+        iframe_doc_uid: Some(888),
+        snapshot_edit_revision: 2,
+        base_committed_revision: 0,
+        session_generation: 1,
+    };
+    handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::Saved {
+            dest_path: "/tmp/Book1.xlsx".into(),
+            new_doc_id: "doc-book1-new".into(),
+            committed_rev: 1,
+        }),
+        &ctx,
+        b"PK\x03\x04_SAVED",
+        None,
+        Some(app_state.clone()),
+    );
+    assert!(!state.has_pending_saves());
+    assert!(
+        state.is_dirty.get_untracked(),
+        "Live undo (rev 3 > snapshot rev 2) must keep saved session dirty so reverted state is not lost"
+    );
+    assert!(app_state.has_unsaved_work_or_running_task());
+}
