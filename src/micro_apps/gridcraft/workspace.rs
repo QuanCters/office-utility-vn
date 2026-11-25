@@ -105,6 +105,31 @@ pub fn sync_coordinator_on_dirty_notification(
     }
 }
 
+/// Hủy luồng Save & Exit khi iframe báo không thể commit draft ô đang nhập (P1 #4690386920).
+pub fn handle_gridcraft_host_save_aborted(
+    s: &GridCraftState,
+    error: &str,
+    req_id: Option<&str>,
+    close_manager: Option<crate::platform::window_close::WindowCloseManager>,
+) {
+    if let Some(id) = req_id {
+        s.clear_pending_save_request(id);
+    }
+    s.is_dirty.set(true);
+    s.save_blocked_detail
+        .set(format!("❌ Không thể lưu ô đang chỉnh sửa: {error}"));
+    s.is_save_blocked_alert.set(true);
+    if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
+        if req_id.is_none() || req_id == Some(close_req_id.as_str()) {
+            s.pending_close_request_id.set(None);
+            if let Some(cm) = close_manager {
+                cm.cancel_close(&close_req_id);
+                cm.error_message.set(Some(error.to_string()));
+            }
+        }
+    }
+}
+
 /// Xử lý hoàn tất lưu tệp và kiểm tra an toàn toàn bộ ứng dụng trước khi ủy quyền đóng cửa sổ (Finding 4)
 pub fn handle_gridcraft_save_completion(
     is_still_dirty: bool,
@@ -1077,6 +1102,29 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 s.save_blocked_detail
                                     .set(format!("❌ Không thể mở tệp: {err}"));
                                 s.is_save_blocked_alert.set(true);
+                            }
+                            "gridcraft:save_aborted" => {
+                                let req_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("id"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string());
+                                let error = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("error"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string())
+                                .unwrap_or_else(|| {
+                                    "Giá trị ô đang nhập không hợp lệ, đã hủy lưu.".to_string()
+                                });
+                                handle_gridcraft_host_save_aborted(
+                                    &s,
+                                    &error,
+                                    req_id.as_deref(),
+                                    close_manager,
+                                );
                             }
                             "gridcraft:failed" => {
                                 let error = js_sys::Reflect::get(

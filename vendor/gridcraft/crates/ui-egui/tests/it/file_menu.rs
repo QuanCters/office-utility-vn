@@ -1169,3 +1169,52 @@ fn test_p2_4683038858_hosted_dont_save_close_removes_dirty_document_from_session
     );
 }
 
+#[test]
+fn test_p1_4690386917_and_4690386920_uncommitted_draft_and_rejected_commit_behavior() {
+    let services = Services {
+        open_async: Some(Box::new(|| {})),
+        download: Some(Box::new(|_, _| {})),
+        ..Default::default()
+    };
+    let mut h = harness(services);
+
+    // 1. Clean workbook -> begin typing a cell draft WITHOUT pressing Enter
+    h.state_mut().begin_edit(Some("UnsavedDraft".into()), false);
+    let doc = h.state().session.active().unwrap();
+    assert!(!doc.is_dirty(), "Before Enter, DocState::is_dirty() alone stays false");
+    let has_changed_draft = h
+        .state()
+        .editor
+        .as_ref()
+        .is_some_and(|ed| ed.doc == doc.uid && ed.original.as_deref() != Some(ed.text.as_str()));
+    assert!(
+        has_changed_draft,
+        "Changed cell draft in SheetApp.editor must be detected before Enter!"
+    );
+
+    // Cancel clean draft, then commit valid edit on C1 + install Stop-style validation on A1
+    h.state_mut().cancel_edit();
+    h.state_mut()
+        .run("cell.set", serde_json::json!({"cell": "C1", "input": "CleanBase"}))
+        .unwrap();
+    h.state_mut()
+        .session
+        .execute(
+            "data.validation",
+            serde_json::json!({"range": "A1", "type": "list", "formula1": "\"Red,Green\""}),
+        )
+        .unwrap();
+
+    // Enter invalid draft "Purple" in A1 (active selection) and invoke commit_edit(0, 0, false, false) (as host-initiated Save & Exit does)
+    h.state_mut().begin_edit(Some("Purple".into()), false);
+    let committed = h.state_mut().commit_edit(0, 0, false, false);
+    assert!(
+        !committed,
+        "Stop-style validation MUST reject invalid draft and return false from commit_edit()"
+    );
+    assert!(
+        h.state().editor.is_some(),
+        "Rejected draft MUST stay open in the editor so user text is not silently discarded"
+    );
+}
+

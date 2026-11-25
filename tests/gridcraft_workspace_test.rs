@@ -3004,3 +3004,52 @@ fn test_p2_4690136471_periodic_dirty_snapshot_during_saving_does_not_mark_dirty_
         other => panic!("Expected Saving state, got {other:?}"),
     }
 }
+
+#[test]
+fn test_p1_4690386920_host_save_aborted_on_invalid_draft_cancels_close_and_keeps_dirty() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::handle_gridcraft_host_save_aborted;
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-draft-1".into(),
+        file_path: "/data/validated.xlsx".into(),
+        file_name: "validated.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(950),
+    });
+
+    close_mgr.handle_native_close_requested("close-req-draft-err".into(), true, "validated.xlsx");
+    close_mgr.is_saving.set(true);
+    state
+        .pending_close_request_id
+        .set(Some("close-req-draft-err".into()));
+    state.register_pending_save_request("close-req-draft-err", Some("doc-draft-1"));
+
+    // Iframe báo không thể commit draft (Stop data validation / công thức lỗi) -> gridcraft:save_aborted
+    handle_gridcraft_host_save_aborted(
+        &state,
+        "Data validation rejected value",
+        Some("close-req-draft-err"),
+        Some(close_mgr),
+    );
+
+    assert!(state.is_dirty.get_untracked());
+    assert!(state.is_save_blocked_alert.get_untracked());
+    assert!(state.pending_close_request_id.get_untracked().is_none());
+    assert!(!state.has_pending_save_for_document("doc-draft-1"));
+    assert!(!close_mgr.is_saving.get_untracked());
+    assert!(!close_mgr.is_authorized.get_untracked());
+    assert!(close_mgr.is_cancelled.get_untracked());
+    assert_eq!(
+        close_mgr.error_message.get_untracked().as_deref(),
+        Some("Data validation rejected value")
+    );
+}

@@ -1,5 +1,5 @@
---- a/apps/gridcraft-web/src/host.rs	2026-11-24 19:45:54.768708826 +0000
-+++ b/apps/gridcraft-web/src/host.rs	2026-11-24 19:27:43.357085116 +0000
+--- a/apps/gridcraft-web/src/host.rs
++++ b/apps/gridcraft-web/src/host.rs
 @@ -23,11 +23,16 @@
  //! exports are handed to the page rather than downloaded, and `?author=` names the user for new
  //! notes and comments.
@@ -103,7 +103,43 @@
              return;
          }
  
-@@ -201,6 +260,17 @@
+@@ -164,7 +223,34 @@
+         let save_intents = std::mem::take(&mut *self.pending_save_intents.borrow_mut());
+         for intent in save_intents {
+             if app.session.active().is_some() {
+-                app.commit_edit(0, 0, false, false);
++                // P1 #4690386920: Tuyệt đối kiểm tra kết quả commit_edit / commit_text_box_edit.
++                // Nếu draft bị từ chối bởi Stop data validation hoặc công thức lỗi, hủy lệnh Save & Exit và báo host thay vì ghi snapshot cũ!
++                let mut draft_err: Option<String> = None;
++                if !app.commit_edit(0, 0, false, false) {
++                    draft_err = Some(
++                        app.message
++                            .as_ref()
++                            .map(|(_, m)| m.clone())
++                            .unwrap_or_else(|| "Giá trị ô đang chỉnh sửa chưa hợp lệ, không thể xác nhận để lưu.".to_string()),
++                    );
++                } else if let Err(err) = app.commit_text_box_edit() {
++                    draft_err = Some(err);
++                }
++                if let Some(reason) = draft_err {
++                    log::warn!("aborting host-initiated save because draft commit failed: {reason}");
++                    if let Some(w) = web_sys::window() {
++                        let parent = w.parent().ok().flatten().unwrap_or(w);
++                        let obj = js_sys::Object::new();
++                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:save_aborted"));
++                        if let Some(ref cid) = intent.correlation_id {
++                            let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(cid));
++                        }
++                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("error"), &wasm_bindgen::JsValue::from_str(&reason));
++                        let _ = parent.post_message(&obj, "*");
++                    }
++                    self.post_dirty_state(app);
++                    continue;
++                }
+                 app.store_view_state();
+ 
+                 if let Some(doc) = app.session.active() {
+@@ -201,6 +287,17 @@
                              name: file_name(&name),
                          },
                      );
@@ -121,7 +157,7 @@
                      if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                          log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                      }
-@@ -242,6 +312,17 @@
+@@ -242,6 +339,17 @@
                          name: file_name(&name),
                      },
                  );
@@ -139,7 +175,7 @@
                  if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
                      log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                  }
-@@ -250,10 +331,10 @@
+@@ -250,10 +358,10 @@
              }
          }
  
@@ -153,7 +189,7 @@
                  let mut last_revs = self.last_saved_revisions.borrow_mut();
                  let last_rev = last_revs.get(&pending.doc_uid).copied().unwrap_or(0);
                  if pending.revision >= last_rev {
-@@ -263,16 +344,26 @@
+@@ -263,16 +371,26 @@
                          if cur == i {
                              if let Some(doc) = app.session.active_mut() {
                                  doc.saved = pending.snapshot.clone();
@@ -184,7 +220,7 @@
                                  }
                              }
                              app.session.set_active(cur);
-@@ -319,16 +410,104 @@
+@@ -319,16 +437,118 @@
                      });
                  } else {
                      log::warn!(
@@ -205,7 +241,21 @@
 +    }
 +
 +    fn post_dirty_state(&self, app: &SheetApp) {
-+        let any_dirty = app.session.documents().iter().any(|d| d.is_dirty());
++        let active_uid = app.session.active().map(|d| d.uid);
++        let doc_is_dirty_or_draft = |doc_uid: u64, base_dirty: bool| -> bool {
++            // P1 #4690386917: Bao gồm draft chưa nhấn Enter trong `app.editor` / `text_box_editor` để Alt+F4 không bỏ qua dữ liệu đang gõ
++            let cell_draft_changed = app
++                .editor
++                .as_ref()
++                .is_some_and(|ed| ed.doc == doc_uid && ed.original.as_deref() != Some(ed.text.as_str()));
++            let text_box_draft = app.text_box_editor.is_some() && active_uid == Some(doc_uid);
++            base_dirty || cell_draft_changed || text_box_draft
++        };
++        let any_dirty = app
++            .session
++            .documents()
++            .iter()
++            .any(|d| doc_is_dirty_or_draft(d.uid, d.is_dirty()));
 +        self.host.post_dirty(any_dirty);
 +
 +        if let Some(w) = web_sys::window() {
@@ -232,7 +282,7 @@
 +                let _ = js_sys::Reflect::set(
 +                    &obj,
 +                    &wasm_bindgen::JsValue::from_str("doc_dirty"),
-+                    &wasm_bindgen::JsValue::from_bool(active_doc.is_dirty()),
++                    &wasm_bindgen::JsValue::from_bool(doc_is_dirty_or_draft(active_doc.uid, active_doc.is_dirty())),
 +                );
 +                let _ = js_sys::Reflect::set(
 +                    &obj,
@@ -262,7 +312,7 @@
 +                let _ = js_sys::Reflect::set(
 +                    &doc_obj,
 +                    &wasm_bindgen::JsValue::from_str("dirty"),
-+                    &wasm_bindgen::JsValue::from_bool(doc.is_dirty()),
++                    &wasm_bindgen::JsValue::from_bool(doc_is_dirty_or_draft(doc.uid, doc.is_dirty())),
 +                );
 +                let _ = js_sys::Reflect::set(
 +                    &doc_obj,
@@ -292,7 +342,7 @@
      }
  
      fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
-@@ -361,7 +540,8 @@
+@@ -361,7 +581,8 @@
  
      fn listen(&self, inbox: Inbox, ctx: egui::Context) {
          let confirmed = self.confirmed;
@@ -302,7 +352,7 @@
          let pending_saves_for_fail = self.pending_saves.clone();
          let app_ctx_for_open = ctx.clone();
          let app_ctx_for_saved = ctx.clone();
-@@ -373,7 +553,15 @@
+@@ -373,7 +594,15 @@
              }
              Message::Saved { id } => {
                  if confirmed {
@@ -319,7 +369,7 @@
                      app_ctx_for_saved.request_repaint();
                  }
              }
-@@ -428,6 +616,35 @@
+@@ -428,6 +657,35 @@
                                  save_as,
                              });
                              app_ctx_for_intents.request_repaint();

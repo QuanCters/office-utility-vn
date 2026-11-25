@@ -223,7 +223,34 @@ impl Bridge {
         let save_intents = std::mem::take(&mut *self.pending_save_intents.borrow_mut());
         for intent in save_intents {
             if app.session.active().is_some() {
-                app.commit_edit(0, 0, false, false);
+                // P1 #4690386920: Tuyệt đối kiểm tra kết quả commit_edit / commit_text_box_edit.
+                // Nếu draft bị từ chối bởi Stop data validation hoặc công thức lỗi, hủy lệnh Save & Exit và báo host thay vì ghi snapshot cũ!
+                let mut draft_err: Option<String> = None;
+                if !app.commit_edit(0, 0, false, false) {
+                    draft_err = Some(
+                        app.message
+                            .as_ref()
+                            .map(|(_, m)| m.clone())
+                            .unwrap_or_else(|| "Giá trị ô đang chỉnh sửa chưa hợp lệ, không thể xác nhận để lưu.".to_string()),
+                    );
+                } else if let Err(err) = app.commit_text_box_edit() {
+                    draft_err = Some(err);
+                }
+                if let Some(reason) = draft_err {
+                    log::warn!("aborting host-initiated save because draft commit failed: {reason}");
+                    if let Some(w) = web_sys::window() {
+                        let parent = w.parent().ok().flatten().unwrap_or(w);
+                        let obj = js_sys::Object::new();
+                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("type"), &wasm_bindgen::JsValue::from_str("gridcraft:save_aborted"));
+                        if let Some(ref cid) = intent.correlation_id {
+                            let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("id"), &wasm_bindgen::JsValue::from_str(cid));
+                        }
+                        let _ = js_sys::Reflect::set(&obj, &wasm_bindgen::JsValue::from_str("error"), &wasm_bindgen::JsValue::from_str(&reason));
+                        let _ = parent.post_message(&obj, "*");
+                    }
+                    self.post_dirty_state(app);
+                    continue;
+                }
                 app.store_view_state();
 
                 if let Some(doc) = app.session.active() {
@@ -424,7 +451,21 @@ impl Bridge {
     }
 
     fn post_dirty_state(&self, app: &SheetApp) {
-        let any_dirty = app.session.documents().iter().any(|d| d.is_dirty());
+        let active_uid = app.session.active().map(|d| d.uid);
+        let doc_is_dirty_or_draft = |doc_uid: u64, base_dirty: bool| -> bool {
+            // P1 #4690386917: Bao gồm draft chưa nhấn Enter trong `app.editor` / `text_box_editor` để Alt+F4 không bỏ qua dữ liệu đang gõ
+            let cell_draft_changed = app
+                .editor
+                .as_ref()
+                .is_some_and(|ed| ed.doc == doc_uid && ed.original.as_deref() != Some(ed.text.as_str()));
+            let text_box_draft = app.text_box_editor.is_some() && active_uid == Some(doc_uid);
+            base_dirty || cell_draft_changed || text_box_draft
+        };
+        let any_dirty = app
+            .session
+            .documents()
+            .iter()
+            .any(|d| doc_is_dirty_or_draft(d.uid, d.is_dirty()));
         self.host.post_dirty(any_dirty);
 
         if let Some(w) = web_sys::window() {
@@ -451,7 +492,7 @@ impl Bridge {
                 let _ = js_sys::Reflect::set(
                     &obj,
                     &wasm_bindgen::JsValue::from_str("doc_dirty"),
-                    &wasm_bindgen::JsValue::from_bool(active_doc.is_dirty()),
+                    &wasm_bindgen::JsValue::from_bool(doc_is_dirty_or_draft(active_doc.uid, active_doc.is_dirty())),
                 );
                 let _ = js_sys::Reflect::set(
                     &obj,
@@ -481,7 +522,7 @@ impl Bridge {
                 let _ = js_sys::Reflect::set(
                     &doc_obj,
                     &wasm_bindgen::JsValue::from_str("dirty"),
-                    &wasm_bindgen::JsValue::from_bool(doc.is_dirty()),
+                    &wasm_bindgen::JsValue::from_bool(doc_is_dirty_or_draft(doc.uid, doc.is_dirty())),
                 );
                 let _ = js_sys::Reflect::set(
                     &doc_obj,
