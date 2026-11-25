@@ -57,6 +57,54 @@ pub struct GridCraftSaveRequestContext {
     pub session_generation: u64,
 }
 
+/// Đồng bộ trạng thái coordinator dựa trên thông báo dirty/revision thực tế (P2 #4690136471).
+/// Khi đang `DocumentState::Saving`, chỉ kích hoạt `on_user_edit()` (đặt `dirty_during_save = true`)
+/// nếu revision của chính workbook đang lưu thực sự tăng thêm — tuyệt đối không kích hoạt theo snapshot lặp định kỳ!
+pub fn sync_coordinator_on_dirty_notification(
+    c: &mut HostDocumentCoordinator,
+    dirty: bool,
+    has_documents_snapshot: bool,
+    advanced_doc_ids: &[String],
+    active_doc_id: Option<&str>,
+    active_file_path: Option<&str>,
+) {
+    if !dirty {
+        return;
+    }
+
+    if *c.state() == crate::platform::coordinator::DocumentState::Unloaded {
+        let cur_doc = active_doc_id.unwrap_or("gridcraft-doc");
+        let cur_path = active_file_path.unwrap_or("workbook.xlsx");
+        c.on_document_opened(cur_doc, cur_path, "dirty-init");
+    }
+
+    match c.state().clone() {
+        crate::platform::coordinator::DocumentState::Saving { document_id, .. } => {
+            if has_documents_snapshot {
+                if advanced_doc_ids.iter().any(|id| id == &document_id) {
+                    c.on_user_edit();
+                }
+            } else {
+                c.on_user_edit();
+            }
+        }
+        crate::platform::coordinator::DocumentState::Clean => {
+            c.on_user_edit();
+        }
+        crate::platform::coordinator::DocumentState::Dirty
+        | crate::platform::coordinator::DocumentState::SaveFailed { .. } => {
+            if !has_documents_snapshot
+                || c.active_document_id()
+                    .map(|id| advanced_doc_ids.iter().any(|adv| adv == id))
+                    .unwrap_or(false)
+            {
+                c.on_user_edit();
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Xử lý hoàn tất lưu tệp và kiểm tra an toàn toàn bộ ứng dụng trước khi ủy quyền đóng cửa sổ (Finding 4)
 pub fn handle_gridcraft_save_completion(
     is_still_dirty: bool,
@@ -510,6 +558,7 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 // 1. Đồng bộ trạng thái dirty chi tiết của từng workbook nếu mảng documents có mặt
                                 let has_documents_snapshot = documents.is_some();
                                 let mut live_uids: Vec<u64> = Vec::new();
+                                let mut advanced_doc_ids: Vec<String> = Vec::new();
                                 if let Some(docs) = documents {
                                     for i in 0..docs.length() {
                                         let item = docs.get(i);
@@ -554,12 +603,16 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                             if let Some(uid_val) = u {
                                                 live_uids.push(uid_val);
                                             }
-                                            s.sync_workbook_dirty_and_revision(
-                                                n.as_deref(),
-                                                u,
-                                                d,
-                                                r,
-                                            );
+                                            if let Some((matched_doc_id, true)) = s
+                                                .sync_workbook_dirty_and_revision_tracked(
+                                                    n.as_deref(),
+                                                    u,
+                                                    d,
+                                                    r,
+                                                )
+                                            {
+                                                advanced_doc_ids.push(matched_doc_id);
+                                            }
                                         }
                                     }
                                 }
@@ -570,25 +623,21 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     s.reconcile_closed_sessions(&live_uids);
                                 }
 
-                                // 3. Đồng bộ coordinator và aggregate dirty
+                                // 3. Đồng bộ coordinator và aggregate dirty (P2 #4690136471: chỉ báo edit cho coordinator khi revision thực sự tăng)
                                 if dirty {
                                     s.is_dirty.set(true);
-                                    if coordinator.read_value().state()
-                                        == &crate::platform::coordinator::DocumentState::Unloaded
-                                    {
-                                        let cur_doc = s
-                                            .active_document_id
-                                            .get_untracked()
-                                            .unwrap_or_else(|| "gridcraft-doc".into());
-                                        let cur_path = s
-                                            .active_file_path
-                                            .get_untracked()
-                                            .unwrap_or_else(|| "workbook.xlsx".into());
-                                        coordinator.update_value(|c| {
-                                            c.on_document_opened(&cur_doc, &cur_path, "dirty-init");
-                                        });
-                                    }
-                                    coordinator.update_value(|c| c.on_user_edit());
+                                    let cur_doc = s.active_document_id.get_untracked();
+                                    let cur_path = s.active_file_path.get_untracked();
+                                    coordinator.update_value(|c| {
+                                        sync_coordinator_on_dirty_notification(
+                                            c,
+                                            dirty,
+                                            has_documents_snapshot,
+                                            &advanced_doc_ids,
+                                            cur_doc.as_deref(),
+                                            cur_path.as_deref(),
+                                        );
+                                    });
                                 } else {
                                     s.recompute_aggregate_dirty();
                                     if !s.is_dirty.get_untracked()

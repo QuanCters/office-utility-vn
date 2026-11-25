@@ -136,12 +136,19 @@ impl GridCraftState {
         self.resolve_save_session_with_uid(name_or_doc_id, None)
     }
 
-    /// Phân giải phiên workbook đích chính xác kết hợp với iframe doc UID (P2 #4682914297)
+    /// Phân giải phiên workbook đích chính xác kết hợp với iframe doc UID (P2 #4682914297 & P1 #4690136464)
     pub fn resolve_save_session_with_uid(
         &self,
         name_or_doc_id: &str,
         doc_uid: Option<u64>,
     ) -> Option<WorkbookSession> {
+        let uid_compatible = |s: &WorkbookSession| -> bool {
+            match (s.iframe_doc_uid, doc_uid) {
+                (Some(bound_uid), Some(req_uid)) => bound_uid == req_uid,
+                _ => true,
+            }
+        };
+
         // 0. Nếu có iframe workbook UID, tìm chính xác theo iframe_doc_uid (Bất biến P2 #4682914297)
         if let Some(uid) = doc_uid {
             let uid_match = self.document_sessions.with_untracked(|map| {
@@ -154,18 +161,20 @@ impl GridCraftState {
             }
         }
 
-        // 1. Tìm trực tiếp theo document_id (định danh bền vững duy nhất)
-        let direct_match = self
-            .document_sessions
-            .with_untracked(|map| map.get(name_or_doc_id).cloned());
+        // 1. Tìm trực tiếp theo document_id (chỉ chấp nhận nếu không xung đột UID đã gắn cho workbook khác)
+        let direct_match = self.document_sessions.with_untracked(|map| {
+            map.get(name_or_doc_id)
+                .filter(|s| uid_compatible(s))
+                .cloned()
+        });
         if let Some(sess) = direct_match {
             return Some(sess);
         }
 
-        // 2. Phân giải theo tên tệp: Chỉ chấp nhận nếu tên tệp là duy nhất tuyệt đối across all sessions
+        // 2. Phân giải theo tên tệp: Chỉ chấp nhận nếu tên tệp là duy nhất tuyệt đối VÀ không thuộc về UID khác (P1 #4690136464)
         let matches: Vec<WorkbookSession> = self.document_sessions.with_untracked(|map| {
             map.values()
-                .filter(|s| s.file_name == name_or_doc_id)
+                .filter(|s| s.file_name == name_or_doc_id && uid_compatible(s))
                 .cloned()
                 .collect()
         });
@@ -173,9 +182,9 @@ impl GridCraftState {
         if matches.len() == 1 {
             Some(matches[0].clone())
         } else {
-            // matches.len() > 1 (nhiều workbook cùng tên ở các thư mục khác nhau) hoặc 0 (không tìm thấy):
-            // Fail closed (P1 #4679994753): Tuyệt đối KHÔNG sử dụng active_document_id hay active_file_name để đoán mò session!
-            // Yêu cầu chỉ định document_id rõ ràng hoặc buộc người dùng chọn đích qua Save As.
+            // matches.len() > 1 (nhiều workbook cùng tên ở các thư mục khác nhau) hoặc 0 (không tìm thấy / UID xung đột):
+            // Fail closed (P1 #4679994753 & P1 #4690136464): Tuyệt đối KHÔNG đoán mò session hay ghi đè phiên UID khác;
+            // buộc Save As để chọn đích mới an toàn.
             None
         }
     }
@@ -292,16 +301,34 @@ impl GridCraftState {
         dirty: bool,
         revision: Option<u64>,
     ) {
+        let _ = self.sync_workbook_dirty_and_revision_tracked(name, doc_uid, dirty, revision);
+    }
+
+    /// Đồng bộ trạng thái dirty/revision cho workbook và trả về `(document_id, revision_advanced)` nếu khớp phiên native (P2 #4690136471)
+    pub fn sync_workbook_dirty_and_revision_tracked(
+        &self,
+        name: Option<&str>,
+        doc_uid: Option<u64>,
+        dirty: bool,
+        revision: Option<u64>,
+    ) -> Option<(String, bool)> {
         let mut sessions = self.document_sessions.get_untracked();
         let mut matched_id = None;
+        let mut revision_advanced = false;
 
         // 1. Khớp theo doc_uid nếu có
         if let Some(uid) = doc_uid {
             for s in sessions.values_mut() {
                 if s.iframe_doc_uid == Some(uid) {
+                    let was_dirty = s.is_dirty;
                     s.is_dirty = dirty;
                     if let Some(rev) = revision {
+                        if rev > s.edit_revision {
+                            revision_advanced = true;
+                        }
                         s.edit_revision = rev;
+                    } else if dirty && !was_dirty {
+                        revision_advanced = true;
                     }
                     matched_id = Some(s.document_id.clone());
                     break;
@@ -309,19 +336,31 @@ impl GridCraftState {
             }
         }
 
-        // 2. Khớp theo name nếu chưa khớp doc_uid
+        // 2. Khớp theo name nếu chưa khớp doc_uid (tuyệt đối không khớp phiên đã gắn UID khác - P1 #4690136464)
         if matched_id.is_none() {
             if let Some(n) = name {
                 let matches: Vec<String> = sessions
                     .values()
-                    .filter(|s| s.file_name == n || s.file_path == n || s.document_id == n)
+                    .filter(|s| {
+                        (s.file_name == n || s.file_path == n || s.document_id == n)
+                            && match (s.iframe_doc_uid, doc_uid) {
+                                (Some(bound_uid), Some(req_uid)) => bound_uid == req_uid,
+                                _ => true,
+                            }
+                    })
                     .map(|s| s.document_id.clone())
                     .collect();
                 if matches.len() == 1 {
                     if let Some(s) = sessions.get_mut(&matches[0]) {
+                        let was_dirty = s.is_dirty;
                         s.is_dirty = dirty;
                         if let Some(rev) = revision {
+                            if rev > s.edit_revision {
+                                revision_advanced = true;
+                            }
                             s.edit_revision = rev;
+                        } else if dirty && !was_dirty {
+                            revision_advanced = true;
                         }
                         if let Some(uid) = doc_uid {
                             s.iframe_doc_uid = Some(uid);
@@ -332,7 +371,7 @@ impl GridCraftState {
             }
         }
 
-        if matched_id.is_some() {
+        if let Some(ref doc_id) = matched_id {
             if let Some(uid) = doc_uid {
                 self.unmanaged_dirty_uids.update(|m| {
                     m.remove(&uid);
@@ -340,6 +379,7 @@ impl GridCraftState {
             }
             self.document_sessions.set(sessions);
             self.recompute_aggregate_dirty();
+            Some((doc_id.clone(), revision_advanced))
         } else if let Some(uid) = doc_uid {
             // P1 #4689114183: Theo dõi dirty + edit_revision cho các workbook live chưa có native session
             self.unmanaged_dirty_uids.update(|m| {
@@ -351,9 +391,13 @@ impl GridCraftState {
                 }
             });
             self.recompute_aggregate_dirty();
+            None
         } else if dirty {
             // Danh tính không rõ ràng nhưng iframe báo dirty: Fail closed
             self.is_dirty.set(true);
+            None
+        } else {
+            None
         }
     }
 

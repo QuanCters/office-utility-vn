@@ -2811,3 +2811,196 @@ fn test_p1_4689587087_opened_csv_never_overwritten_with_xlsx_snapshot() {
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
+
+#[test]
+fn test_p1_4690136464_reject_filename_fallback_when_uid_differs() {
+    use office_utility_vn_ui::micro_apps::gridcraft::state::{GridCraftState, WorkbookSession};
+
+    let state = GridCraftState::new();
+
+    // 1. Mở tệp Book1.xlsx đã tồn tại trên đĩa và đã gắn với iframe_doc_uid = 101
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-existing-book1".into(),
+        file_path: "/data/Book1.xlsx".into(),
+        file_name: "Book1.xlsx".into(),
+        revision: 1,
+        is_dirty: false,
+        edit_revision: 0,
+        iframe_doc_uid: Some(101),
+    });
+
+    // 2. Tạo workbook mới trong GridCraft (tự đặt tên "Book1" -> "Book1.xlsx"), UID mới là 202
+    state.sync_workbook_dirty_and_revision(Some("Book1.xlsx"), Some(202), true, Some(1));
+
+    // Phiên doc-existing-book1 (uid 101) PHẢI không bị đánh dấu dirty hay cướp UID bởi workbook mới (uid 202)
+    let existing = state
+        .get_session_for_document("doc-existing-book1")
+        .expect("existing Book1 session must remain");
+    assert_eq!(existing.iframe_doc_uid, Some(101));
+    assert!(!existing.is_dirty);
+
+    // 3. BẤT BIẾN P1 #4690136464: Khi resolve save cho ("Book1.xlsx", Some(202)),
+    // TUYỆT ĐỐI KHÔNG được rơi về fallback tên tệp để ghi đè lên /data/Book1.xlsx của UID 101!
+    let resolved_new = state.resolve_save_session_with_uid("Book1.xlsx", Some(202));
+    assert!(
+        resolved_new.is_none(),
+        "New workbook UID 202 named 'Book1.xlsx' MUST NOT resolve to existing UID 101 session!"
+    );
+
+    // Trong khi đó, save chính thức của UID 101 vẫn resolve chính xác tới doc-existing-book1
+    let resolved_existing = state
+        .resolve_save_session_with_uid("Book1.xlsx", Some(101))
+        .expect("UID 101 must resolve its own Book1.xlsx session");
+    assert_eq!(resolved_existing.document_id, "doc-existing-book1");
+}
+
+#[test]
+fn test_p2_4690136471_periodic_dirty_snapshot_during_saving_does_not_mark_dirty_during_save() {
+    use leptos::prelude::StoredValue;
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        DevSaveResult, GridCraftSaveRequestContext, handle_gridcraft_save_outcome,
+        sync_coordinator_on_dirty_notification,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::coordinator::{DocumentState, HostDocumentCoordinator};
+    use office_utility_vn_ui::platform::persistence::compute_fingerprint;
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-save-sync".into(),
+        file_path: "/data/sync_test.xlsx".into(),
+        file_name: "sync_test.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(901),
+    });
+    state.set_document_session(
+        Some("doc-save-sync".into()),
+        Some("/data/sync_test.xlsx".into()),
+        1,
+    );
+
+    let mut coord = HostDocumentCoordinator::new();
+    coord.on_document_opened("doc-save-sync", "/data/sync_test.xlsx", "fp0");
+    coord.on_user_edit();
+
+    let payload = b"PK\x03\x04_SAVING_BYTES".to_vec();
+    let _ = coord.on_save_requested(1, "doc-save-sync", "req-sync-1", payload.clone(), 1000);
+    assert!(matches!(coord.state(), DocumentState::Saving { .. }));
+
+    // 1. Trong lúc đang lưu, iframe Bridge::sync phát lại snapshot dirty:true nhưng revision vẫn = 1 (không có chỉnh sửa mới)
+    let mut advanced_docs = Vec::new();
+    if let Some((doc_id, true)) = state.sync_workbook_dirty_and_revision_tracked(
+        Some("sync_test.xlsx"),
+        Some(901),
+        true,
+        Some(1),
+    ) {
+        advanced_docs.push(doc_id);
+    }
+    assert!(
+        advanced_docs.is_empty(),
+        "Repeated revision 1 must NOT count as an edit advance"
+    );
+
+    sync_coordinator_on_dirty_notification(
+        &mut coord,
+        true,
+        true,
+        &advanced_docs,
+        Some("doc-save-sync"),
+        Some("/data/sync_test.xlsx"),
+    );
+
+    // Kiểm tra coordinator không bị đánh dấu dirty_during_save giả!
+    match coord.state() {
+        DocumentState::Saving {
+            dirty_during_save, ..
+        } => {
+            assert!(
+                !*dirty_during_save,
+                "Periodic dirty snapshot without revision advance MUST NOT set dirty_during_save!"
+            );
+        }
+        other => panic!("Expected Saving state, got {other:?}"),
+    }
+
+    // 2. Hoàn tất Save & Exit -> phải cho phép đóng cửa sổ bình thường!
+    close_mgr.handle_native_close_requested("close-sync-req".into(), true, "sync_test.xlsx");
+    close_mgr.is_saving.set(true);
+    state
+        .pending_close_request_id
+        .set(Some("close-sync-req".into()));
+
+    let coord_sv = StoredValue::new(coord);
+    let ctx = GridCraftSaveRequestContext {
+        request_id: "req-sync-1".into(),
+        operation_intent: SaveOperationIntent::Save,
+        originating_document_id: Some("doc-save-sync".into()),
+        originating_path: Some("/data/sync_test.xlsx".into()),
+        originating_name: "sync_test.xlsx".into(),
+        iframe_doc_uid: Some(901),
+        snapshot_edit_revision: 1,
+        base_committed_revision: 1,
+        session_generation: 1,
+    };
+    state.register_pending_save_request("req-sync-1", Some("doc-save-sync"));
+
+    handle_gridcraft_save_outcome(
+        &state,
+        Some(&coord_sv),
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/sync_test.xlsx".into(),
+            new_doc_id: "doc-save-sync".into(),
+            committed_rev: 2,
+        }),
+        &ctx,
+        &payload,
+        Some(close_mgr),
+        Some(app_state.clone()),
+    );
+
+    assert!(close_mgr.is_authorized.get_untracked());
+    assert!(!state.is_dirty.get_untracked());
+
+    // 3. Trường hợp ngược lại: nếu revision thực sự TĂNG (1 -> 2) khi đang lưu -> dirty_during_save PHẢI bật = true!
+    let mut coord2 = HostDocumentCoordinator::new();
+    let fp = compute_fingerprint(&payload);
+    coord2.on_document_opened("doc-save-sync", "/data/sync_test.xlsx", &fp);
+    coord2.on_user_edit();
+    let _ = coord2.on_save_requested(1, "doc-save-sync", "req-sync-2", payload, 2000);
+    let mut adv2 = Vec::new();
+    if let Some((doc_id, true)) = state.sync_workbook_dirty_and_revision_tracked(
+        Some("sync_test.xlsx"),
+        Some(901),
+        true,
+        Some(2),
+    ) {
+        adv2.push(doc_id);
+    }
+    assert_eq!(adv2, vec!["doc-save-sync".to_string()]);
+    sync_coordinator_on_dirty_notification(
+        &mut coord2,
+        true,
+        true,
+        &adv2,
+        Some("doc-save-sync"),
+        Some("/data/sync_test.xlsx"),
+    );
+    match coord2.state() {
+        DocumentState::Saving {
+            dirty_during_save, ..
+        } => assert!(
+            *dirty_during_save,
+            "Actual edit revision advance MUST mark dirty_during_save = true"
+        ),
+        other => panic!("Expected Saving state, got {other:?}"),
+    }
+}
