@@ -929,9 +929,18 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                                 .and_then(|uid| s.get_unmanaged_edit_revision(uid))
                                         })
                                         .unwrap_or_else(|| s.get_edit_revision(effective_doc_id));
+                                    let effective_intent = if requires_format_safe_save_as(
+                                        intent,
+                                        target_path.as_deref(),
+                                        &bytes_clone,
+                                    ) {
+                                        crate::platform::adapter::SaveOperationIntent::SaveAs
+                                    } else {
+                                        intent
+                                    };
                                     let save_ctx = GridCraftSaveRequestContext {
                                         request_id: req_clone.clone(),
-                                        operation_intent: intent,
+                                        operation_intent: effective_intent,
                                         originating_document_id: target_doc_id
                                             .clone()
                                             .or_else(|| incoming_doc_id.clone()),
@@ -1356,8 +1365,12 @@ pub async fn execute_gridcraft_save(
         || ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::Export;
     let req_id = ctx.request_id.as_str();
 
-    // 1. Regular Save: Có sẵn file_path và document_id đã đăng ký
-    if !save_as && let (Some(_path), Some(doc_id)) = (file_path, document_id) {
+    // 1. Regular Save: Có sẵn file_path, document_id đã đăng ký VÀ định dạng nhị phân tương thích 100% với tệp đích (P1 #4689587087)
+    // Nếu mở CSV/XLS nhưng snapshot serialize ra XLSX ZIP (PK\x03\x04), TUYỆT ĐỐI không ghi đè tệp CSV/XLS mà bắt buộc Save As sang .xlsx!
+    if !save_as
+        && let (Some(_path), Some(doc_id)) = (file_path, document_id)
+        && validate_save_as_format_compatibility(_path, bytes).is_ok()
+    {
         let grant_args = serde_wasm_bindgen::to_value(&serde_json::json!({
             "documentId": doc_id,
             "appInstanceId": "gridcraft-workspace-instance",
@@ -1458,11 +1471,12 @@ pub async fn execute_gridcraft_save(
         ));
     };
 
+    let default_save_name = format_safe_default_save_name(name, bytes);
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
         "documentId": document_id,
         "appInstanceId": "gridcraft-workspace-instance",
         "sessionGeneration": session_gen,
-        "defaultName": name,
+        "defaultName": default_save_name,
         "filterName": filter_name,
         "extensions": extensions,
     }))
@@ -1539,6 +1553,59 @@ pub async fn execute_gridcraft_save(
             }
         }
         Err(e) => Ok(DevSaveResult::Failed(format!("Lỗi hộp thoại: {e:?}"))),
+    }
+}
+
+/// Đánh giá liệu thao tác Save thường lên `target_path` với payload `bytes` có bắt buộc nâng cấp
+/// thành Save As (ví dụ: mở `.csv`/`.xls` nhưng snapshot serialize ra XLSX `PK\x03\x04`) hay không (P1 #4689587087).
+pub fn requires_format_safe_save_as(
+    intent: crate::platform::adapter::SaveOperationIntent,
+    target_path: Option<&str>,
+    bytes: &[u8],
+) -> bool {
+    if intent != crate::platform::adapter::SaveOperationIntent::Save {
+        return false;
+    }
+    match target_path {
+        Some(path) => validate_save_as_format_compatibility(path, bytes).is_err(),
+        None => true,
+    }
+}
+
+/// Tên tệp gợi ý an toàn cho hộp thoại Save As khớp định dạng nhị phân thực tế (P1 #4689587087).
+pub fn format_safe_default_save_name(name: &str, bytes: &[u8]) -> String {
+    let lower = name.to_ascii_lowercase();
+    if bytes.starts_with(b"PK\x03\x04") {
+        if lower.ends_with(".xlsx") || lower.ends_with(".xlsm") {
+            name.to_string()
+        } else {
+            let stem = std::path::Path::new(name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("workbook");
+            format!("{stem}.xlsx")
+        }
+    } else if bytes.starts_with(b"%PDF-") {
+        if lower.ends_with(".pdf") {
+            name.to_string()
+        } else {
+            let stem = std::path::Path::new(name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("export");
+            format!("{stem}.pdf")
+        }
+    } else if lower.ends_with(".csv") || lower.ends_with(".txt") {
+        name.to_string()
+    } else {
+        let stem = std::path::Path::new(name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("export");
+        format!("{stem}.csv")
     }
 }
 

@@ -2688,3 +2688,126 @@ fn test_p1_4689114183_unmanaged_dirty_workbook_retained_when_sibling_save_comple
     );
     assert_eq!(state.get_unmanaged_edit_revision(702), None);
 }
+
+#[test]
+fn test_p1_4689587087_opened_csv_never_overwritten_with_xlsx_snapshot() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        DevSaveResult, GridCraftSaveRequestContext, format_safe_default_save_name,
+        handle_gridcraft_save_outcome, requires_format_safe_save_as,
+        validate_save_as_format_compatibility,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+    use sha2::{Digest, Sha256};
+
+    let tmp_dir =
+        std::env::temp_dir().join(format!("p1_4689587087_csv_safety_{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&tmp_dir);
+    let csv_path = tmp_dir.join("ledger.csv");
+    let xlsx_dest = tmp_dir.join("ledger.xlsx");
+
+    let csv_original = b"id,name,amount\n1,Office,1500\n";
+    std::fs::write(&csv_path, csv_original).expect("write initial csv");
+    let csv_sha_before = format!("{:x}", Sha256::digest(csv_original));
+
+    // Snapshot từ GridCraft host-initiated save (XLSX ZIP)
+    let fixture_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+    let xlsx_bytes = std::fs::read(fixture_dir.join("stage2c_v1.xlsx")).expect("read xlsx fixture");
+
+    // 1. Khi mở .csv nhưng payload là XLSX (PK\x03\x04), Save thường BẮT BUỘC phải nâng cấp thành Save As!
+    assert!(requires_format_safe_save_as(
+        SaveOperationIntent::Save,
+        csv_path.to_str(),
+        &xlsx_bytes
+    ));
+    assert!(
+        validate_save_as_format_compatibility(&csv_path.to_string_lossy(), &xlsx_bytes).is_err(),
+        "Direct ZIP write over .csv MUST be rejected"
+    );
+    assert_eq!(
+        format_safe_default_save_name("ledger.csv", &xlsx_bytes),
+        "ledger.xlsx"
+    );
+
+    // Ngược lại, .xlsx khớp với PK\x03\x04 và .csv khớp với CSV text
+    assert!(!requires_format_safe_save_as(
+        SaveOperationIntent::Save,
+        xlsx_dest.to_str(),
+        &xlsx_bytes
+    ));
+    assert!(!requires_format_safe_save_as(
+        SaveOperationIntent::Save,
+        csv_path.to_str(),
+        csv_original
+    ));
+
+    // 2. Đăng ký phiên .csv và mô phỏng hoàn tất Save & Exit khi được nâng cấp sang SaveAs -> ledger.xlsx
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+    close_mgr.handle_native_close_requested("close-csv-req".into(), true, "ledger.csv");
+    close_mgr.is_saving.set(true);
+    state
+        .pending_close_request_id
+        .set(Some("close-csv-req".into()));
+
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-csv-1".into(),
+        file_path: csv_path.to_string_lossy().to_string(),
+        file_name: "ledger.csv".into(),
+        revision: 0,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(801),
+    });
+    state.set_document_session(
+        Some("doc-csv-1".into()),
+        Some(csv_path.to_string_lossy().to_string()),
+        0,
+    );
+
+    let upgraded_ctx = GridCraftSaveRequestContext {
+        request_id: "save-csv-upgraded".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-csv-1".into()),
+        originating_path: Some(csv_path.to_string_lossy().to_string()),
+        originating_name: "ledger.csv".into(),
+        iframe_doc_uid: Some(801),
+        snapshot_edit_revision: 1,
+        base_committed_revision: 0,
+        session_generation: 1,
+    };
+    state.register_pending_save_request("save-csv-upgraded", Some("doc-csv-1"));
+
+    // Ghi .xlsx đích an toàn
+    std::fs::write(&xlsx_dest, &xlsx_bytes).expect("write xlsx dest");
+    handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::Saved {
+            dest_path: xlsx_dest.to_string_lossy().to_string(),
+            new_doc_id: "doc-xlsx-new".into(),
+            committed_rev: 1,
+        }),
+        &upgraded_ctx,
+        &xlsx_bytes,
+        Some(close_mgr),
+        Some(app_state.clone()),
+    );
+
+    // 3. Xác minh tệp CSV gốc trên đĩa KHÔNG BỊ GHI ĐÈ, còn phiên host chuyển sạch sang ledger.xlsx và được phép đóng cửa sổ
+    let csv_after = std::fs::read(&csv_path).expect("read csv after");
+    assert_eq!(format!("{:x}", Sha256::digest(&csv_after)), csv_sha_before);
+    assert!(
+        state
+            .document_sessions
+            .with_untracked(|m| !m.contains_key("doc-csv-1") && m.contains_key("doc-xlsx-new")),
+        "CSV session must migrate cleanly to new XLSX session without retaining a ghost dirty CSV session"
+    );
+    assert!(!state.is_dirty.get_untracked());
+    assert!(close_mgr.is_authorized.get_untracked());
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
