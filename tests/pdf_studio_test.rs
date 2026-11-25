@@ -2153,3 +2153,70 @@ fn test_p2_4684793560_pdf_canvas_binding_lifecycle_all_five_scenarios() {
     ));
     assert!(state.is_path_bound_to_active_canvas("/docs/D.pdf"));
 }
+
+#[test]
+fn test_p2_4689114193_reconcile_originating_pdf_session_after_clean_save_as() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{SaveOutcome, apply_save_outcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::{PdfStudioState, SaveRequestContext};
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let state = PdfStudioState::new();
+    let inst_1 = state.begin_canvas_instance();
+    state.set_canvas_ready(true);
+
+    // 1. Mở A.pdf và đánh dấu thay đổi chưa lưu
+    state.add_file("/docs/A.pdf");
+    state.register_document_session("/docs/A.pdf", Some("doc-A".into()), 1);
+    state.set_active_document_session(Some("doc-A".into()), 1);
+    assert!(state.mark_canvas_bound(inst_1, "/docs/A.pdf"));
+
+    state.set_unsaved_changes(true);
+    assert!(state.has_unsaved_changes());
+    assert!(state.has_unsaved_documents_or_pending_saves());
+
+    // 2. Save As A.pdf -> B.pdf không có chỉnh sửa phát sinh thêm (snapshot_gen == 1)
+    let ctx_save_as = SaveRequestContext {
+        request_id: "req-pdf-clean-saveas-ab".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-A".into()),
+        originating_path: Some("/docs/A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-ab-1".into(),
+        authorized_dest_path: Some("/docs/B.pdf".into()),
+    };
+    state.register_pending_save("req-pdf-clean-saveas-ab".into(), ctx_save_as.clone());
+
+    apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: "/docs/B.pdf".into(),
+            committed_revision: 1,
+            new_document_id: Some("doc-B".into()),
+        }),
+        &ctx_save_as,
+        b"%PDF-1.7 SAVED_AS_B",
+    );
+
+    // 3. BẤT BIẾN P2 #4689114193: B.pdf được kích hoạt sạch, đồng thời phiên nguồn A.pdf KHÔNG bị kẹt is_dirty = true!
+    assert_eq!(state.active_file_path().as_deref(), Some("/docs/B.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-B"));
+    assert!(!state.has_unsaved_changes());
+
+    let sess_a = state
+        .get_document_session("/docs/A.pdf")
+        .expect("Originating session A should remain indexed");
+    assert!(
+        !sess_a.is_dirty,
+        "Originating session A must NOT retain stale pre-save dirty flag after clean Save As to B!"
+    );
+    let sess_b = state
+        .get_document_session("/docs/B.pdf")
+        .expect("Destination session B should be indexed");
+    assert!(!sess_b.is_dirty);
+    assert!(
+        !state.has_unsaved_documents_or_pending_saves(),
+        "Window close guard must NOT remain blocked after clean Save As from A.pdf to B.pdf!"
+    );
+}

@@ -2594,3 +2594,97 @@ fn test_p2_4683038858_explicit_discard_and_close_dirty_workbook_leaves_no_ghost_
         "Workspace must be clean after last dirty workbook is discarded and closed"
     );
 }
+
+#[test]
+fn test_p1_4689114183_unmanaged_dirty_workbook_retained_when_sibling_save_completes() {
+    use office_utility_vn_ui::app::AppState;
+    use office_utility_vn_ui::micro_apps::gridcraft::state::WorkbookSession;
+    use office_utility_vn_ui::micro_apps::gridcraft::workspace::{
+        DevSaveResult, GridCraftSaveRequestContext, handle_gridcraft_save_outcome,
+    };
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::window_close::WindowCloseManager;
+
+    let app_state = AppState::new();
+    let state = app_state.gridcraft_state;
+    let close_mgr = WindowCloseManager::new();
+
+    // 1. Mở workbook A.xlsx (đã có native session), đồng thời tạo workbook B mới chưa lưu (uid 702, không có native session)
+    state.register_document_session(WorkbookSession {
+        document_id: "doc-A".into(),
+        file_path: "/data/A.xlsx".into(),
+        file_name: "A.xlsx".into(),
+        revision: 1,
+        is_dirty: true,
+        edit_revision: 1,
+        iframe_doc_uid: Some(701),
+    });
+    state.set_document_session(Some("doc-A".into()), Some("/data/A.xlsx".into()), 1);
+
+    // Iframe báo workbook B chưa có native session (uid 702) đang dirty ở revision 2
+    state.sync_workbook_dirty_and_revision(Some("Untitled-1"), Some(702), true, Some(2));
+    assert!(state.is_dirty.get_untracked());
+    assert!(app_state.has_unsaved_work_or_running_task());
+
+    // 2. Chọn A và thực hiện Save & Exit cho A trong khi B (unmanaged uid 702) vẫn chưa lưu
+    close_mgr.handle_native_close_requested(
+        "req-close-p1-4689114183".into(),
+        true,
+        "GridCraft: A.xlsx, Untitled-1",
+    );
+    close_mgr.is_saving.set(true);
+    state
+        .pending_close_request_id
+        .set(Some("req-close-p1-4689114183".into()));
+
+    let ctx_a = GridCraftSaveRequestContext {
+        request_id: "save-A-only".into(),
+        operation_intent: SaveOperationIntent::Save,
+        originating_document_id: Some("doc-A".into()),
+        originating_path: Some("/data/A.xlsx".into()),
+        originating_name: "A.xlsx".into(),
+        iframe_doc_uid: Some(701),
+        snapshot_edit_revision: 1,
+        base_committed_revision: 1,
+        session_generation: 1,
+    };
+    state.register_pending_save_request("save-A-only", Some("doc-A"));
+
+    handle_gridcraft_save_outcome(
+        &state,
+        None,
+        Ok(DevSaveResult::Saved {
+            dest_path: "/data/A.xlsx".into(),
+            new_doc_id: "doc-A".into(),
+            committed_rev: 2,
+        }),
+        &ctx_a,
+        b"PK\x03\x04_A_SAVED",
+        Some(close_mgr),
+        Some(app_state.clone()),
+    );
+
+    // BẤT BIẾN P1 #4689114183: Dù A đã sạch và được đăng ký lại, B (uid 702) vẫn dirty => workspace và app_state PHẢI giữ dirty
+    // và KHÔNG được phép ủy quyền đóng cửa sổ!
+    assert!(
+        state.is_dirty.get_untracked(),
+        "Workspace dirty flag MUST remain true while unmanaged workbook uid 702 has unsaved changes!"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "AppState MUST still report unsaved work for unmanaged workbook uid 702!"
+    );
+    assert!(
+        !close_mgr.is_authorized.get_untracked(),
+        "Save & Exit on A MUST NOT authorize window close while unmanaged workbook B is dirty!"
+    );
+    assert_eq!(state.get_unmanaged_edit_revision(702), Some(2));
+
+    // 3. Nếu người dùng đóng hẳn B với "Don't Save", documents snapshot chỉ còn [701] -> đối soát dọn uid 702 sạch sẽ
+    state.reconcile_closed_sessions(&[701]);
+    assert!(
+        !state.is_dirty.get_untracked(),
+        "Workspace dirty flag must clear once unmanaged dirty workbook 702 is closed/discarded"
+    );
+    assert_eq!(state.get_unmanaged_edit_revision(702), None);
+}

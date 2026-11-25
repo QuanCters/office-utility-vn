@@ -127,11 +127,13 @@ pub fn handle_gridcraft_save_outcome(
             })
             .or_else(|| {
                 originating_uid.and_then(|uid| {
-                    s.document_sessions.with_untracked(|m| {
-                        m.values()
-                            .find(|sess| sess.iframe_doc_uid == Some(uid))
-                            .map(|sess| sess.edit_revision)
-                    })
+                    s.document_sessions
+                        .with_untracked(|m| {
+                            m.values()
+                                .find(|sess| sess.iframe_doc_uid == Some(uid))
+                                .map(|sess| sess.edit_revision)
+                        })
+                        .or_else(|| s.get_unmanaged_edit_revision(uid))
                 })
             })
             .unwrap_or(snapshot_edit_rev)
@@ -140,6 +142,8 @@ pub fn handle_gridcraft_save_outcome(
     let mark_origin_dirty = || {
         if let Some(ref orig_id) = originating_doc_id {
             s.set_document_dirty(orig_id, true);
+        } else if let Some(uid) = originating_uid {
+            s.sync_workbook_dirty_and_revision(Some(name), Some(uid), true, None);
         } else {
             s.is_dirty.set(true);
         }
@@ -920,6 +924,10 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     // Finding 2 & P1 #4684931088: Chụp ngữ cảnh yêu cầu lưu bất biến tại thời điểm chấp nhận yêu cầu
                                     let snapshot_edit_rev = resolved_edit_rev
                                         .or_else(|| meta_pair.map(|(_, rev)| rev))
+                                        .or_else(|| {
+                                            resolved_uid
+                                                .and_then(|uid| s.get_unmanaged_edit_revision(uid))
+                                        })
                                         .unwrap_or_else(|| s.get_edit_revision(effective_doc_id));
                                     let save_ctx = GridCraftSaveRequestContext {
                                         request_id: req_clone.clone(),

@@ -35,6 +35,8 @@ pub struct GridCraftState {
     pub document_sessions: RwSignal<std::collections::HashMap<String, WorkbookSession>>,
     /// Tập các request_id -> document_id đang có lệnh lưu native pending (P2 #4683038858)
     pub pending_save_requests: RwSignal<std::collections::HashMap<String, String>>,
+    /// Trạng thái dirty & edit revision cho các workbook live trong iframe chưa có phiên native (P1 #4689114183)
+    pub unmanaged_dirty_uids: RwSignal<std::collections::HashMap<u64, (bool, u64)>>,
 }
 
 /// Dữ liệu phiên làm việc của một workbook độc lập (Stage 4C-1 Workbook Session Identity)
@@ -88,6 +90,7 @@ impl GridCraftState {
             edit_revision: RwSignal::new(0),
             document_sessions: RwSignal::new(std::collections::HashMap::new()),
             pending_save_requests: RwSignal::new(std::collections::HashMap::new()),
+            unmanaged_dirty_uids: RwSignal::new(std::collections::HashMap::new()),
         }
     }
 
@@ -103,6 +106,11 @@ impl GridCraftState {
 
     /// Đăng ký hoặc cập nhật một phiên workbook cụ thể (Finding 2)
     pub fn register_document_session(&self, session: WorkbookSession) {
+        if let Some(uid) = session.iframe_doc_uid {
+            self.unmanaged_dirty_uids.update(|m| {
+                m.remove(&uid);
+            });
+        }
         self.document_sessions.update(|map| {
             map.insert(session.document_id.clone(), session);
         });
@@ -184,6 +192,11 @@ impl GridCraftState {
     /// Di chuyển một phiên workbook sang document_id và đường dẫn mới sau khi Save As thành công (P1 #4683798594)
     /// Đảm bảo không để lại session ma (ghost dirty session) của tài liệu nguồn cũ.
     pub fn migrate_document_session(&self, old_doc_id: &str, new_session: WorkbookSession) {
+        if let Some(uid) = new_session.iframe_doc_uid {
+            self.unmanaged_dirty_uids.update(|m| {
+                m.remove(&uid);
+            });
+        }
         let mut sessions = self.document_sessions.get_untracked();
         if old_doc_id != new_session.document_id {
             sessions.remove(old_doc_id);
@@ -248,6 +261,15 @@ impl GridCraftState {
             modified = true;
         }
 
+        let mut unmanaged_modified = false;
+        self.unmanaged_dirty_uids.update(|m| {
+            let before = m.len();
+            m.retain(|uid, _| live_uids.contains(uid));
+            if m.len() != before {
+                unmanaged_modified = true;
+            }
+        });
+
         if modified {
             self.document_sessions.set(sessions);
             if removed_active {
@@ -256,6 +278,8 @@ impl GridCraftState {
                 self.active_file_name.set(None);
                 self.active_revision.set(0);
             }
+            self.recompute_aggregate_dirty();
+        } else if unmanaged_modified {
             self.recompute_aggregate_dirty();
         }
     }
@@ -309,7 +333,23 @@ impl GridCraftState {
         }
 
         if matched_id.is_some() {
+            if let Some(uid) = doc_uid {
+                self.unmanaged_dirty_uids.update(|m| {
+                    m.remove(&uid);
+                });
+            }
             self.document_sessions.set(sessions);
+            self.recompute_aggregate_dirty();
+        } else if let Some(uid) = doc_uid {
+            // P1 #4689114183: Theo dõi dirty + edit_revision cho các workbook live chưa có native session
+            self.unmanaged_dirty_uids.update(|m| {
+                if dirty {
+                    let prev_rev = m.get(&uid).map(|&(_, r)| r).unwrap_or(0);
+                    m.insert(uid, (true, revision.unwrap_or(prev_rev)));
+                } else {
+                    m.remove(&uid);
+                }
+            });
             self.recompute_aggregate_dirty();
         } else if dirty {
             // Danh tính không rõ ràng nhưng iframe báo dirty: Fail closed
@@ -421,13 +461,24 @@ impl GridCraftState {
         self.document_sessions.set(std::collections::HashMap::new());
         self.pending_save_requests
             .set(std::collections::HashMap::new());
+        self.unmanaged_dirty_uids
+            .set(std::collections::HashMap::new());
+    }
+
+    /// Lấy edit revision của một unmanaged UID live trong iframe (nếu có)
+    pub fn get_unmanaged_edit_revision(&self, uid: u64) -> Option<u64> {
+        self.unmanaged_dirty_uids
+            .with_untracked(|m| m.get(&uid).map(|&(_, rev)| rev))
     }
 
     /// Tái tính toán trạng thái dirty tổng hợp của toàn bộ workspace từ mọi workbook đang mở
     pub fn recompute_aggregate_dirty(&self) {
         let sessions = self.document_sessions.get_untracked();
-        let any_dirty = sessions.values().any(|s| s.is_dirty);
-        self.is_dirty.set(any_dirty);
+        let any_session_dirty = sessions.values().any(|s| s.is_dirty);
+        let any_unmanaged_dirty = self
+            .unmanaged_dirty_uids
+            .with_untracked(|m| m.values().any(|&(dirty, _)| dirty));
+        self.is_dirty.set(any_session_dirty || any_unmanaged_dirty);
     }
 
     /// Cập nhật phiên tài liệu đã mở hoặc lưu

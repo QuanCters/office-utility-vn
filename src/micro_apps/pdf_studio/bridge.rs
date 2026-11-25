@@ -551,8 +551,24 @@ pub fn apply_save_outcome(
                 ctx.snapshot_edit_generation
             };
 
+            // P2 #4689114193: Nếu Save As sang đường dẫn mới khác tài liệu nguồn,
+            // đối soát dọn cờ dirty của phiên nguồn vì thay đổi đã được chuyển/lưu sang dest_path.
+            let is_cross_file_save_as = (is_save_as || ctx.originating_path.is_none())
+                && ctx
+                    .originating_path
+                    .as_deref()
+                    .map(|orig| orig != dest_path.as_str())
+                    .unwrap_or(false);
+
             // 1. Luôn cập nhật phiên và bộ nhớ cache cho tài liệu đã được lưu TRƯỚC khi chuyển active file
             let mut map = s.document_sessions.get_untracked();
+            if is_cross_file_save_as {
+                if let Some(ref orig_path) = ctx.originating_path {
+                    if let Some(orig_sess) = map.get_mut(orig_path) {
+                        orig_sess.is_dirty = false;
+                    }
+                }
+            }
             if let Some(sess) = map.get_mut(&dest_path) {
                 sess.document_id = target_doc_id.clone();
                 sess.revision = committed_revision;
@@ -580,6 +596,10 @@ pub fn apply_save_outcome(
             // 2. Thêm hoặc chọn tệp mới lưu (Save As)
             if is_save_as || ctx.originating_path.is_none() {
                 if is_still_active_target {
+                    if is_cross_file_save_as && is_originating_active {
+                        // Ngăn add_file() sao chép cờ has_unsaved_changes cũ ngược lại phiên nguồn trước khi chuyển active
+                        s.has_unsaved_changes.set(false);
+                    }
                     s.add_file(&dest_path);
                 } else {
                     // Thêm tệp vào danh sách nhưng giữ nguyên tệp đang active
