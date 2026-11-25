@@ -1,0 +1,60 @@
+# Risk Classification Rules
+# Phân loại mức độ rủi ro dựa trên tệp thay đổi và độ phức tạp kiến trúc
+
+version: "1.0"
+
+rules:
+  - id: "risk-persistence"
+    name: "Persistence & File I/O Modifications"
+    pattern: "(src-tauri/src/safe_persistence.rs|src-tauri/src/db/.*|.*persistence.*|.*save.*)"
+    risk_level: "HIGH"
+    mandatory_verifications: ["L0", "L1", "L2", "L3"]
+    required_invariants:
+      - "NativeSafePersistence"
+      - "NativeSaveGrantManager"
+    description: "Thay đổi tầng lưu trữ hoặc ghi file có rủi ro gây hỏng tài liệu gốc nếu có lỗi."
+
+  - id: "risk-ipc-boundary"
+    name: "Tauri IPC Command & Capability Alterations"
+    pattern: "(src-tauri/src/commands/.*|src-tauri/capabilities/.*|src-tauri/tauri.conf.json)"
+    risk_level: "CRITICAL"
+    mandatory_verifications: ["L0", "L1", "L2", "L3", "L4"]
+    required_invariants:
+      - "Tauri IPC"
+      - "HostDocumentCoordinator"
+    description: "Thay đổi IPC boundary hoặc permissions có nguy cơ rò rỉ quyền hoặc injection."
+
+  - id: "risk-document-coordinator"
+    name: "Document Coordinator & State Lifecycle"
+    pattern: "(src/micro_apps/.*/state.rs|src/micro_apps/.*/layout.rs|src-tauri/src/window_guard.rs)"
+    risk_level: "HIGH"
+    mandatory_verifications: ["L0", "L1", "L2", "L3"]
+    required_invariants:
+      - "HostDocumentCoordinator"
+      - "WindowCloseGuard"
+    description: "Sửa đổi quản lý trạng thái tài liệu hoặc vòng đời đóng cửa sổ có nguy cơ stale writes hoặc mất dữ liệu chưa lưu."
+
+  - id: "risk-vendor-patch"
+    name: "Vendor Pinned Dependencies"
+    pattern: "(vendor/.*|patches/.*)"
+    risk_level: "CRITICAL"
+    mandatory_verifications: ["L0", "L1", "L2", "L3", "L4", "L5"]
+    required_invariants:
+      - "GridCraft vendor"
+    description: "Thay đổi mã nguồn vendor đã ghim bắt buộc phải có maintainer review và kiểm chứng toàn diện."
+
+  - id: "risk-pdf-ast"
+    name: "PDF AST & Byte Stream Manipulation"
+    pattern: "(crates/office-engine/src/doc_suite/.*|src/micro_apps/pdf_studio/.*)"
+    risk_level: "HIGH"
+    mandatory_verifications: ["L0", "L1", "L2", "L3"]
+    required_invariants:
+      - "PDF/WebAssembly"
+      - "NFR-SEC-01"
+      - "NFR-SEC-04"
+    description: "Xử lý cấu trúc PDF phải đảm bảo tính toán XREF offset tuyệt đối và không hỏng byte."
+
+default_policy:
+  fallback_risk_level: "MEDIUM"
+  action_on_unknown: "ELEVATE_RISK_TO_HIGH"
+  note: "Nếu không xác định được file ảnh hưởng hoặc bộ chọn test gặp lỗi, hành vi an toàn là nâng cấp rủi ro lên HIGH và chạy bộ test rộng hơn, tuyệt đối không bỏ qua kiểm tra."

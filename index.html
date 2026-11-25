@@ -5,8 +5,12 @@
     <title>Tauri + Leptos App</title>
     <link data-trunk rel="copy-dir" href="styles" />
     <link data-trunk rel="css" href="styles.css" />
-    <link data-trunk rel="copy-dir" href="public" />
     <link data-trunk rel="copy-dir" href="public/pdfcraft" data-target-path="pdfcraft" />
+    <link data-trunk rel="copy-dir" href="public/gridcraft" data-target-path="gridcraft" />
+    <link data-trunk rel="copy-dir" href="public/audio" data-target-path="audio" />
+    <link data-trunk rel="copy-dir" href="public/audio" data-target-path="public/audio" />
+    <link data-trunk rel="copy-file" href="public/tauri.svg" />
+    <link data-trunk rel="copy-file" href="public/leptos.svg" />
     <link data-trunk rel="rust" data-wasm-opt="0" />
     <script>
       // Vietnamese Number Web Audio Scheduler
@@ -140,8 +144,17 @@
         return obj;
       }
 
-      if (typeof window !== "undefined" && !window.__TAURI__) {
+      if (typeof window !== "undefined" && !window.__TAURI_INTERNALS__ && !window.__TAURI__) {
         window.__TAURI__ = {
+          event: {
+            listen: async function(event, handler) {
+              console.log("[Tauri Web Shim] listen:", event);
+              return function unlisten() {};
+            },
+            emit: async function(event, payload) {
+              console.log("[Tauri Web Shim] emit:", event, payload);
+            }
+          },
           core: {
             Channel: class {
               constructor() {
@@ -236,6 +249,35 @@
             }
           }
         };
+      }
+
+      // Native Tauri v2 Event Bridge
+      if (typeof window !== "undefined") {
+        if (!window.__TAURI__) window.__TAURI__ = {};
+        if (!window.__TAURI__.event && window.__TAURI_INTERNALS__) {
+          window.__TAURI__.event = {
+            listen: function(event, handler) {
+              const handlerId = window.__TAURI_INTERNALS__.transformCallback(handler);
+              return window.__TAURI_INTERNALS__.invoke("plugin:event|listen", {
+                event: event,
+                handler: handlerId
+              }).then(function(unlistenId) {
+                return function() {
+                  return window.__TAURI_INTERNALS__.invoke("plugin:event|unlisten", {
+                    event: event,
+                    eventId: unlistenId
+                  });
+                };
+              });
+            },
+            emit: function(event, payload) {
+              return window.__TAURI_INTERNALS__.invoke("plugin:event|emit", {
+                event: event,
+                payload: payload
+              });
+            }
+          };
+        }
       }
     </script>
   </head>

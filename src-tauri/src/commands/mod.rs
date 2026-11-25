@@ -314,29 +314,187 @@ pub async fn inspect_file_metadata(file_path: String) -> Result<FileMetadataResp
 }
 
 /// Đọc toàn bộ nội dung nhị phân (binary bytes) của một tệp từ đĩa cục bộ.
+/// [BẢO MẬT STAGE 4C-0D CLOSURE]: Vô hiệu hóa vĩnh viễn lỗ hổng raw-path read bypass (Fail-Closed).
+/// Không chấp nhận bất kỳ đường dẫn nào do JavaScript cung cấp theo NFR-SEC-01.
+/// Mọi thao tác nạp tài liệu sản xuất bắt buộc phải thông qua 'native_dialog_open_file' với OS Dialog.
 #[tauri::command]
-pub async fn read_file_binary(file_path: String) -> Result<Vec<u8>, CommandError> {
-    let path = Path::new(&file_path);
-    if !path.exists() {
+pub async fn read_file_binary(_file_path: String) -> Result<Vec<u8>, CommandError> {
+    Err(CommandError::ValidationFailed {
+        reason: "Lệnh cũ 'read_file_binary' đã bị vô hiệu hóa vĩnh viễn theo NFR-SEC-01 để ngăn chặn lỗ hổng Arbitrary File Read. Mọi thao tác nạp tệp bắt buộc phải thông qua 'native_dialog_open_file' với hộp thoại OS do người dùng trực tiếp chọn.".to_string(),
+    })
+}
+
+#[cfg(debug_assertions)]
+const APPROVED_DEV_FIXTURES: &[(&str, &str)] = &[
+    ("tc04_sample", "/tmp/office-utility-uat/tc04_sample.xlsx"),
+    ("test_uat_sample", "/tmp/office-utility-uat/test_uat_sample.xlsx"),
+];
+
+/// Tải fixture phục vụ kiểm thử phát triển / UAT cục bộ (Debug Only).
+/// Tuyệt đối KHÔNG nhận đường dẫn tùy ý từ JavaScript; chỉ chấp nhận fixture_id được định nghĩa sẵn.
+/// Bị loại bỏ hoàn toàn trong bản dựng Release.
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn load_dev_fixture(
+    fixture_id: String,
+) -> Result<crate::safe_persistence::DocumentHandle, CommandError> {
+    let matched = APPROVED_DEV_FIXTURES
+        .iter()
+        .find(|(id, _)| *id == fixture_id)
+        .ok_or_else(|| CommandError::ValidationFailed {
+            reason: format!("Mã kiểm thử '{}' không nằm trong danh mục fixture phát triển được cho phép", fixture_id),
+        })?;
+
+    let path = std::path::Path::new(matched.1);
+
+    if !path.is_file() {
         return Err(CommandError::FileNotFound {
-            path: file_path.clone(),
+            path: matched.1.to_string(),
         });
     }
-    std::fs::read(path).map_err(|e| CommandError::IoError {
-        details: format!("Không thể đọc tệp {file_path}: {e}"),
+
+    // Kiểm tra không được là liên kết tượng trưng (symlink)
+    let meta = std::fs::symlink_metadata(path).map_err(|e| CommandError::IoError {
+        details: format!("Không thể kiểm tra metadata fixture: {e}"),
+    })?;
+    if meta.file_type().is_symlink() {
+        return Err(CommandError::ValidationFailed {
+            reason: "Từ chối fixture dạng liên kết tượng trưng (symlink)".to_string(),
+        });
+    }
+
+    // Giới hạn kích thước an toàn tối đa 5MB
+    if meta.len() > 5 * 1024 * 1024 {
+        return Err(CommandError::ValidationFailed {
+            reason: "Kích thước fixture vượt quá giới hạn an toàn 5MB".to_string(),
+        });
+    }
+
+    // Đọc dữ liệu và xác thực magic header định dạng XLSX (PK\x03\x04)
+    let bytes = std::fs::read(path).map_err(|e| CommandError::IoError {
+        details: format!("Không thể đọc nội dung fixture: {e}"),
+    })?;
+    if !bytes.starts_with(b"PK\x03\x04") {
+        return Err(CommandError::ValidationFailed {
+            reason: "Tệp fixture không phải là tệp bảng tính XLSX hợp lệ (thiếu header PK)".to_string(),
+        });
+    }
+
+    let file_name = path
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_else(|| "tc04_sample.xlsx".to_string());
+    let file_path = path.to_string_lossy().to_string();
+    let doc_id = "doc-uat-04".to_string();
+
+    let _ = crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.register_document_session(
+        &doc_id,
+        "gridcraft-dev-instance",
+        1,
+        path,
+        0,
+    );
+
+    Ok(crate::safe_persistence::DocumentHandle {
+        document_id: doc_id,
+        app_instance_id: "gridcraft-dev-instance".to_string(),
+        session_generation: 1,
+        file_name,
+        file_path,
+        initial_revision: 0,
+        bytes,
     })
 }
 
 /// Ghi dữ liệu nhị phân (binary bytes) ra tệp trên đĩa cục bộ.
+/// [BẢO MẬT STAGE 4B-2A CLOSURE]: Khóa hoàn toàn vĩnh viễn lỗ hổng raw-path write bypass (Fail-Closed).
+/// Không chấp nhận bất kỳ đường dẫn nào do JavaScript cung cấp.
+/// Mọi thao tác ghi đĩa bắt buộc phải thông qua 'secure_save_document' với Save Grant hợp lệ từ Native Dialog.
 #[tauri::command]
-pub async fn save_file_binary(file_path: String, bytes: Vec<u8>) -> Result<(), CommandError> {
-    let path = Path::new(&file_path);
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    std::fs::write(path, bytes).map_err(|e| CommandError::IoError {
-        details: format!("Không thể ghi tệp {file_path}: {e}"),
+pub async fn save_file_binary(_file_path: String, _bytes: Vec<u8>) -> Result<(), CommandError> {
+    Err(CommandError::ValidationFailed {
+        reason: "Lệnh cũ 'save_file_binary' đã bị vô hiệu hóa vĩnh viễn theo NFR-SEC-01. Mọi thao tác lưu tệp bắt buộc phải thông qua 'secure_save_document' với Save Grant hợp lệ từ Native Dialog.".to_string(),
     })
+}
+
+/// Ghi tài liệu an toàn tuyệt đối thông qua Native Save Grant (Stage 4B-2A Revised API).
+/// Đường dẫn đích và quyền hạn được sở hữu và xác thực 100% bởi Native Backend từ grant_id.
+#[tauri::command]
+pub async fn secure_save_document(
+    grant_id: String,
+    request_id: String,
+    bytes: Vec<u8>,
+) -> Result<crate::safe_persistence::SaveSuccessResponse, CommandError> {
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.execute_granted_save(&grant_id, &request_id, &bytes)
+    })
+    .await
+    .map_err(|e| CommandError::ProcessExecutionError {
+        message: format!("Lỗi runtime khi điều phối ghi tệp có ủy quyền: {e}"),
+    })??;
+    Ok(res)
+}
+
+/// Mở tệp thông qua hộp thoại OS Native File Dialog.
+/// Đường dẫn được chọn trực tiếp bởi người dùng qua hệ điều hành.
+#[tauri::command]
+pub async fn native_dialog_open_file(
+    app_instance_id: String,
+    session_generation: u64,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Result<Option<crate::safe_persistence::DocumentHandle>, CommandError> {
+    let exts: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+    crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.open_file_via_native_dialog(
+        &app_instance_id,
+        session_generation,
+        &filter_name,
+        &exts,
+    )
+}
+
+/// Lưu tệp mới (Save As) thông qua hộp thoại OS Native File Dialog.
+/// Cấp phát ngay một Save Grant hợp lệ cho đường dẫn vừa chọn.
+#[tauri::command]
+pub async fn native_dialog_save_as(
+    document_id: Option<String>,
+    app_instance_id: String,
+    session_generation: u64,
+    default_name: Option<String>,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Result<Option<crate::safe_persistence::SaveAsHandle>, CommandError> {
+    let exts: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+    crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.save_as_via_native_dialog(
+        document_id.as_deref(),
+        &app_instance_id,
+        session_generation,
+        default_name.as_deref(),
+        &filter_name,
+        &exts,
+    )
+}
+
+/// Yêu cầu phát hành Save Grant cho tài liệu hiện hành đã được người dùng ủy quyền
+#[tauri::command]
+pub async fn request_save_grant(
+    document_id: String,
+    app_instance_id: String,
+    session_generation: u64,
+    request_id: String,
+    expected_revision: u64,
+) -> Result<crate::safe_persistence::NativeSaveGrant, CommandError> {
+    let grant = crate::safe_persistence::GLOBAL_SAVE_GRANT_MANAGER.issue_save_grant(
+        &document_id,
+        &app_instance_id,
+        session_generation,
+        &request_id,
+        expected_revision,
+        crate::safe_persistence::GrantOperationType::Save,
+        crate::safe_persistence::OverwritePolicy::AllowOverwrite,
+        30,
+    )?;
+    Ok(grant)
 }
 
 /// 5. Kiểm tra trạng thái gói mở rộng ngoại tuyến (Addon Package)

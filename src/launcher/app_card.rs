@@ -17,6 +17,30 @@ pub fn AppCard(
 ) -> impl IntoView {
     let meta: MicroAppMetadata = app_id.metadata();
 
+    let is_rollback = {
+        #[cfg(target_arch = "wasm32")]
+        {
+            web_sys::window()
+                .and_then(|w| w.local_storage().ok().flatten())
+                .and_then(|s| s.get_item("OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB").ok().flatten())
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false)
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::env::var("OFFICE_UTILITY_ROLLBACK_LEGACY_DATALAB").is_ok()
+        }
+    };
+
+    let (display_name, display_desc, display_badge) = match app_id {
+        MicroAppId::DataLab if !is_rollback => (
+            "Bảng tính GridCraft",
+            "Ứng dụng bảng tính chuyên nghiệp WebAssembly (100% On-Device, OpenXML native)",
+            "WASM Grid".to_string(),
+        ),
+        _ => (meta.name, meta.description, format!("{} công cụ", meta.tool_count)),
+    };
+
     let card_class_modifier = match app_id {
         MicroAppId::VnOffice => "launcher-card-vn-office",
         MicroAppId::PdfStudio => "launcher-card-pdf-studio",
@@ -29,7 +53,7 @@ pub fn AppCard(
             class=format!("launcher-app-card {}", card_class_modifier)
             role="button"
             tabindex="0"
-            title=format!("Mở không gian {}", meta.name)
+            title=format!("Mở không gian {}", display_name)
             on:click=move |_| on_select.run(app_id)
             on:keydown=move |ev: web_sys::KeyboardEvent| {
                 if ev.key() == "Enter" || ev.key() == " " {
@@ -43,13 +67,13 @@ pub fn AppCard(
                     <span class="launcher-app-card-icon" aria-hidden="true">{meta.icon}</span>
                 </div>
                 <span class="launcher-app-card-badge">
-                    {format!("{} công cụ", meta.tool_count)}
+                    {display_badge}
                 </span>
             </div>
 
             <div class="launcher-app-card-body">
-                <h3 class="launcher-app-card-title">{meta.name}</h3>
-                <p class="launcher-app-card-desc">{meta.description}</p>
+                <h3 class="launcher-app-card-title">{display_name}</h3>
+                <p class="launcher-app-card-desc">{display_desc}</p>
             </div>
 
             <div class="launcher-app-card-footer">

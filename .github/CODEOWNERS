@@ -1,0 +1,49 @@
+# ==============================================================================
+# GitHub CODEOWNERS - Office Utility VN
+# ==============================================================================
+# Phân quyền chặt chẽ giữa Maintainer và Developer / Feature Coding Agent.
+# Agent đang thực hiện feature KHÔNG được tự ý sửa policy hoặc harness để vượt gate.
+# ==============================================================================
+
+# Mặc định toàn bộ repository thuộc quyền Maintainer
+* @office-utility-vn/maintainers
+
+# Vùng mã nguồn ứng dụng: Developer / Coding Agent được phép tạo Feature PR
+/src/               @office-utility-vn/maintainers @office-utility-vn/engine-devs
+/src-tauri/         @office-utility-vn/maintainers @office-utility-vn/engine-devs
+/crates/            @office-utility-vn/maintainers @office-utility-vn/engine-devs
+/tests/             @office-utility-vn/maintainers @office-utility-vn/engine-devs
+/public/            @office-utility-vn/maintainers @office-utility-vn/ui-devs
+/styles/            @office-utility-vn/maintainers @office-utility-vn/ui-devs
+
+# Task Contract: Developer có thể đề xuất task, nhưng duyệt bắt buộc bởi Maintainer
+/harness/contracts/tasks/ @office-utility-vn/maintainers @office-utility-vn/engine-devs
+
+# ==============================================================================
+# CÁC VÙNG BẢO VỆ CHỈ ĐỌC (PROTECTED / READ-ONLY FOR AGENTS)
+# Chỉ Maintainer được duyệt PR sửa đổi các thành phần này:
+# ==============================================================================
+
+# 1. Verification Harness Policies, CI Scripts và Test Runners
+/harness/policies/           @office-utility-vn/maintainers
+/harness/ci/                 @office-utility-vn/maintainers
+/harness/runner/             @office-utility-vn/maintainers
+/harness/review/             @office-utility-vn/maintainers
+/harness/contracts/*.json    @office-utility-vn/maintainers
+
+# 2. Quy chuẩn Review và Phân cấp Prompt của Agent
+/.agents/review/             @office-utility-vn/maintainers
+/.agents/rules/              @office-utility-vn/maintainers
+
+# 3. CI/CD Workflows và Cấu hình Phân quyền
+/.github/workflows/          @office-utility-vn/maintainers
+/.github/CODEOWNERS          @office-utility-vn/maintainers
+
+# 4. Spine Lock Foundation (Phase 0 Read-Only Guard)
+/crates/office-shared/       @office-utility-vn/maintainers
+/src-tauri/src/db/           @office-utility-vn/maintainers
+/src-tauri/src/commands/     @office-utility-vn/maintainers
+/scripts/verify_spine_lock.sh @office-utility-vn/maintainers
+
+# 5. Pinned Third-Party Source (Vendor)
+/vendor/                     @office-utility-vn/maintainers

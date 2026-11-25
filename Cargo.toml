@@ -2,6 +2,7 @@
 name = "office-utility-vn-ui"
 version = "0.2.3"
 edition = "2024"
+autotests = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
@@ -23,6 +24,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 paste = "1.0"
+sha2 = "0.10"
 criterion = { version = "0.5", default-features = false }
 rayon = "1.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -38,36 +40,8 @@ name = "e2e"
 path = "tests/e2e/main.rs"
 
 [[test]]
-name = "micro_app_routing_test"
-path = "tests/micro_app_routing_test.rs"
-
-[[test]]
-name = "shared_ui_test"
-path = "tests/shared_ui_test.rs"
-
-[[test]]
-name = "launcher_test"
-path = "tests/launcher_test.rs"
-
-[[test]]
-name = "vn_office_test"
-path = "tests/vn_office_test.rs"
-
-[[test]]
-name = "pdf_studio_test"
-path = "tests/pdf_studio_test.rs"
-
-[[test]]
-name = "media_studio_test"
-path = "tests/media_studio_test.rs"
-
-[[test]]
-name = "data_lab_test"
-path = "tests/data_lab_test.rs"
-
-[[test]]
-name = "app_routing_test"
-path = "tests/app_routing_test.rs"
+name = "integration_tests"
+path = "tests/integration_tests.rs"
 
 [workspace]
 members = [
@@ -77,6 +51,7 @@ members = [
 ]
 exclude = [
     "vendor/pdfcraft",
+    "vendor/gridcraft",
 ]
 
 # Size and speed optimizations for release binaries (Windows, macOS, Linux)

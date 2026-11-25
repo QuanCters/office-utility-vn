@@ -1,0 +1,14 @@
+# Enforce LF line endings across all platforms for deterministic artifact verification
+* text=auto eol=lf
+*.wasm binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.xlsx binary
+*.xls binary
+*.zip binary
+*.exe binary
+*.msi binary
+*.dmg binary

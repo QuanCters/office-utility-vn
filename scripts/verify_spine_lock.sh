@@ -16,7 +16,16 @@ CMD_FILE="${PROJECT_ROOT}/src-tauri/src/commands/mod.rs"
 
 EXPECTED_SHARED="26a8aed81fceb200951f4581f80635b42f3344186d3cb0a7c84d1016629e32c6"
 EXPECTED_DB="38bcd07c7358503b46664e407ed6d84e641661d82a95a428299d15f61df0c5d1"
-EXPECTED_CMD="fc0578eb9834967131e536c43c718bacd19c1c8f84964dce249be1a73bbc41bf"
+# Stage 4B-2A Security Closure Authorized Amendment:
+# Permanently fail-closed save_file_binary, removed register_authorized_document,
+# added native_dialog_open_file and native_dialog_save_as.
+# Stage 4C-0D Security Closure Authorized Amendment:
+# Permanently fail-closed read_file_binary, added load_dev_fixture under #[cfg(debug_assertions)].
+# Audit history:
+# Stage 2D hash: 8f4524125899479ffebbc74b3b14be6a96fa6dc63bbce311a4278f46b920e1da
+# Stage 4B-2A initial hash: aaf5784b547e3d93836f22cfa1acf2024a0c3735d82e56df7620783282a09237
+# Stage 4B-2A revised hash: 191d8a12b60ec83217ac275c59a961a262bbaf014236444f44281f8182dd63a9
+EXPECTED_CMD="ca12b1ad5586453d6753bda21cb31213333c8f13f2d621b6d00f5bdc2228b1a0"
 
 ACTUAL_SHARED="$(sha256sum "${SHARED_FILE}" | awk '{print $1}')"
 ACTUAL_DB="$(sha256sum "${DB_FILE}" | awk '{print $1}')"

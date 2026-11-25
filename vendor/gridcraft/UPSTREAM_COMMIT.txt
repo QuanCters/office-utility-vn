@@ -1,0 +1,8 @@
+REPOSITORY: https://github.com/storytold/gridcraft.git
+COMMIT_SHA: d60709a1738d4f02c7f507848441306c0aacf692
+SHORT_SHA: d60709a
+VERSION: 0.19.1
+COMMIT_DATE: 2026-11-16 22:44:24 -0500
+LICENSE: MIT OR Apache-2.0
+RUST_VERSION_REQUIRED: 1.95 (edition 2024)
+IMPORT_METHOD: rsync from shallow clone of storytold/gridcraft.git main branch

@@ -95,6 +95,10 @@ pub struct DataLabState {
     pub status_message: RwSignal<String>,
     /// Danh mục toolbar tab hiện tại đang được chọn xem.
     pub active_category: RwSignal<DataLabCategory>,
+    /// Chế độ xem trước thử nghiệm GridCraft WASM Canvas (mặc định: false - dùng Bảng tính Cổ điển).
+    pub is_gridcraft_preview: RwSignal<bool>,
+    /// Cờ trạng thái sẵn sàng của GridCraft Canvas.
+    pub is_canvas_ready: RwSignal<bool>,
 }
 
 impl Default for DataLabState {
@@ -131,7 +135,14 @@ impl DataLabState {
             is_running: RwSignal::new(false),
             status_message: RwSignal::new(String::new()),
             active_category: RwSignal::new(category),
+            is_gridcraft_preview: RwSignal::new(false),
+            is_canvas_ready: RwSignal::new(false),
         }
+    }
+
+    /// Chuyển đổi giữa giao diện Bảng tính Cổ điển và Xem trước GridCraft Canvas
+    pub fn toggle_gridcraft_preview(&self) {
+        self.is_gridcraft_preview.update(|v| *v = !*v);
     }
 
     /// Thêm một tệp dữ liệu vào danh sách làm việc chung.

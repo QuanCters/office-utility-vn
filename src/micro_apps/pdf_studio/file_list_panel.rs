@@ -15,7 +15,14 @@ pub fn PdfStudioFileListPanel(
     let on_add_file_click = move |_| {
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = js_sys::eval("document.getElementById('pdf-studio-native-picker')?.click()");
+            if crate::micro_apps::pdf_studio::bridge::is_tauri_runtime() {
+                let s = state;
+                wasm_bindgen_futures::spawn_local(async move {
+                    let _ = crate::micro_apps::pdf_studio::bridge::open_file_into_pdf_studio("pdfcraft-frame", s).await;
+                });
+            } else {
+                let _ = js_sys::eval("document.getElementById('pdf-studio-native-picker')?.click()");
+            }
         }
     };
 

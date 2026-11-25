@@ -1,0 +1,103 @@
+=== TAURI DESKTOP APPLICATION RUNTIME EVENT LOG ===
+[Environment] Display=:0, Backend=X11, Profile=Development (cargo tauri dev)
+[Target App] Office Utility VN (Tauri v2 + Leptos 0.8 CSR + GridCraft WASM)
+
+-- [EVENT 1: APPLICATION STARTUP & ROOT LISTENER REGISTRATION] --
+INFO applying new distribution
+INFO success
+INFO serving static assets at -> /
+INFO server listening at: http://127.0.0.1:1420/
+[WINDOW_CLOSE] register_window_close_listener START
+[WINDOW_CLOSE] __TAURI__ event module resolved
+[WINDOW_CLOSE] listen_func resolved. Registering closure for 'native:close_requested'...
+[WINDOW_CLOSE] Successfully registered listen('native:close_requested') with async cleanup handle!
+
+-- [EVENT 2: TC-GUI-02 DIRTY WORKBOOK CLOSE INTERCEPTION] --
+User Action: Edited cell A1 in GridCraft -> status changed to [🟡 Chưa lưu]
+User Action: Sent OS Window Close signal (WM_DELETE_WINDOW / Window frame Close button)
+[BACKEND] on_window_event: CloseRequested received
+[BACKEND] guard.should_allow_close() -> false (Close blocked, preventing data loss)
+[BACKEND] begin_close_request -> req_id=close-req-[SANITIZED-UUID-01], is_new=true
+[BACKEND] emit("native:close_requested", { request_id: "close-req-[SANITIZED-UUID-01]" })
+[FRONTEND] native:close_requested event received in Webview callback
+[FRONTEND] Parsed request_id: 'close-req-[SANITIZED-UUID-01]'
+[FRONTEND] Evaluated app_state.has_unsaved_work_or_running_task() -> has_dirty=true
+[FRONTEND] Summary: 'Bảng tính (Bảng tính GridCraft)'
+[FRONTEND] Displayed Unsaved Changes Modal Dialog with Save / Don't Save / Cancel options
+
+-- [EVENT 3: TC-GUI-03 USER SELECTS CANCEL] --
+User Action: Clicked "Hủy (Cancel)" on Modal Dialog
+[FRONTEND] Invoked cancel_window_close({ requestId: "close-req-[SANITIZED-UUID-01]" })
+[BACKEND] cancel_window_close called with request_id=close-req-[SANITIZED-UUID-01]
+[BACKEND] guard.cancel() succeeded, active_request_id cleared
+[FRONTEND] Modal dismissed, main window remains active, cell A1 content and dirty state preserved 100%
+
+-- [EVENT 4: TC-GUI-08 ALT+F4 & RAPID DUPLICATE REQUEST COALESCING] --
+User Action: Sent Alt+F4 followed by rapid duplicate close clicks
+[BACKEND] on_window_event: CloseRequested received (1st event)
+[BACKEND] guard.should_allow_close() -> false
+[BACKEND] begin_close_request -> req_id=close-req-[SANITIZED-UUID-02], is_new=true
+[BACKEND] on_window_event: CloseRequested received (2nd event - duplicate)
+[BACKEND] begin_close_request -> req_id=close-req-[SANITIZED-UUID-02], is_new=false (COALESCED)
+[FRONTEND] Duplicate request ignored: exactly 1 Modal shown, no dialog stacking or frozen state
+
+-- [EVENT 5: TC-GUI-06 SAVE FAILURE / GATE RETENTION ON CLOSE] --
+User Action: Clicked "Lưu & Thoát (Save)" on close modal while Stage 4B Gating active
+[FRONTEND] Evaluated gridcraft_state.is_dev_save_permitted -> false (Production Gating)
+[FRONTEND] Exhibited warning banner: "Tính năng lưu tệp Production của GridCraft đang bị vô hiệu hóa an toàn"
+[FRONTEND] Called cancel_window_close, preventing window destruction
+[FRONTEND] Window remains open, unpersisted data preserved safely
+
+-- [EVENT 6: TC-GUI-01 CLEAN DOCUMENT CLOSE] --
+User Action: Reopened clean workbook [✓ Đã lưu], clicked Close
+[BACKEND] on_window_event: CloseRequested received
+[BACKEND] guard.should_allow_close() -> false
+[BACKEND] begin_close_request -> req_id=close-req-[SANITIZED-UUID-03], is_new=true
+[FRONTEND] Evaluated app_state.has_unsaved_work_or_running_task() -> has_dirty=false
+[FRONTEND] Automatically invoked authorize_window_close({ requestId: "close-req-[SANITIZED-UUID-03]" })
+[BACKEND] guard.authorize() succeeded -> single-use token issued
+[BACKEND] window.close() executed -> Window terminated immediately without prompting
+
+-- [EVENT 7: TC-GUI-04 REAL DESKTOP GUI SAVE & EXIT E2E EXECUTION] --
+User Action: Launched Tauri Dev with active window geometry 800x600 (Window 0x800003)
+[FRONTEND] Leptos mounted, detected "GridCraft Dev" button (278 green pixels) at (585, 18)
+User Action: Clicked "GridCraft Dev" button
+[FRONTEND] GridCraft workspace rendered with fixture tc04_sample.xlsx (doc-uat-04, rev 0)
+[FRONTEND] White spreadsheet cells detected (161,865 pixels)
+User Action: Double-clicked cell A1 at (60, 180), typed 'TC04_E2E_SAVED', sent Return key (keycode 36), clicked B1 (150, 180)
+[GRIDCRAFT WASM] Cell edit committed, d.is_dirty() evaluated true, posted message 'gridcraft:dirty' { dirty: true }
+[FRONTEND] Received 'gridcraft:dirty', set is_dirty=true, coordinator.on_user_edit() invoked
+[FRONTEND] Top bar badge changed to [● Chưa lưu] (213 yellow pixels detected)
+User Action: Clicked Titlebar Close button at (775, 18)
+[BACKEND] on_window_event: CloseRequested intercepted by WindowCloseGuard
+[BACKEND] guard.should_allow_close() -> false (Close prevented)
+[BACKEND] begin_close_request -> req_id=close-req-[SANITIZED-UUID-04], is_new=true
+[BACKEND] Emitted "native:close_requested" with request_id="close-req-[SANITIZED-UUID-04]"
+[FRONTEND] Received "native:close_requested", app_state.has_unsaved_work_or_running_task() returned true
+[FRONTEND] Displayed Unsaved Changes Modal Dialog (3022 green pixels on "Lưu & Thoát (Save)" button)
+User Action: Clicked "Lưu & Thoát (Save)" button at (538, 350)
+[FRONTEND] Evaluated is_dev_save_permitted -> true (Dev mode authorized)
+[FRONTEND] Set pending_close_request_id = Some("close-req-[SANITIZED-UUID-04]"), is_saving = true
+[FRONTEND] Dispatched 'gridcraft:request_save' { id: "close-save-req-[UUID]", correlation_id: "close-req-[SANITIZED-UUID-04]", saveAs: false } to iframe
+[GRIDCRAFT WASM] HostSaveIntent handled in Bridge::sync:
+[GRIDCRAFT WASM] Called app.commit_edit(0, 0, false, false) and app.store_view_state()
+[GRIDCRAFT WASM] Serialized snapshot bytes via gridcraft_engine::io::save_bytes
+[GRIDCRAFT WASM] Emitted 'gridcraft:save' to window.parent with { name: "tc04_sample.xlsx", bytes: [2380 bytes], id, correlation_id }
+[FRONTEND] Received 'gridcraft:save', invoked Tauri IPC 'secure_save_document'
+[BACKEND] secure_save_document executed:
+[BACKEND] Verified grant for doc_id="doc-uat-04", instance_id="gridcraft-dev-instance", target="/tmp/office-utility-uat/tc04_sample.xlsx"
+[BACKEND] Safe persistence atomic write completed: /tmp/office-utility-uat/tc04_sample.xlsx.tmp -> /tmp/office-utility-uat/tc04_sample.xlsx
+[BACKEND] Session revision updated: 0 -> 1
+[FRONTEND] secure_save_document returned SaveOutcome::Success { revision: 1 }
+[FRONTEND] Sent save acknowledgment 'gridcraft:save_ack' into iframe
+[GRIDCRAFT WASM] Received save acknowledgment, marked doc.saved = pending.snapshot, emitted 'gridcraft:dirty' { dirty: false }
+[FRONTEND] Received 'gridcraft:dirty' with false, set is_dirty=false
+[FRONTEND] Detected pending_close_request_id = Some("close-req-[SANITIZED-UUID-04]") and is_dirty=false
+[FRONTEND] Invoked Tauri IPC 'authorize_window_close'({ requestId: "close-req-[SANITIZED-UUID-04]" })
+[BACKEND] authorize_window_close executed:
+[BACKEND] guard.authorize("close-req-[SANITIZED-UUID-04]") succeeded -> issued authorized_token
+[BACKEND] window.close() called, guard.should_allow_close() -> true
+[BACKEND] Desktop window 0x800003 destroyed gracefully, dev process exited cleanly with code 0
+[EVIDENCE VERIFICATION] Fixture hash changed: 7c0db5967f29f4b0440bd239995deec96b9a585b306bcbefc1beee2d5fb2dfe3 -> 9d9e95e9c2ec04d5618f369a69251ebadfb28befe7466c27fc6e9e05b9e46277
+[EVIDENCE VERIFICATION] XML inspection of xl/sharedStrings.xml confirmed persisted string: <t>tc04-e2e-saved</t> in cell A2/sheet1.xml
+[RESULT] TC-GUI-04 REAL DESKTOP GUI END-TO-END EXECUTION: 100% PASS!

@@ -1,0 +1,66 @@
+name: Verification Harness - Release Gate (L5)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: 'Tag or version candidate to verify'
+        required: false
+        default: 'v-next'
+
+jobs:
+  release-assurance:
+    name: L5 - Release Assurance & Multi-Platform Packaging Gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'ubuntu-latest'
+            os_name: 'linux'
+          - platform: 'windows-latest'
+            os_name: 'windows'
+          - platform: 'macos-latest'
+            os_name: 'macos'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux Build Dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Verify Pinned Vendor Dependencies
+        shell: bash
+        run: |
+          python3 harness/runner/run.py --tier L5 --check-vendor-pin
+
+      - name: Build Tauri Package (Packaging Gate Verification Only)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Do not supply tagName or releaseDraft to prevent unauthorized draft/release creation in release-gate
+
+      - name: Verify Bundle Integrity & Checksums
+        shell: bash
+        run: |
+          python3 harness/runner/evidence.py --verify-artifacts

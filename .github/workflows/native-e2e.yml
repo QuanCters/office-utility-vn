@@ -1,0 +1,47 @@
+name: Verification Harness - Native E2E (L4)
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'crates/**'
+      - 'vendor/**'
+      - 'harness/tests/native-e2e/**'
+      - '.github/workflows/native-e2e.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-e2e-linux:
+    name: Native Desktop E2E (Linux Xvfb)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux GUI Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+
+      - name: Setup Rust & WASM
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Run Native E2E under Xvfb
+        run: |
+          chmod +x harness/ci/verify-native-e2e.sh
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" ./harness/ci/verify-native-e2e.sh

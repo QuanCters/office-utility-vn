@@ -1,9 +1,9 @@
+use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
@@ -24,9 +24,7 @@ pub enum IncomingBridgeMessage {
     },
     /// PDFCraft Canvas thông báo trạng thái có thay đổi chưa lưu (dirty = true) hoặc đã lưu xong (dirty = false).
     #[serde(rename = "pdfcraft:dirty")]
-    Dirty {
-        dirty: bool,
-    },
+    Dirty { dirty: bool },
     /// PDFCraft Canvas gửi yêu cầu lưu tài liệu kèm mảng bytes PDF mới nhất.
     #[serde(rename = "pdfcraft:save")]
     Save {
@@ -38,9 +36,84 @@ pub enum IncomingBridgeMessage {
     },
     /// PDFCraft Canvas thông báo lỗi khởi động (ví dụ: trình duyệt không hỗ trợ WebGL).
     #[serde(rename = "pdfcraft:failed")]
-    Failed {
-        error: String,
+    Failed { error: String },
+}
+
+/// Kết quả phản hồi minh thị cho hành động lưu tài liệu trong PDF Studio (Gate 1 - Stage 4B-2B).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SaveOutcome {
+    /// Đã lưu thành công bền vững xuống đĩa với đường dẫn và revision xác định
+    Saved {
+        dest_path: String,
+        committed_revision: u64,
+        #[serde(default)]
+        new_document_id: Option<String>,
     },
+    /// Hoán đổi nguyên tử thành công nhưng đồng bộ thư mục cha thất bại (P2 #4678429561)
+    AmbiguousCommit {
+        dest_path: String,
+        committed_revision: u64,
+        #[serde(default)]
+        new_document_id: Option<String>,
+        message: String,
+    },
+    /// Người dùng bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> Giữ nguyên dirty và session
+    Canceled,
+    /// Thao tác lưu thất bại có thông báo lỗi chi tiết -> Giữ nguyên dirty
+    Failed(String),
+    /// Kích hoạt tải về qua trình duyệt Web thuần túy (chỉ áp dụng khi không chạy trong Tauri)
+    BrowserDownloadInitiated,
+}
+
+/// DTO phân quyền lưu đĩa có kiểu dữ liệu chặt chẽ (P1 #4676016514: Strict Save Grant Validation)
+pub use crate::platform::save_grant::{
+    NativeSaveGrantDto, SaveAsHandleDto, SaveRequestContext, validate_native_save_grant,
+};
+
+/// Khởi tạo SaveRequestContext chuẩn xác, bảo lưu originating context trên mọi luồng lưu (P1 #4676016514)
+pub fn construct_pdf_save_request_context(
+    req_id: String,
+    save_as: bool,
+    orig_doc_id: Option<String>,
+    orig_path: Option<String>,
+    cur_rev: u64,
+    snapshot_gen: u64,
+    fp: String,
+) -> crate::micro_apps::pdf_studio::state::SaveRequestContext {
+    crate::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: req_id,
+        operation_intent: if save_as {
+            crate::platform::adapter::SaveOperationIntent::SaveAs
+        } else {
+            crate::platform::adapter::SaveOperationIntent::Save
+        },
+        originating_document_id: orig_doc_id.clone(),
+        originating_path: orig_path.clone(),
+        session_generation: 1,
+        snapshot_edit_generation: snapshot_gen,
+        expected_committed_revision: cur_rev + 1,
+        snapshot_fingerprint: fp,
+        authorized_dest_path: if !save_as { orig_path } else { None },
+    }
+}
+
+static AUTHORIZED_PDF_CACHE: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// Lưu nội dung nhị phân vào bộ đệm tài liệu đã được ủy quyền trong phiên
+pub fn cache_authorized_pdf_bytes(path: &str, bytes: Vec<u8>) {
+    if let Ok(mut cache) = AUTHORIZED_PDF_CACHE.lock() {
+        cache.insert(path.to_string(), bytes);
+    }
+}
+
+/// Lấy nội dung nhị phân từ bộ đệm tài liệu đã được ủy quyền
+pub fn get_authorized_pdf_bytes(path: &str) -> Option<Vec<u8>> {
+    AUTHORIZED_PDF_CACHE
+        .lock()
+        .ok()
+        .and_then(|c| c.get(path).cloned())
 }
 
 impl IncomingBridgeMessage {
@@ -118,7 +191,10 @@ impl PdfCraftBridge {
     }
 
     /// Gắn trạng thái phản ứng `PdfStudioState` vào cầu nối.
-    pub fn with_state(mut self, state: crate::micro_apps::pdf_studio::state::PdfStudioState) -> Self {
+    pub fn with_state(
+        mut self,
+        state: crate::micro_apps::pdf_studio::state::PdfStudioState,
+    ) -> Self {
         self.state = Some(state);
         self
     }
@@ -136,7 +212,10 @@ impl PdfCraftBridge {
     }
 
     /// Đăng ký callback khi PDFCraft kích hoạt thao tác lưu tài liệu.
-    pub fn on_save<F: Fn(String, bool, Vec<u8>) + Send + Sync + 'static>(&mut self, cb: F) -> &mut Self {
+    pub fn on_save<F: Fn(String, bool, Vec<u8>) + Send + Sync + 'static>(
+        &mut self,
+        cb: F,
+    ) -> &mut Self {
         self.on_save_cb = Some(std::sync::Arc::new(cb));
         self
     }
@@ -164,7 +243,11 @@ impl PdfCraftBridge {
                     cb(*dirty);
                 }
             }
-            IncomingBridgeMessage::Save { name, save_as, bytes } => {
+            IncomingBridgeMessage::Save {
+                name,
+                save_as,
+                bytes,
+            } => {
                 if let Some(cb) = &self.on_save_cb {
                     cb(name.clone(), *save_as, bytes.clone());
                 }
@@ -227,7 +310,10 @@ pub fn send_open_file(iframe_id: &str, name: &str, bytes: &[u8]) -> Result<(), S
     .map_err(|e| format!("{e:?}"))?;
 
     let transfer = js_sys::Array::of1(&array_buffer);
-    let origin = window.location().origin().unwrap_or_else(|_| "*".to_string());
+    let origin = window
+        .location()
+        .origin()
+        .unwrap_or_else(|_| "*".to_string());
     content_window
         .post_message_with_transfer(&msg, &origin, &transfer)
         .map_err(|e| format!("postMessage failed: {e:?}"))?;
@@ -268,7 +354,8 @@ pub fn parse_incoming_js_value(data: &wasm_bindgen::JsValue) -> Option<IncomingB
                 .ok()
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let bytes_val = js_sys::Reflect::get(data, &wasm_bindgen::JsValue::from_str("bytes")).ok()?;
+            let bytes_val =
+                js_sys::Reflect::get(data, &wasm_bindgen::JsValue::from_str("bytes")).ok()?;
             let bytes = if let Some(array) = bytes_val.dyn_ref::<js_sys::Uint8Array>() {
                 array.to_vec()
             } else if bytes_val.is_instance_of::<js_sys::ArrayBuffer>() {
@@ -278,7 +365,11 @@ pub fn parse_incoming_js_value(data: &wasm_bindgen::JsValue) -> Option<IncomingB
             } else {
                 Vec::new()
             };
-            Some(IncomingBridgeMessage::Save { name, save_as, bytes })
+            Some(IncomingBridgeMessage::Save {
+                name,
+                save_as,
+                bytes,
+            })
         }
         "pdfcraft:failed" => {
             let error = js_sys::Reflect::get(data, &wasm_bindgen::JsValue::from_str("error"))
@@ -297,69 +388,113 @@ pub fn setup_bridge_listener(
     iframe_id: String,
     state: crate::micro_apps::pdf_studio::state::PdfStudioState,
     bridge: Option<PdfCraftBridge>,
-) -> Result<(), String> {
+) -> Result<Option<crate::platform::window_close::WasmCleanupHandle>, String> {
     use wasm_bindgen::closure::Closure;
 
     let window = web_sys::window().ok_or_else(|| "Không tìm thấy window".to_string())?;
     let expected_origin = window.location().origin().unwrap_or_default();
 
-    let on_message = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |event: web_sys::MessageEvent| {
-        // 1. Kiểm tra Origin (chấp nhận same-origin, origin rỗng "null", hoặc các custom protocol của Tauri/WebView2)
-        let ev_origin = event.origin();
-        let is_valid_origin = expected_origin.is_empty()
-            || ev_origin == expected_origin
-            || ev_origin == "null"
-            || ev_origin.is_empty()
-            || ev_origin.contains("tauri.localhost")
-            || ev_origin.starts_with("tauri://")
-            || ev_origin.starts_with("http://127.0.0.1")
-            || ev_origin.starts_with("http://localhost");
+    let on_message =
+        Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |event: web_sys::MessageEvent| {
+            // 1. Kiểm tra Origin (chấp nhận same-origin, origin rỗng "null", hoặc các custom protocol của Tauri/WebView2)
+            let ev_origin = event.origin();
+            let is_valid_origin = expected_origin.is_empty()
+                || ev_origin == expected_origin
+                || ev_origin == "null"
+                || ev_origin.is_empty()
+                || ev_origin.contains("tauri.localhost")
+                || ev_origin.starts_with("tauri://")
+                || ev_origin.starts_with("http://127.0.0.1")
+                || ev_origin.starts_with("http://localhost");
 
-        if !is_valid_origin {
-            return;
-        }
+            if !is_valid_origin {
+                return;
+            }
 
-        // 2. Kiểm tra Source Window khớp với iframe con nếu tìm thấy iframe
-        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-            if let Some(iframe_el) = doc.get_element_by_id(&iframe_id) {
-                if let Ok(iframe) = iframe_el.dyn_into::<web_sys::HtmlIFrameElement>() {
-                    if let Some(cw) = iframe.content_window() {
-                        if let Some(source) = event.source() {
-                            if !js_sys::Object::is(&source, &cw) {
-                                return;
+            // 2. Kiểm tra Source Window khớp với iframe con nếu tìm thấy iframe
+            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                if let Some(iframe_el) = doc.get_element_by_id(&iframe_id) {
+                    if let Ok(iframe) = iframe_el.dyn_into::<web_sys::HtmlIFrameElement>() {
+                        if let Some(cw) = iframe.content_window() {
+                            if let Some(source) = event.source() {
+                                if !js_sys::Object::is(&source, &cw) {
+                                    return;
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // 3. Phân tích và xử lý thông điệp
-        let data = event.data();
-        if let Some(msg) = parse_incoming_js_value(&data) {
-            state.handle_bridge_message(&msg);
-            if let Some(ref b) = bridge {
-                b.dispatch_incoming(&msg);
-            }
+            // 3. Phân tích và xử lý thông điệp
+            let data = event.data();
+            if let Some(msg) = parse_incoming_js_value(&data) {
+                state.handle_bridge_message(&msg);
+                if let Some(ref b) = bridge {
+                    b.dispatch_incoming(&msg);
+                }
 
-            // Xử lý lưu tệp tự động nếu nhận được Save message
-            if let IncomingBridgeMessage::Save { ref name, save_as, ref bytes } = msg {
-                let name_clone = name.clone();
-                let bytes_clone = bytes.clone();
-                let active_path = if !save_as { state.active_file_path() } else { None };
-                wasm_bindgen_futures::spawn_local(async move {
-                    let _ = save_file_to_disk_or_download(&name_clone, active_path.as_deref(), &bytes_clone).await;
-                });
+                // Xử lý lưu tệp tự động nếu nhận được Save message (Gate 1 - Stage 4B-2B)
+                if let IncomingBridgeMessage::Save {
+                    ref name,
+                    save_as,
+                    ref bytes,
+                } = msg
+                {
+                    let name_clone = name.clone();
+                    let bytes_clone = bytes.clone();
+                    let orig_path = state.active_file_path();
+                    let orig_doc_id = state.active_document_id();
+                    let cur_rev = state.active_revision();
+                    let snapshot_gen = state.edit_generation.get_untracked();
+                    static REQ_COUNTER: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(1);
+                    let count = REQ_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let req_id = format!("pdf-save-{}-{}", snapshot_gen, count);
+                    let fp = crate::platform::persistence::compute_fingerprint(&bytes_clone);
+
+                    let ctx = construct_pdf_save_request_context(
+                        req_id.clone(),
+                        save_as,
+                        orig_doc_id.clone(),
+                        orig_path.clone(),
+                        cur_rev,
+                        snapshot_gen,
+                        fp,
+                    );
+
+                    state.register_pending_save(req_id.clone(), ctx.clone());
+                    let ctx_clone = ctx.clone();
+                    let s = state;
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let outcome = save_file_to_disk_or_download(
+                            &name_clone,
+                            if !save_as { orig_path.as_deref() } else { None },
+                            orig_doc_id.as_deref(),
+                            cur_rev + 1,
+                            save_as,
+                            &bytes_clone,
+                        )
+                        .await;
+                        apply_save_outcome(&s, outcome, &ctx_clone, &bytes_clone);
+                    });
+                }
             }
-        }
-    });
+        });
 
     window
         .add_event_listener_with_callback("message", on_message.as_ref().unchecked_ref())
         .map_err(|e| format!("Không thể đăng ký message listener: {e:?}"))?;
 
+    let win_clone = window.clone();
+    let listener_js = on_message.as_ref().clone();
     on_message.forget();
-    Ok(())
+    Ok(Some(crate::platform::window_close::WasmCleanupHandle::new(
+        move || {
+            let _ = win_clone
+                .remove_event_listener_with_callback("message", listener_js.unchecked_ref());
+        },
+    )))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -367,41 +502,410 @@ pub fn setup_bridge_listener(
     _iframe_id: String,
     _state: crate::micro_apps::pdf_studio::state::PdfStudioState,
     _bridge: Option<PdfCraftBridge>,
-) -> Result<(), String> {
-    Ok(())
+) -> Result<Option<()>, String> {
+    Ok(None)
 }
 
-/// Đọc toàn bộ nội dung nhị phân của tệp (ưu tiên Tauri IPC, fallback web fetch).
-#[cfg(target_arch = "wasm32")]
-pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
-    // 0. Tuân thủ nghiêm ngặt NFR-SEC-01 (Zero-Cloud): Nghiêm cấm tải file từ URL http:// hoặc https://
-    if file_path.starts_with("http://") || file_path.starts_with("https://") {
-        return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
-    }
+/// Áp dụng kết quả của tác vụ lưu tệp PDF (P1 #4676016520 & #4676016514)
+pub fn apply_save_outcome(
+    s: &crate::micro_apps::pdf_studio::state::PdfStudioState,
+    outcome: Result<SaveOutcome, String>,
+    ctx: &crate::micro_apps::pdf_studio::state::SaveRequestContext,
+    bytes: &[u8],
+) {
+    s.clear_pending_save(&ctx.request_id);
 
-    // 1. Thử gọi qua Tauri IPC `read_file_binary`
+    match outcome {
+        Ok(SaveOutcome::Saved {
+            dest_path,
+            committed_revision,
+            new_document_id,
+        }) => {
+            let target_doc_id = new_document_id.or_else(|| ctx.originating_document_id.clone());
+            let is_save_as =
+                ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::SaveAs;
+
+            let is_originating_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => s.active_file_path().is_none(),
+            };
+            let is_still_active_target =
+                is_originating_active || s.active_file_path().as_deref() == Some(&dest_path);
+
+            // P1 #4680342554: Chụp và so sánh live generation của tài liệu nguồn TRƯỚC KHI thay đổi active document identity hoặc selection!
+            let live_originating_gen = if is_originating_active {
+                s.edit_generation.get_untracked()
+            } else if let Some(ref p) = ctx.originating_path {
+                s.get_document_session(p)
+                    .map(|sess| sess.edit_generation)
+                    .unwrap_or(ctx.snapshot_edit_generation)
+            } else {
+                ctx.snapshot_edit_generation
+            };
+
+            let has_newer_edits = live_originating_gen > ctx.snapshot_edit_generation;
+            let dest_is_dirty = has_newer_edits;
+            let dest_gen = if has_newer_edits {
+                live_originating_gen
+            } else {
+                ctx.snapshot_edit_generation
+            };
+
+            // P2 #4689114193: Nếu Save As sang đường dẫn mới khác tài liệu nguồn,
+            // đối soát dọn cờ dirty của phiên nguồn vì thay đổi đã được chuyển/lưu sang dest_path.
+            let is_cross_file_save_as = (is_save_as || ctx.originating_path.is_none())
+                && ctx
+                    .originating_path
+                    .as_deref()
+                    .map(|orig| orig != dest_path.as_str())
+                    .unwrap_or(false);
+
+            // 1. Luôn cập nhật phiên và bộ nhớ cache cho tài liệu đã được lưu TRƯỚC khi chuyển active file
+            let mut map = s.document_sessions.get_untracked();
+            if is_cross_file_save_as {
+                if let Some(ref orig_path) = ctx.originating_path {
+                    if let Some(orig_sess) = map.get_mut(orig_path) {
+                        orig_sess.is_dirty = false;
+                    }
+                }
+            }
+            if let Some(sess) = map.get_mut(&dest_path) {
+                sess.document_id = target_doc_id.clone();
+                sess.revision = committed_revision;
+                sess.is_dirty = dest_is_dirty;
+                sess.edit_generation = dest_gen;
+            } else {
+                map.insert(
+                    dest_path.clone(),
+                    crate::micro_apps::pdf_studio::state::PdfDocumentSession {
+                        file_path: dest_path.clone(),
+                        document_id: target_doc_id.clone(),
+                        revision: committed_revision,
+                        is_dirty: dest_is_dirty,
+                        edit_generation: dest_gen,
+                    },
+                );
+            }
+            s.document_sessions.set(map);
+
+            cache_authorized_pdf_bytes(&dest_path, bytes.to_vec());
+            if !has_newer_edits {
+                s.cache_document_bytes(&dest_path, bytes.to_vec());
+            }
+
+            // 2. Thêm hoặc chọn tệp mới lưu (Save As)
+            if is_save_as || ctx.originating_path.is_none() {
+                if is_still_active_target {
+                    if is_cross_file_save_as && is_originating_active {
+                        // Ngăn add_file() sao chép cờ has_unsaved_changes cũ ngược lại phiên nguồn trước khi chuyển active
+                        s.has_unsaved_changes.set(false);
+                    }
+                    s.add_file(&dest_path);
+                } else {
+                    // Thêm tệp vào danh sách nhưng giữ nguyên tệp đang active
+                    let cur_idx = s.active_file_index.get_untracked();
+                    s.loaded_files.update(|f| {
+                        if !f.iter().any(|p| p == &dest_path) {
+                            f.push(dest_path.clone());
+                        }
+                    });
+                    s.active_file_index.set(cur_idx);
+                }
+            }
+
+            // 3. Chỉ cập nhật tín hiệu active và ràng buộc canvas NẾU tài liệu đang chọn VẪN LÀ tài liệu nguồn hoặc tệp vừa lưu
+            if is_still_active_target {
+                s.active_document_id.set(target_doc_id);
+                s.active_revision.set(committed_revision);
+                s.edit_generation.set(dest_gen);
+                s.has_unsaved_changes.set(dest_is_dirty);
+                // P1 #4680342554 & P2 #4684793560: Chỉ rebind canvas sang dest_path trên thực thể iframe sẵn sàng hiện hành
+                // để không nạp lại snapshot cũ từ đĩa đè lên các chỉnh sửa mới hơn;
+                // nếu iframe chưa sẵn sàng hoặc đã bị hủy, tuyệt đối không đánh dấu bound.
+                if let Some(inst_id) = s.active_canvas_instance_id.get_untracked() {
+                    if !s.mark_canvas_bound(inst_id, &dest_path) {
+                        s.invalidate_canvas_binding();
+                    }
+                } else {
+                    s.invalidate_canvas_binding();
+                }
+            } else {
+                // Người dùng đã chuyển sang tài liệu khác trong khi lưu!
+                // Giữ nguyên active state của tài liệu đang chọn.
+            }
+            s.status_message.set(format!("✓ Đã lưu tệp: {dest_path}"));
+        }
+        Ok(SaveOutcome::AmbiguousCommit {
+            dest_path,
+            committed_revision,
+            new_document_id,
+            message,
+        }) => {
+            let target_doc_id = new_document_id.or_else(|| ctx.originating_document_id.clone());
+            let is_save_as =
+                ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::SaveAs;
+            let is_originating_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => s.active_file_path().is_none(),
+            };
+            let is_still_active_target =
+                is_originating_active || s.active_file_path().as_deref() == Some(&dest_path);
+
+            let live_originating_gen = if is_originating_active {
+                s.edit_generation.get_untracked()
+            } else if let Some(ref p) = ctx.originating_path {
+                s.get_document_session(p)
+                    .map(|sess| sess.edit_generation)
+                    .unwrap_or(ctx.snapshot_edit_generation)
+            } else {
+                ctx.snapshot_edit_generation
+            };
+            let dest_gen = live_originating_gen.max(ctx.snapshot_edit_generation);
+            let is_cross_file_save_as = (is_save_as || ctx.originating_path.is_none())
+                && ctx
+                    .originating_path
+                    .as_deref()
+                    .map(|orig| orig != dest_path.as_str())
+                    .unwrap_or(false);
+
+            // P2 #4689901525: Rename sang dest_path đã diễn ra trên đĩa; đồng bộ phiên đích, path và canvas binding nhất quán
+            // để lần Save thường tiếp theo thử lại đúng cặp (dest_path, new_document_id, committed_revision), đồng thời BẮT BUỘC giữ is_dirty = true.
+            let mut map = s.document_sessions.get_untracked();
+            if is_cross_file_save_as {
+                if let Some(ref orig_path) = ctx.originating_path {
+                    if let Some(orig_sess) = map.get_mut(orig_path) {
+                        orig_sess.is_dirty = false;
+                    }
+                }
+            }
+            if let Some(sess) = map.get_mut(&dest_path) {
+                sess.document_id = target_doc_id.clone();
+                sess.revision = committed_revision;
+                sess.is_dirty = true;
+                sess.edit_generation = dest_gen;
+            } else {
+                map.insert(
+                    dest_path.clone(),
+                    crate::micro_apps::pdf_studio::state::PdfDocumentSession {
+                        file_path: dest_path.clone(),
+                        document_id: target_doc_id.clone(),
+                        revision: committed_revision,
+                        is_dirty: true,
+                        edit_generation: dest_gen,
+                    },
+                );
+            }
+            s.document_sessions.set(map);
+
+            if is_save_as || ctx.originating_path.is_none() {
+                if is_still_active_target {
+                    if is_cross_file_save_as && is_originating_active {
+                        s.has_unsaved_changes.set(false);
+                    }
+                    s.add_file(&dest_path);
+                } else {
+                    let cur_idx = s.active_file_index.get_untracked();
+                    s.loaded_files.update(|f| {
+                        if !f.iter().any(|p| p == &dest_path) {
+                            f.push(dest_path.clone());
+                        }
+                    });
+                    s.active_file_index.set(cur_idx);
+                }
+            }
+
+            if is_still_active_target {
+                s.active_document_id.set(target_doc_id);
+                s.active_revision.set(committed_revision);
+                s.edit_generation.set(dest_gen);
+                s.has_unsaved_changes.set(true);
+                if let Some(inst_id) = s.active_canvas_instance_id.get_untracked() {
+                    if !s.mark_canvas_bound(inst_id, &dest_path) {
+                        s.invalidate_canvas_binding();
+                    }
+                } else {
+                    s.invalidate_canvas_binding();
+                }
+            }
+            s.status_message.set(format!(
+                "⚠️ Hoán đổi tệp thành công nhưng đồng bộ thư mục cha thất bại (Ambiguous Commit): {message}"
+            ));
+        }
+        Ok(SaveOutcome::Canceled) => {
+            if let Some(ref path) = ctx.originating_path {
+                let mut map = s.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(path) {
+                    sess.is_dirty = true;
+                }
+                s.document_sessions.set(map);
+            }
+            let is_still_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set("Đã hủy thao tác lưu tệp.".to_string());
+        }
+        Ok(SaveOutcome::Failed(err)) => {
+            if let Some(ref path) = ctx.originating_path {
+                let mut map = s.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(path) {
+                    sess.is_dirty = true;
+                }
+                s.document_sessions.set(map);
+            }
+            let is_still_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set(format!("❌ Lưu tệp thất bại: {err}"));
+        }
+        Ok(SaveOutcome::BrowserDownloadInitiated) => {
+            let is_still_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                let current_gen = s.edit_generation.get_untracked();
+                if current_gen == ctx.snapshot_edit_generation {
+                    s.has_unsaved_changes.set(false);
+                } else {
+                    s.has_unsaved_changes.set(true);
+                }
+            }
+            s.status_message
+                .set("Đã bắt đầu tải về qua trình duyệt.".to_string());
+        }
+        Err(err) => {
+            if let Some(ref path) = ctx.originating_path {
+                let mut map = s.document_sessions.get_untracked();
+                if let Some(sess) = map.get_mut(path) {
+                    sess.is_dirty = true;
+                }
+                s.document_sessions.set(map);
+            }
+            let is_still_active = match ctx.originating_path.as_deref() {
+                Some(p) => s.active_file_path().as_deref() == Some(p),
+                None => false,
+            };
+            if is_still_active {
+                s.has_unsaved_changes.set(true);
+            }
+            s.status_message.set(format!("❌ Lỗi hệ thống: {err}"));
+        }
+    }
+}
+
+/// Nạp tệp PDF thông qua Native OS File Dialog có kiểm soát an ninh (Stage 4C-0D UAT Support).
+#[cfg(target_arch = "wasm32")]
+pub async fn open_file_into_pdf_studio(
+    iframe_id: &str,
+    state: crate::micro_apps::pdf_studio::state::PdfStudioState,
+) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
-        "filePath": file_path
+        "appInstanceId": "pdf-studio-instance",
+        "sessionGeneration": 1,
+        "filterName": "Tài liệu PDF (*.pdf)",
+        "extensions": ["pdf"],
     }))
     .map_err(|e| format!("{e:?}"))?;
 
-    if let Ok(js_val) = invoke("read_file_binary", args).await {
-        if let Ok(bytes) = serde_wasm_bindgen::from_value::<Vec<u8>>(js_val) {
-            if !bytes.is_empty() {
-                return Ok(bytes);
+    if let Ok(js_res) = invoke("native_dialog_open_file", args).await {
+        if let Ok(Some(handle)) =
+            serde_wasm_bindgen::from_value::<Option<serde_json::Value>>(js_res)
+        {
+            let doc_id = handle
+                .get("document_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let file_path = handle
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let file_name = handle
+                .get("file_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("document.pdf")
+                .to_string();
+            let rev = handle
+                .get("initial_revision")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
+            let bytes_val = handle
+                .get("bytes")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            let bytes: Vec<u8> = serde_json::from_value(bytes_val).unwrap_or_default();
+
+            if !file_path.is_empty() {
+                cache_authorized_pdf_bytes(&file_path, bytes.clone());
+                state.cache_document_bytes(&file_path, bytes.clone());
+                state.add_file(&file_path);
+                state.set_active_document_session(doc_id, rev);
+                // P2 #4684793560: KHÔNG đánh dấu canvas_bound_path trước khi giao hàng thành công vào iframe đang sẵn sàng!
+                // Nếu đang ở Hub (không có iframe) hoặc iframe chưa sẵn sàng / postMessage thất bại,
+                // giữ trạng thái unbound để khi vào Canvas sẽ tự động nạp tệp.
+                if state.is_canvas_ready.get_untracked()
+                    && !bytes.is_empty()
+                    && let Some(inst_id) = state.active_canvas_instance_id.get_untracked()
+                    && send_open_file(iframe_id, &file_name, &bytes).is_ok()
+                {
+                    state.mark_canvas_bound(inst_id, &file_path);
+                } else {
+                    state.invalidate_canvas_binding();
+                }
+                return Ok(());
             }
         }
     }
 
-    // 2. Thử fetch qua web nếu file_path là local path nội bộ (ví dụ: /assets/... hoặc blob:)
+    // Fallback nếu chạy trong môi trường web không có Tauri IPC
+    let _ = js_sys::eval("document.getElementById('pdf-studio-native-picker')?.click()");
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn open_file_into_pdf_studio(
+    _iframe_id: &str,
+    _state: crate::micro_apps::pdf_studio::state::PdfStudioState,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// Đọc nội dung nhị phân của tệp nội bộ (ưu tiên cache tài liệu đã ủy quyền, web fetch đối với /assets/... hoặc blob: URL).
+/// [BẢO MẬT STAGE 4C-0D CLOSURE]: Loại bỏ hoàn toàn lệnh gọi IPC 'read_file_binary' raw-path.
+#[cfg(target_arch = "wasm32")]
+pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
+    // 0. Kiểm tra bộ đệm tài liệu đã được ủy quyền trong phiên
+    if let Some(cached) = get_authorized_pdf_bytes(file_path) {
+        return Ok(cached);
+    }
+
+    // 1. Tuân thủ nghiêm ngặt NFR-SEC-01 (Zero-Cloud): Nghiêm cấm tải file từ URL http:// hoặc https://
+    if file_path.starts_with("http://") || file_path.starts_with("https://") {
+        return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
+    }
+
+    // 2. Fetch qua web nếu file_path là local web path nội bộ (ví dụ: /assets/... hoặc blob:)
     if file_path.starts_with('/') || file_path.starts_with("blob:") {
         if let Some(win) = web_sys::window() {
-            if let Ok(resp_val) = wasm_bindgen_futures::JsFuture::from(win.fetch_with_str(file_path)).await {
+            if let Ok(resp_val) =
+                wasm_bindgen_futures::JsFuture::from(win.fetch_with_str(file_path)).await
+            {
                 if let Ok(resp) = resp_val.dyn_into::<web_sys::Response>() {
                     if let Ok(ab_val) = resp.array_buffer() {
                         if let Ok(buffer_val) = wasm_bindgen_futures::JsFuture::from(ab_val).await {
                             let u8_arr = js_sys::Uint8Array::new(&buffer_val);
-                            return Ok(u8_arr.to_vec());
+                            let bytes = u8_arr.to_vec();
+                            cache_authorized_pdf_bytes(file_path, bytes.clone());
+                            return Ok(bytes);
                         }
                     }
                 }
@@ -409,43 +913,240 @@ pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
         }
     }
 
-    Err(format!("Không thể đọc nội dung file từ đường dẫn: {file_path}"))
+    Err(format!(
+        "Không thể đọc nội dung file từ đường dẫn: {file_path}"
+    ))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn read_file_bytes(file_path: &str) -> Result<Vec<u8>, String> {
+    if let Some(cached) = get_authorized_pdf_bytes(file_path) {
+        return Ok(cached);
+    }
     if file_path.starts_with("http://") || file_path.starts_with("https://") {
         return Err("NFR-SEC-01: Không cho phép tải file qua mạng bên ngoài (Chính sách Zero-Cloud Local-Only)".to_string());
     }
     std::fs::read(file_path).map_err(|e| format!("Không thể đọc tệp: {e}"))
 }
 
-/// Lưu nội dung nhị phân xuống đĩa (qua Tauri IPC) hoặc kích hoạt tải về qua trình duyệt.
+/// Kiểm tra môi trường thực thi có phải là Tauri Desktop hay không.
 #[cfg(target_arch = "wasm32")]
-pub async fn save_file_to_disk_or_download(name: &str, file_path: Option<&str>, bytes: &[u8]) -> Result<(), String> {
-    // 1. Nếu có file_path cụ thể, thử lưu qua Tauri command
-    if let Some(path) = file_path {
-        let args = serde_wasm_bindgen::to_value(&serde_json::json!({
-            "filePath": path,
-            "bytes": bytes,
-        }))
-        .map_err(|e| format!("{e:?}"))?;
-
-        if invoke("save_file_binary", args).await.is_ok() {
-            return Ok(());
+pub fn is_tauri_runtime() -> bool {
+    if let Some(win) = web_sys::window() {
+        if let Ok(tauri_val) =
+            js_sys::Reflect::get(&win, &wasm_bindgen::JsValue::from_str("__TAURI__"))
+        {
+            return !tauri_val.is_undefined() && !tauri_val.is_null();
         }
     }
+    false
+}
 
-    // 2. Fallback: Kích hoạt tải về qua trình duyệt (Blob download)
-    trigger_browser_download(name, bytes)
+/// Lưu nội dung nhị phân xuống đĩa (qua Tauri IPC có thẩm quyền Native Dialog) hoặc kích hoạt tải về qua trình duyệt.
+#[cfg(target_arch = "wasm32")]
+pub async fn save_file_to_disk_or_download(
+    name: &str,
+    file_path: Option<&str>,
+    document_id: Option<&str>,
+    expected_rev: u64,
+    save_as: bool,
+    bytes: &[u8],
+) -> Result<SaveOutcome, String> {
+    if is_tauri_runtime() {
+        // Desktop Mode: TUYỆT ĐỐI KHÔNG FALLBACK VỀ TRÌNH DUYỆT
+
+        // 1. Nếu là Regular Save và đã có phiên tài liệu được ủy quyền
+        if !save_as && let (Some(_path), Some(doc_id)) = (file_path, document_id) {
+            let req_id = format!("pdf-save-{}", js_sys::Date::now() as u64);
+            let grant_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                "documentId": doc_id,
+                "appInstanceId": "pdf-studio-instance",
+                "sessionGeneration": 1,
+                "requestId": req_id,
+                "expectedRevision": expected_rev,
+            }))
+            .map_err(|e| format!("{e:?}"))?;
+
+            let grant_val = match invoke("request_save_grant", grant_args).await {
+                Ok(val) => val,
+                Err(e) => {
+                    return Ok(SaveOutcome::Failed(format!(
+                        "Yêu cầu cấp phép ghi đĩa thất bại: {e:?}"
+                    )));
+                }
+            };
+
+            let grant: NativeSaveGrantDto = match serde_wasm_bindgen::from_value(grant_val) {
+                Ok(g) => g,
+                Err(e) => {
+                    return Ok(SaveOutcome::Failed(format!(
+                        "Lỗi bất biến: Grant bị thiếu trường bắt buộc hoặc sai định dạng: {e:?}"
+                    )));
+                }
+            };
+
+            let ctx = SaveRequestContext {
+                document_id: doc_id.to_string(),
+                app_instance_id: "pdf-studio-instance".to_string(),
+                session_generation: 1,
+                authorized_dest_path: Some(_path.to_string()),
+                expected_revision: expected_rev,
+                request_id: req_id.clone(),
+            };
+
+            if let Err(err) = validate_native_save_grant(&grant, &ctx) {
+                return Ok(SaveOutcome::Failed(format!("Lỗi bất biến: {err}")));
+            }
+
+            let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                "grantId": grant.grant_id,
+                "requestId": grant.request_id,
+                "bytes": bytes,
+            }))
+            .map_err(|e| format!("{e:?}"))?;
+
+            match invoke("secure_save_document", save_args).await {
+                Ok(save_res) => {
+                    let (dest, rev) = if let Ok(resp) =
+                        serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
+                    {
+                        (
+                            resp.get("dest_path")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(_path)
+                                .to_string(),
+                            resp.get("committed_revision")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(expected_rev),
+                        )
+                    } else {
+                        (_path.to_string(), expected_rev)
+                    };
+                    return Ok(SaveOutcome::Saved {
+                        dest_path: dest,
+                        committed_revision: rev,
+                        new_document_id: Some(doc_id.to_string()),
+                    });
+                }
+                Err(e) => {
+                    let err_str = format!("{e:?}");
+                    if err_str.contains("AmbiguousCommit") {
+                        return Ok(SaveOutcome::AmbiguousCommit {
+                            dest_path: _path.to_string(),
+                            committed_revision: expected_rev,
+                            new_document_id: Some(doc_id.to_string()),
+                            message: err_str,
+                        });
+                    }
+                    return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
+                }
+            }
+        }
+
+        // 2. Luồng Save As (hoặc Lưu lần đầu chưa có phiên ủy quyền)
+        let args = serde_wasm_bindgen::to_value(&serde_json::json!({
+            "documentId": document_id,
+            "appInstanceId": "pdf-studio-instance",
+            "sessionGeneration": 1,
+            "defaultName": name,
+            "filterName": "Tài liệu PDF (*.pdf)",
+            "extensions": ["pdf"],
+        }))
+        .unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+
+        match invoke("native_dialog_save_as", args).await {
+            Ok(js_res) => {
+                if let Ok(Some(handle)) =
+                    serde_wasm_bindgen::from_value::<Option<SaveAsHandleDto>>(js_res)
+                {
+                    let ctx = SaveRequestContext {
+                        document_id: handle.document_id.clone(),
+                        app_instance_id: "pdf-studio-instance".to_string(),
+                        session_generation: 1,
+                        authorized_dest_path: Some(handle.file_path.clone()),
+                        expected_revision: 1,
+                        request_id: handle.grant.request_id.clone(),
+                    };
+                    if let Err(val_err) = validate_native_save_grant(&handle.grant, &ctx) {
+                        return Ok(SaveOutcome::Failed(format!(
+                            "Thẩm định Save As grant thất bại: {val_err}"
+                        )));
+                    }
+
+                    let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
+                        "grantId": handle.grant.grant_id,
+                        "requestId": handle.grant.request_id,
+                        "bytes": bytes,
+                    }))
+                    .map_err(|e| format!("{e:?}"))?;
+
+                    match invoke("secure_save_document", save_args).await {
+                        Ok(save_res) => {
+                            let rev = if let Ok(resp) =
+                                serde_wasm_bindgen::from_value::<serde_json::Value>(save_res)
+                            {
+                                resp.get("committed_revision")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(1)
+                            } else {
+                                1
+                            };
+                            let dest_path = handle.file_path;
+                            return Ok(SaveOutcome::Saved {
+                                dest_path,
+                                committed_revision: rev,
+                                new_document_id: Some(handle.document_id),
+                            });
+                        }
+                        Err(e) => {
+                            let err_str = format!("{e:?}");
+                            if err_str.contains("AmbiguousCommit") {
+                                return Ok(SaveOutcome::AmbiguousCommit {
+                                    dest_path: handle.file_path,
+                                    committed_revision: 1,
+                                    new_document_id: Some(handle.document_id),
+                                    message: err_str,
+                                });
+                            }
+                            return Ok(SaveOutcome::Failed(format!("Ghi đĩa thất bại: {e:?}")));
+                        }
+                    }
+                } else {
+                    // Người dùng chủ động bấm Hủy (Cancel) trên hộp thoại hệ điều hành -> KHÔNG LƯU, GIỮ NGUYÊN DIRTY
+                    Ok(SaveOutcome::Canceled)
+                }
+            }
+            Err(e) => Ok(SaveOutcome::Failed(format!(
+                "Lỗi khi mở hộp thoại lưu tệp: {e:?}"
+            ))),
+        }
+    } else {
+        // Fallback: Chỉ kích hoạt tải về trình duyệt khi chạy trên Web thuần túy
+        trigger_browser_download(name, bytes)?;
+        Ok(SaveOutcome::BrowserDownloadInitiated)
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn save_file_to_disk_or_download(_name: &str, file_path: Option<&str>, bytes: &[u8]) -> Result<(), String> {
+pub async fn save_file_to_disk_or_download(
+    _name: &str,
+    file_path: Option<&str>,
+    document_id: Option<&str>,
+    _expected_rev: u64,
+    _save_as: bool,
+    bytes: &[u8],
+) -> Result<SaveOutcome, String> {
     if let Some(path) = file_path {
         std::fs::write(path, bytes).map_err(|e| format!("Không thể ghi tệp: {e}"))?;
+        cache_authorized_pdf_bytes(path, bytes.to_vec());
+        Ok(SaveOutcome::Saved {
+            dest_path: path.to_string(),
+            committed_revision: 1,
+            new_document_id: document_id.map(|s| s.to_string()),
+        })
+    } else {
+        Ok(SaveOutcome::Canceled)
     }
-    Ok(())
 }
 
 /// Kích hoạt tải tệp về thông qua Blob URL trong trình duyệt.
@@ -467,7 +1168,11 @@ pub fn trigger_browser_download(name: &str, bytes: &[u8]) -> Result<(), String> 
         URL.revokeObjectURL(url);
         "#,
     );
-    let _ = global.call2(&window, &wasm_bindgen::JsValue::from_str(name), &uint8_array);
+    let _ = global.call2(
+        &window,
+        &wasm_bindgen::JsValue::from_str(name),
+        &uint8_array,
+    );
     Ok(())
 }
 

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvidenceLedger",
+  "description": "Schema nhật ký bằng chứng kiểm chứng (Evidence Ledger) gắn chặt với từng phiên bản commit",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "source",
+    "tool_versions",
+    "review",
+    "checks",
+    "evidence",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "pr_number": {
+      "type": ["integer", "null"]
+    },
+    "source": {
+      "type": "object",
+      "required": ["base_sha", "head_sha", "checkout_sha", "tree_sha"],
+      "properties": {
+        "base_sha": { "type": "string", "description": "Commit nhánh đích dùng làm mốc so sánh" },
+        "head_sha": { "type": "string", "description": "Commit mới nhất trên nhánh nguồn của PR" },
+        "checkout_sha": { "type": "string", "description": "Commit thực sự được CI checkout và kiểm thử" },
+        "tree_sha": { "type": "string", "description": "Git tree SHA đại diện cho toàn bộ nội dung source tree" }
+      }
+    },
+    "tool_versions": {
+      "type": "object",
+      "properties": {
+        "rustc": { "type": "string" },
+        "cargo": { "type": "string" },
+        "antigravity_cli": { "type": "string" },
+        "trunk": { "type": "string" },
+        "os": { "type": "string" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["model", "requested_effort", "status"],
+      "properties": {
+        "model": { "type": "string" },
+        "requested_effort": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "COMPLETED", "PENDING_HUMAN_REVIEW", "STALE", "NOT_REQUIRED"]
+        },
+        "findings_summary": {
+          "type": "object",
+          "properties": {
+            "P0": { "type": "integer" },
+            "P1": { "type": "integer" },
+            "P2": { "type": "integer" },
+            "P3": { "type": "integer" }
+          }
+        },
+        "verified_findings_ref": { "type": "string" }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["PASSED", "FAILED", "PENDING", "NOT_RUN", "SKIPPED"]
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "sha256", "timestamp_utc"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["TEST_LOG", "BUILD_ARTIFACT", "AUDIT_REPORT", "SECURITY_SCAN"] },
+          "path": { "type": "string" },
+          "sha256": { "type": "string" },
+          "timestamp_utc": { "type": "string" }
+        }
+      }
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "INCOMPLETE", "MANUAL_HOLD"]
+    },
+    "decision_reason": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

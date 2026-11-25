@@ -1,0 +1,94 @@
+# Quality Gates & Merge Gate Policy
+# Phiên bản nâng cấp hỗ trợ Evidence Ledger, AI Review 4-Pass và Deterministic Merge Gate
+
+version: 1
+
+merge_policy:
+  required_checks:
+    - policy-integrity
+    - rust-core
+    - wasm-build
+    - verification-gate
+
+  require_current_commit: true
+  fail_on_missing_evidence: true
+  fail_on_test_failure: true
+  fail_on_policy_violation: true
+
+ai_review:
+  model: gemini-3.8-flash-high
+  thinking: high
+  mode: advisory
+  invalidate_on_new_commit: true
+
+  findings:
+    P0: manual_hold
+    P1: manual_hold
+    P2: require_disposition
+    P3: advisory
+
+risk_rules:
+  high_risk_paths:
+    - "src-tauri/capabilities/**"
+    - "src-tauri/src/commands/**"
+    - "src/platform/**"
+    - "crates/office-engine/**"
+    - "src-tauri/src/safe_persistence.rs"
+    - "vendor/**"
+
+  high_risk_checks:
+    - integration-tests
+    - fault-injection
+    - native-e2e
+
+release_policy:
+  require_cross_platform_build: true
+  require_human_uat: true
+  require_rollback_readiness: true
+
+gates:
+  L0:
+    name: "Source & Policy Integrity"
+    description: "Spine Lock, Task Contract, Protected Paths, Secrets Scan"
+    checks:
+      - id: "policy-integrity"
+        command: "./scripts/verify_spine_lock.sh"
+        required: true
+  L1:
+    name: "Rust Static Checks"
+    description: "rustfmt, cargo clippy -D warnings, cargo check"
+    checks:
+      - id: "rust-fmt-clippy"
+        command: "./harness/ci/verify-core.sh --static-only"
+        required: true
+  L2:
+    name: "Unit & Property Tests"
+    description: "cargo test --workspace & office-engine tests"
+    checks:
+      - id: "rust-core"
+        command: "./harness/ci/verify-core.sh --unit-only"
+        required: true
+  L3:
+    name: "Integration & Fault Injection"
+    description: "Tauri backend, SafePersistence, Window Lifecycle"
+    checks:
+      - id: "integration-tests"
+        command: "./harness/ci/verify-tauri.sh"
+        required: true
+  L4:
+    name: "Frontend WASM & Native E2E"
+    description: "Trunk build wasm32-unknown-unknown & Desktop scenarios"
+    checks:
+      - id: "wasm-build"
+        command: "./harness/ci/verify-wasm.sh"
+        required: true
+      - id: "native-e2e"
+        command: "./harness/ci/verify-native-e2e.sh"
+        required: false
+  L5:
+    name: "Release Assurance"
+    description: "Cross platform build, pinned vendor integrity, rollback verification"
+    checks:
+      - id: "verification-gate"
+        command: "python3 harness/runner/run.py --tier L5"
+        required: true

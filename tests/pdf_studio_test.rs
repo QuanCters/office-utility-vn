@@ -1,12 +1,21 @@
 use leptos::prelude::*;
+use sha2::{Digest, Sha256};
+
+fn sha256_oracle(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("{:x}", hasher.finalize())
+}
 use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
-    IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge,
+    IncomingBridgeMessage, OutgoingBridgeMessage, PdfCraftBridge, SaveOutcome,
 };
 use office_utility_vn_ui::micro_apps::pdf_studio::canvas_frame::PdfCraftCanvasFrame;
-use office_utility_vn_ui::micro_apps::pdf_studio::state::{category_for_tool, PdfCategory, PdfStudioState};
+use office_utility_vn_ui::micro_apps::pdf_studio::state::{
+    PdfCategory, PdfStudioState, category_for_tool,
+};
 use office_utility_vn_ui::micro_apps::pdf_studio::toolbar::pdf_studio_tool_icon;
 use office_utility_vn_ui::micro_apps::pdf_studio::vn_ribbon::PdfVnExtensionRibbon;
-use office_utility_vn_ui::micro_apps::{tool_slug_to_micro_app, MicroAppId, PDF_STUDIO_TOOLS};
+use office_utility_vn_ui::micro_apps::{MicroAppId, PDF_STUDIO_TOOLS, tool_slug_to_micro_app};
 
 const EXPECTED_PDF_STUDIO_SLUGS: &[&str] = &[
     "pdf-merge-split",
@@ -65,7 +74,10 @@ fn test_pdf_studio_state_with_custom_initial_tool() {
     // 1. Khởi tạo với công cụ thuộc SecurityOptimize
     let state_sec = PdfStudioState::with_initial_tool(Some("pdf-compress".to_string()));
     assert_eq!(state_sec.active_tool_slug(), "pdf-compress");
-    assert_eq!(state_sec.active_category.get(), PdfCategory::SecurityOptimize);
+    assert_eq!(
+        state_sec.active_category.get(),
+        PdfCategory::SecurityOptimize
+    );
     assert!(!state_sec.is_workflow());
 
     // 2. Khởi tạo với công cụ thuộc ConvertOcr
@@ -96,7 +108,10 @@ fn test_pdf_studio_file_management() {
     assert_eq!(state.loaded_files_count(), 1);
     assert!(state.has_files());
     assert_eq!(state.active_file_index.get(), Some(0));
-    assert_eq!(state.active_file_path(), Some("/home/user/documents/report_q4.pdf".to_string()));
+    assert_eq!(
+        state.active_file_path(),
+        Some("/home/user/documents/report_q4.pdf".to_string())
+    );
     assert_eq!(state.active_file_name(), Some("report_q4.pdf".to_string()));
 
     // 2. Thêm nhiều tệp tiếp theo
@@ -116,11 +131,17 @@ fn test_pdf_studio_file_management() {
     // 4. Chọn tệp khác theo index
     state.select_file(1);
     assert_eq!(state.active_file_index.get(), Some(1));
-    assert_eq!(state.active_file_name(), Some("contract_signed.pdf".to_string()));
+    assert_eq!(
+        state.active_file_name(),
+        Some("contract_signed.pdf".to_string())
+    );
 
     state.select_file(2);
     assert_eq!(state.active_file_index.get(), Some(2));
-    assert_eq!(state.active_file_name(), Some("invoice_vat_2026.pdf".to_string()));
+    assert_eq!(
+        state.active_file_name(),
+        Some("invoice_vat_2026.pdf".to_string())
+    );
 
     // 5. Chọn index vượt quá giới hạn -> Không thay đổi
     state.select_file(99);
@@ -189,7 +210,11 @@ fn test_pdf_studio_all_tools_exact_list() {
     for slug in EXPECTED_PDF_STUDIO_SLUGS {
         // 2. Mọi slug phải tồn tại trong PDF_STUDIO_TOOLS
         let found = PDF_STUDIO_TOOLS.iter().find(|t| t.slug == *slug);
-        assert!(found.is_some(), "Công cụ '{}' thiếu trong PDF_STUDIO_TOOLS", slug);
+        assert!(
+            found.is_some(),
+            "Công cụ '{}' thiếu trong PDF_STUDIO_TOOLS",
+            slug
+        );
 
         // 3. Mọi slug phải được ánh xạ đúng về MicroAppId::PdfStudio
         assert_eq!(
@@ -201,7 +226,11 @@ fn test_pdf_studio_all_tools_exact_list() {
 
         // 4. Mọi slug phải thuộc đúng 1 nhóm PdfCategory
         let cat = category_for_tool(slug);
-        assert!(cat.is_some(), "Slug '{}' không được gán danh mục PdfCategory nào", slug);
+        assert!(
+            cat.is_some(),
+            "Slug '{}' không được gán danh mục PdfCategory nào",
+            slug
+        );
 
         // 5. Mọi slug phải có icon emoji trực quan
         let icon = pdf_studio_tool_icon(slug);
@@ -350,13 +379,22 @@ fn test_pdf_studio_view_mode_and_sidebar_toggle() {
     assert_eq!(state.active_tool_slug(), "pdf-compress");
     assert!(state.is_tool_workspace());
     assert!(!state.is_hub());
-    assert!(state.sidebar_collapsed.get(), "Sidebar phải tự động thu gọn về dạng Mini khi vào công cụ");
+    assert!(
+        state.sidebar_collapsed.get(),
+        "Sidebar phải tự động thu gọn về dạng Mini khi vào công cụ"
+    );
 
     // 3. Toggle sidebar mở rộng và thu gọn
     state.toggle_sidebar();
-    assert!(!state.sidebar_collapsed.get(), "Sau khi toggle, sidebar phải mở rộng (expanded)");
+    assert!(
+        !state.sidebar_collapsed.get(),
+        "Sau khi toggle, sidebar phải mở rộng (expanded)"
+    );
     state.toggle_sidebar();
-    assert!(state.sidebar_collapsed.get(), "Sau khi toggle lần 2, sidebar phải thu gọn lại");
+    assert!(
+        state.sidebar_collapsed.get(),
+        "Sau khi toggle lần 2, sidebar phải thu gọn lại"
+    );
 
     // 4. Quay lại Hub
     state.open_hub();
@@ -405,7 +443,9 @@ fn test_pdf_studio_visual_workspace_transition() {
 
 #[test]
 fn test_pdf_studio_hub_filter() {
-    use office_utility_vn_ui::micro_apps::pdf_studio::hub_view::{filter_pdf_studio_tools, matches_pdf_tool};
+    use office_utility_vn_ui::micro_apps::pdf_studio::hub_view::{
+        filter_pdf_studio_tools, matches_pdf_tool,
+    };
 
     let state = PdfStudioState::new();
     let tools = state.tools();
@@ -433,31 +473,47 @@ fn test_pdf_studio_hub_filter() {
     // 5. Tìm kiếm theo từ khóa "gộp" hoặc "tách"
     let gop_results = filter_pdf_studio_tools(tools, "gộp");
     assert!(gop_results.iter().any(|t| t.slug == "pdf-merge-split"));
-    let merge_tool = state.find_tool("pdf-merge-split").expect("pdf-merge-split must exist");
+    let merge_tool = state
+        .find_tool("pdf-merge-split")
+        .expect("pdf-merge-split must exist");
     assert!(matches_pdf_tool(merge_tool, "gộp"));
     assert!(matches_pdf_tool(merge_tool, "tách"));
     assert!(matches_pdf_tool(merge_tool, "merge"));
 
     // 6. Tìm kiếm trích xuất bảng biểu / Excel
     let table_results = filter_pdf_studio_tools(tools, "bảng");
-    assert!(table_results.iter().any(|t| t.slug == "pdf-table-extractor"));
+    assert!(
+        table_results
+            .iter()
+            .any(|t| t.slug == "pdf-table-extractor")
+    );
 
     // 7. Tìm kiếm 3 công cụ mở rộng Phase 1
     let organizer_results = filter_pdf_studio_tools(tools, "sắp xếp");
-    assert!(organizer_results.iter().any(|t| t.slug == "pdf-page-organizer"));
-    let organizer_tool = state.find_tool("pdf-page-organizer").expect("pdf-page-organizer must exist");
+    assert!(
+        organizer_results
+            .iter()
+            .any(|t| t.slug == "pdf-page-organizer")
+    );
+    let organizer_tool = state
+        .find_tool("pdf-page-organizer")
+        .expect("pdf-page-organizer must exist");
     assert!(matches_pdf_tool(organizer_tool, "organizer"));
     assert!(matches_pdf_tool(organizer_tool, "đảo trang"));
 
     let sig_results = filter_pdf_studio_tools(tools, "ký tay");
     assert!(sig_results.iter().any(|t| t.slug == "pdf-signature-pad"));
-    let sig_tool = state.find_tool("pdf-signature-pad").expect("pdf-signature-pad must exist");
+    let sig_tool = state
+        .find_tool("pdf-signature-pad")
+        .expect("pdf-signature-pad must exist");
     assert!(matches_pdf_tool(sig_tool, "signature"));
     assert!(matches_pdf_tool(sig_tool, "chữ ký"));
 
     let zip_results = filter_pdf_studio_tools(tools, "gói ảnh");
     assert!(zip_results.iter().any(|t| t.slug == "pdf-to-images-pack"));
-    let pack_tool = state.find_tool("pdf-to-images-pack").expect("pdf-to-images-pack must exist");
+    let pack_tool = state
+        .find_tool("pdf-to-images-pack")
+        .expect("pdf-to-images-pack must exist");
     assert!(matches_pdf_tool(pack_tool, "zip"));
     assert!(matches_pdf_tool(pack_tool, "xuất ảnh"));
 
@@ -480,8 +536,8 @@ fn test_pdfcraft_canvas_frame_renders() {
 
 #[test]
 fn test_pdf_studio_app_initial_tool_preserves_tool_workspace() {
-    use office_utility_vn_ui::micro_apps::pdf_studio::init_pdf_studio_app_state;
     use office_utility_vn_ui::micro_apps::pdf_studio::PdfViewMode;
+    use office_utility_vn_ui::micro_apps::pdf_studio::init_pdf_studio_app_state;
 
     let state = PdfStudioState::new();
     let state = init_pdf_studio_app_state(Some(state), Some("pdf-to-images-pack".to_string()));
@@ -505,7 +561,8 @@ fn test_bridge_protocol() {
     // 1. Test deserialization of incoming messages from PDFCraft
     // 1a. pdfcraft:ready
     let ready_json = r#"{"type":"pdfcraft:ready","version":"0.2.0"}"#;
-    let msg: IncomingBridgeMessage = serde_json::from_str(ready_json).expect("deserialize ready message");
+    let msg: IncomingBridgeMessage =
+        serde_json::from_str(ready_json).expect("deserialize ready message");
     match &msg {
         IncomingBridgeMessage::Ready { version } => assert_eq!(version, "0.2.0"),
         _ => panic!("Expected Ready variant, got {:?}", msg),
@@ -513,7 +570,8 @@ fn test_bridge_protocol() {
 
     // 1b. pdfcraft:dirty
     let dirty_json = r#"{"type":"pdfcraft:dirty","dirty":true}"#;
-    let msg: IncomingBridgeMessage = serde_json::from_str(dirty_json).expect("deserialize dirty message");
+    let msg: IncomingBridgeMessage =
+        serde_json::from_str(dirty_json).expect("deserialize dirty message");
     match &msg {
         IncomingBridgeMessage::Dirty { dirty } => assert!(*dirty),
         _ => panic!("Expected Dirty variant, got {:?}", msg),
@@ -521,9 +579,14 @@ fn test_bridge_protocol() {
 
     // 1c. pdfcraft:save
     let save_json = r#"{"type":"pdfcraft:save","name":"bao_cao_tai_chinh.pdf","saveAs":false,"bytes":[37,80,68,70]}"#;
-    let msg: IncomingBridgeMessage = serde_json::from_str(save_json).expect("deserialize save message");
+    let msg: IncomingBridgeMessage =
+        serde_json::from_str(save_json).expect("deserialize save message");
     match &msg {
-        IncomingBridgeMessage::Save { name, save_as, bytes } => {
+        IncomingBridgeMessage::Save {
+            name,
+            save_as,
+            bytes,
+        } => {
             assert_eq!(name, "bao_cao_tai_chinh.pdf");
             assert!(!*save_as);
             assert_eq!(bytes, &[37, 80, 68, 70]);
@@ -533,7 +596,8 @@ fn test_bridge_protocol() {
 
     // 1d. pdfcraft:failed
     let failed_json = r#"{"type":"pdfcraft:failed","error":"WebGL not supported"}"#;
-    let msg: IncomingBridgeMessage = serde_json::from_str(failed_json).expect("deserialize failed message");
+    let msg: IncomingBridgeMessage =
+        serde_json::from_str(failed_json).expect("deserialize failed message");
     match &msg {
         IncomingBridgeMessage::Failed { error } => assert_eq!(error, "WebGL not supported"),
         _ => panic!("Expected Failed variant, got {:?}", msg),
@@ -551,7 +615,8 @@ fn test_bridge_protocol() {
     assert!(open_json.contains(r#""bytes":[37,80,68,70,45,49,46,55]"#));
 
     // Deserialization roundtrip for open message
-    let parsed_open: OutgoingBridgeMessage = serde_json::from_str(&open_json).expect("roundtrip open message");
+    let parsed_open: OutgoingBridgeMessage =
+        serde_json::from_str(&open_json).expect("roundtrip open message");
     assert_eq!(parsed_open, open_msg);
 
     // 3. Test state integration with bridge messages
@@ -573,7 +638,8 @@ fn test_bridge_protocol() {
     state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: false });
     assert!(!state.has_unsaved_changes.get());
 
-    // When save event arrives -> has_unsaved_changes is cleared
+    // Gate 1 (Stage 4B-2B): Khi nhận IncomingBridgeMessage::Save, dirty KHÔNG được tự động xóa
+    // mà phải duy trì dirty = true cho đến khi có SaveOutcome::Saved từ backend để ngăn ngừa mất dữ liệu khi Cancel
     state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: true });
     assert!(state.has_unsaved_changes.get());
     state.handle_bridge_message(&IncomingBridgeMessage::Save {
@@ -581,6 +647,12 @@ fn test_bridge_protocol() {
         save_as: false,
         bytes: vec![],
     });
+    // BẢO VỆ DỮ LIỆU: Vẫn phải giữ dirty = true vì chưa có xác nhận ghi đĩa
+    assert!(state.has_unsaved_changes.get());
+    assert!(state.status_message.get().contains("Đang xử lý"));
+
+    // Chỉ khi nhận xác nhận lưu thành công (SaveOutcome::Saved) thì dirty mới được xóa
+    state.set_unsaved_changes(false);
     assert!(!state.has_unsaved_changes.get());
 
     // 4. Test PdfCraftBridge callback dispatching
@@ -654,9 +726,11 @@ fn test_vn_extension_ribbon_renders() {
 fn test_read_file_bytes_zero_cloud_rejection() {
     use std::future::Future;
 
-    let mut fut_http = Box::pin(office_utility_vn_ui::micro_apps::pdf_studio::bridge::read_file_bytes(
-        "http://evil.com/remote.pdf",
-    ));
+    let mut fut_http = Box::pin(
+        office_utility_vn_ui::micro_apps::pdf_studio::bridge::read_file_bytes(
+            "http://evil.com/remote.pdf",
+        ),
+    );
     let waker = std::task::Waker::noop();
     let mut cx = std::task::Context::from_waker(waker);
     let res_http = match fut_http.as_mut().poll(&mut cx) {
@@ -666,13 +740,1560 @@ fn test_read_file_bytes_zero_cloud_rejection() {
     assert!(res_http.is_err());
     assert!(res_http.unwrap_err().contains("NFR-SEC-01"));
 
-    let mut fut_https = Box::pin(office_utility_vn_ui::micro_apps::pdf_studio::bridge::read_file_bytes(
-        "https://evil.com/remote.pdf",
-    ));
+    let mut fut_https = Box::pin(
+        office_utility_vn_ui::micro_apps::pdf_studio::bridge::read_file_bytes(
+            "https://evil.com/remote.pdf",
+        ),
+    );
     let res_https = match fut_https.as_mut().poll(&mut cx) {
         std::task::Poll::Ready(res) => res,
         std::task::Poll::Pending => panic!("Expected Ready"),
     };
     assert!(res_https.is_err());
     assert!(res_https.unwrap_err().contains("NFR-SEC-01"));
+}
+
+#[test]
+fn test_pdf_studio_save_outcomes_and_cancel_preserves_dirty() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::SaveOutcome;
+
+    // 1. Kiểm tra các biến thể SaveOutcome phân định minh thị kết quả lưu
+    let outcome_saved = SaveOutcome::Saved {
+        dest_path: "/data/contract.pdf".to_string(),
+        committed_revision: 5,
+        new_document_id: Some("doc-123".to_string()),
+    };
+    let outcome_canceled = SaveOutcome::Canceled;
+    let outcome_failed = SaveOutcome::Failed("Permission denied".to_string());
+    let _outcome_browser = SaveOutcome::BrowserDownloadInitiated;
+
+    // Phải tuần tự hóa và giải mã được qua serde
+    let json = serde_json::to_string(&outcome_saved).unwrap();
+    let deserialized: SaveOutcome = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, outcome_saved);
+
+    // 2. Kiểm tra logic bảo vệ trạng thái dirty khi người dùng Cancel hoặc thất bại
+    let state = PdfStudioState::new();
+    state.set_unsaved_changes(true);
+    assert!(state.has_unsaved_changes());
+
+    // Giả lập xử lý SaveOutcome::Canceled: dirty BẮT BUỘC giữ nguyên true
+    match outcome_canceled {
+        SaveOutcome::Canceled => {
+            // KHÔNG xóa dirty!
+            assert!(state.has_unsaved_changes());
+            state
+                .status_message
+                .set("Đã hủy thao tác lưu tệp.".to_string());
+        }
+        _ => panic!("Expected Canceled"),
+    }
+    assert!(state.has_unsaved_changes());
+    assert_eq!(state.status_message.get(), "Đã hủy thao tác lưu tệp.");
+
+    // Giả lập xử lý SaveOutcome::Failed: dirty BẮT BUỘC giữ nguyên true
+    match outcome_failed {
+        SaveOutcome::Failed(ref err) => {
+            assert!(state.has_unsaved_changes());
+            state.status_message.set(format!("Lỗi: {err}"));
+        }
+        _ => panic!("Expected Failed"),
+    }
+    assert!(state.has_unsaved_changes());
+
+    // Giả lập xử lý SaveOutcome::Saved: Chỉ khi lưu thành công thì mới xóa dirty
+    match outcome_saved {
+        SaveOutcome::Saved {
+            ref dest_path,
+            committed_revision,
+            ref new_document_id,
+        } => {
+            state.set_unsaved_changes(false);
+            state.set_active_document_session(new_document_id.clone(), committed_revision);
+            state.status_message.set(format!("Đã lưu: {dest_path}"));
+        }
+        _ => panic!("Expected Saved"),
+    }
+    assert!(!state.has_unsaved_changes());
+    assert_eq!(state.active_revision(), 5);
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-123"));
+}
+
+#[test]
+fn test_pdf_studio_save_as_activates_new_document_session() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{SaveOutcome, apply_save_outcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let state = PdfStudioState::new();
+    state.add_file("/documents/original_a.pdf");
+    state.set_active_document_session(Some("doc-session-aaa".to_string()), 1);
+    state.set_unsaved_changes(true);
+
+    assert_eq!(
+        state.active_file_path().as_deref(),
+        Some("/documents/original_a.pdf")
+    );
+    assert_eq!(
+        state.active_document_id().as_deref(),
+        Some("doc-session-aaa")
+    );
+    assert_eq!(state.active_revision(), 1);
+
+    // Thực hiện Save As sang tệp B: backend cấp document_id mới "doc-session-bbb"
+    let ctx = SaveRequestContext {
+        request_id: "req-save-as-test".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-session-aaa".into()),
+        originating_path: Some("/documents/original_a.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp".into(),
+        authorized_dest_path: Some("/documents/saved_b.pdf".into()),
+    };
+
+    let save_as_outcome = SaveOutcome::Saved {
+        dest_path: "/documents/saved_b.pdf".to_string(),
+        committed_revision: 1,
+        new_document_id: Some("doc-session-bbb".to_string()),
+    };
+
+    apply_save_outcome(&state, Ok(save_as_outcome), &ctx, b"test-pdf-bytes");
+
+    // Xác nhận session B đã được kích hoạt làm active session, không còn trỏ về file A
+    assert_eq!(
+        state.active_file_path().as_deref(),
+        Some("/documents/saved_b.pdf")
+    );
+    assert_eq!(
+        state.active_document_id().as_deref(),
+        Some("doc-session-bbb")
+    );
+    assert_eq!(state.active_revision(), 1);
+    assert!(!state.has_unsaved_changes());
+}
+
+#[test]
+fn test_pdf_studio_concurrent_edits_during_save_preserve_dirty() {
+    let state = PdfStudioState::new();
+    state.add_file("/documents/doc.pdf");
+    state.set_active_document_session(Some("doc-1".to_string()), 1);
+
+    // Người dùng chỉnh sửa lần 1
+    state.set_unsaved_changes(true);
+    let snapshot_gen = state.edit_generation.get_untracked();
+    assert_eq!(snapshot_gen, 1);
+
+    // Trong lúc save đang chạy bất đồng bộ, người dùng tiếp tục chỉnh sửa lần 2 (thế hệ tăng lên)
+    state.set_unsaved_changes(true);
+    let newer_gen = state.edit_generation.get_untracked();
+    assert_eq!(newer_gen, 2);
+
+    // Khi tác vụ lưu của snapshot_gen hoàn thành:
+    // Vì newer_gen (2) != snapshot_gen (1), dirty state BẮT BUỘC phải duy trì true!
+    let current_gen = state.edit_generation.get_untracked();
+    if current_gen == snapshot_gen {
+        state.has_unsaved_changes.set(false);
+    } else {
+        state.has_unsaved_changes.set(true);
+    }
+
+    assert!(
+        state.has_unsaved_changes(),
+        "Bắt buộc giữ unsaved_changes = true nếu có chỉnh sửa mới trong khi đang lưu!"
+    );
+}
+
+#[test]
+fn test_pdf_studio_cached_document_reopening() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
+        cache_authorized_pdf_bytes, get_authorized_pdf_bytes, read_file_bytes,
+    };
+
+    let fake_path = "/authorized/documents/report_q4.pdf";
+    let fake_bytes = b"%PDF-1.7 Test document content for caching".to_vec();
+
+    // Chưa cache thì get trả về None
+    assert!(get_authorized_pdf_bytes(fake_path).is_none());
+
+    // Nạp vào cache ủy quyền phiên
+    cache_authorized_pdf_bytes(fake_path, fake_bytes.clone());
+
+    // Đọc lại từ cache
+    let retrieved = get_authorized_pdf_bytes(fake_path);
+    assert_eq!(retrieved, Some(fake_bytes.clone()));
+
+    // read_file_bytes cũng phải đọc thành công từ cache
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        let mut f = std::pin::pin!(f);
+        let waker = std::task::Waker::noop();
+        let mut cx = std::task::Context::from_waker(&waker);
+        match f.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(res) => res,
+            std::task::Poll::Pending => panic!("Future pending unexpectedly"),
+        }
+    }
+
+    let read_res = block_on(read_file_bytes(fake_path));
+    assert!(read_res.is_ok());
+    assert_eq!(read_res.unwrap(), fake_bytes);
+}
+
+#[test]
+fn test_pdf_studio_session_identity_restored_on_file_switch() {
+    let state = PdfStudioState::new();
+
+    // 1. Mở file A: /tmp/A.pdf với document_id "doc-A", rev 1
+    state.add_file("/tmp/A.pdf");
+    state.set_active_document_session(Some("doc-A".to_string()), 1);
+
+    // 2. Mở tiếp file B: /tmp/B.pdf với document_id "doc-B", rev 1
+    state.add_file("/tmp/B.pdf");
+    state.set_active_document_session(Some("doc-B".to_string()), 1);
+
+    assert_eq!(state.active_file_path(), Some("/tmp/B.pdf".to_string()));
+    assert_eq!(state.active_document_id(), Some("doc-B".to_string()));
+
+    // 3. Người dùng chọn lại file A (index 0)
+    state.select_file(0);
+
+    // BẮT BUỘC: Khi chọn lại file A, session ID và revision của A phải được phục hồi!
+    assert_eq!(state.active_file_path(), Some("/tmp/A.pdf".to_string()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-A".to_string()),
+        "Active document ID must be restored to A's session ID when switching back to A!"
+    );
+    assert_eq!(state.active_revision(), 1);
+}
+
+#[test]
+fn test_pdf_studio_switching_and_saving_preserves_other_document_bytes() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let path_a = dir.path().join("A.pdf");
+    let path_b = dir.path().join("B.pdf");
+
+    let initial_bytes_a = b"%PDF-1.7 ORIGINAL_CONTENT_FOR_DOCUMENT_A";
+    let initial_bytes_b = b"%PDF-1.7 DISTINCT_CONTENT_FOR_DOCUMENT_B";
+
+    std::fs::write(&path_a, initial_bytes_a).expect("write A");
+    std::fs::write(&path_b, initial_bytes_b).expect("write B");
+
+    let sha_b_before = {
+        use std::hash::{DefaultHasher, Hasher};
+        let mut hasher = DefaultHasher::new();
+        hasher.write(initial_bytes_b);
+        hasher.finish()
+    };
+
+    let state = PdfStudioState::new();
+
+    // 1. Mở A.pdf
+    let path_a_str = path_a.to_str().unwrap().to_string();
+    state.add_file(&path_a_str);
+    state.set_active_document_session(Some("doc-session-A".to_string()), 1);
+
+    // 2. Mở B.pdf
+    let path_b_str = path_b.to_str().unwrap().to_string();
+    state.add_file(&path_b_str);
+    state.set_active_document_session(Some("doc-session-B".to_string()), 1);
+
+    assert_eq!(state.active_file_path(), Some(path_b_str.clone()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-B".to_string())
+    );
+
+    // 3. Người dùng chuyển lại tệp A
+    state.select_file(0);
+    assert_eq!(state.active_file_path(), Some(path_a_str.clone()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-A".to_string()),
+        "Must restore A's session ID, NOT keep B's session ID!"
+    );
+
+    // 4. Giả lập lưu A với nội dung mới
+    let new_bytes_a = b"%PDF-1.7 EDITED_CONTENT_FOR_DOCUMENT_A_V2";
+    // Kiểm tra rằng session được lấy để lưu là A
+    let grant_target_doc_id = state.active_document_id().expect("doc id for A");
+    assert_eq!(grant_target_doc_id, "doc-session-A");
+    assert_ne!(grant_target_doc_id, "doc-session-B");
+
+    // Ghi đĩa theo phiên A
+    let target_session = state
+        .get_document_session(&path_a_str)
+        .expect("session for A");
+    assert_eq!(
+        target_session.document_id,
+        Some("doc-session-A".to_string())
+    );
+    std::fs::write(&target_session.file_path, new_bytes_a).expect("write new A");
+    state.set_active_document_session(Some("doc-session-A".to_string()), 2);
+
+    // 5. Xác minh: A chứa đúng bytes mới, B giữ nguyên tuyệt đối
+    let read_a = std::fs::read(&path_a).expect("read A");
+    assert_eq!(read_a, new_bytes_a);
+
+    let read_b = std::fs::read(&path_b).expect("read B");
+    assert_eq!(read_b, initial_bytes_b);
+
+    let sha_b_after = {
+        use std::hash::{DefaultHasher, Hasher};
+        let mut hasher = DefaultHasher::new();
+        hasher.write(&read_b);
+        hasher.finish()
+    };
+    assert_eq!(
+        sha_b_before, sha_b_after,
+        "B's content must be 100% unchanged!"
+    );
+}
+
+#[test]
+fn test_pdf_studio_save_completion_cross_document_interleaving_safety() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::SaveOutcome;
+
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let path_a = dir.path().join("A.pdf");
+    let path_b = dir.path().join("B.pdf");
+
+    let initial_bytes_a = b"%PDF-1.7 INITIAL_CONTENT_FOR_DOC_A";
+    let initial_bytes_b = b"%PDF-1.7 INITIAL_CONTENT_FOR_DOC_B";
+
+    std::fs::write(&path_a, initial_bytes_a).expect("write initial A");
+    std::fs::write(&path_b, initial_bytes_b).expect("write initial B");
+
+    let oracle_initial_b = sha256_oracle(initial_bytes_b);
+
+    let state = PdfStudioState::new();
+
+    // 1. Mở A.pdf và đăng ký session
+    let path_a_str = path_a.to_str().unwrap().to_string();
+    state.add_file(&path_a_str);
+    state.set_active_document_session(Some("doc-session-A".to_string()), 1);
+    state.set_unsaved_changes(true);
+
+    // 2. Mở B.pdf và đăng ký session
+    let path_b_str = path_b.to_str().unwrap().to_string();
+    state.add_file(&path_b_str);
+    state.set_active_document_session(Some("doc-session-B".to_string()), 1);
+    state.set_unsaved_changes(false);
+
+    // 3. Người dùng chọn lại file A
+    state.select_file(0);
+    assert_eq!(state.active_file_path(), Some(path_a_str.clone()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-A".to_string())
+    );
+
+    // 4. Bắt đầu lưu A.pdf: Chụp lại thông tin snapshot
+    let originating_path_a = state.active_file_path().unwrap();
+    let originating_doc_id_a = state.active_document_id().unwrap();
+    let snapshot_gen_a = state.edit_generation.get_untracked();
+    let new_bytes_a = b"%PDF-1.7 NEW_CONTENT_FOR_A_POST_EDIT";
+
+    // 5. TRƯỚC KHI tác vụ lưu của A hoàn tất, người dùng chuyển sang file B
+    state.select_file(1);
+    assert_eq!(state.active_file_path(), Some(path_b_str.clone()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-B".to_string())
+    );
+    // Người dùng chỉnh sửa file B
+    state.set_unsaved_changes(true);
+
+    // 6. Tác vụ lưu bất đồng bộ của A hoàn tất
+    let outcome_a = SaveOutcome::Saved {
+        dest_path: originating_path_a.clone(),
+        committed_revision: 2,
+        new_document_id: Some("doc-session-A".to_string()),
+    };
+
+    let ctx_a = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: "req-test-a".to_string(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some(originating_doc_id_a.clone()),
+        originating_path: Some(originating_path_a.clone()),
+        session_generation: 1,
+        snapshot_edit_generation: snapshot_gen_a,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-a".to_string(),
+        authorized_dest_path: Some(originating_path_a.clone()),
+    };
+
+    // Áp dụng completion handler của bridge
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(outcome_a),
+        &ctx_a,
+        new_bytes_a,
+    );
+    std::fs::write(&originating_path_a, new_bytes_a).expect("write new A");
+
+    // 7. BẮT BUỘC: Sau khi A lưu xong, active session của B VẪN PHẢI LÀ B!
+    // Không được bị ghi đè thành doc-session-A!
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-B".to_string()),
+        "B's active document session identity must remain B, even after A's save completes!"
+    );
+    assert_eq!(state.active_revision(), 1);
+    assert!(
+        state.has_unsaved_changes(),
+        "B must remain dirty after A saves!"
+    );
+
+    // 8. Bây giờ người dùng lưu file B
+    let new_bytes_b = b"%PDF-1.7 NEW_CONTENT_FOR_B_POST_EDIT";
+    let originating_path_b = state.active_file_path().unwrap();
+    let originating_doc_id_b = state.active_document_id().unwrap();
+    assert_eq!(
+        originating_doc_id_b, "doc-session-B",
+        "Grant for B must reference B's session!"
+    );
+    assert_ne!(
+        originating_doc_id_b, "doc-session-A",
+        "Grant for B must NEVER reference A's session!"
+    );
+
+    let outcome_b = SaveOutcome::Saved {
+        dest_path: originating_path_b.clone(),
+        committed_revision: 2,
+        new_document_id: Some("doc-session-B".to_string()),
+    };
+    let ctx_b = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: "req-test-b".to_string(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some(originating_doc_id_b.clone()),
+        originating_path: Some(originating_path_b.clone()),
+        session_generation: 1,
+        snapshot_edit_generation: state.edit_generation.get_untracked(),
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-b".to_string(),
+        authorized_dest_path: Some(originating_path_b.clone()),
+    };
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(outcome_b),
+        &ctx_b,
+        new_bytes_b,
+    );
+    std::fs::write(&originating_path_b, new_bytes_b).expect("write new B");
+
+    // 9. Xác thực SHA-256 độc lập cho nội dung cuối cùng của cả hai tệp
+    let read_a = std::fs::read(&path_a).expect("read final A");
+    let read_b = std::fs::read(&path_b).expect("read final B");
+
+    let oracle_final_a = sha256_oracle(&read_a);
+    let oracle_final_b = sha256_oracle(&read_b);
+
+    assert_eq!(
+        oracle_final_a,
+        sha256_oracle(new_bytes_a),
+        "A must contain new A bytes!"
+    );
+    assert_eq!(
+        oracle_final_b,
+        sha256_oracle(new_bytes_b),
+        "B must contain new B bytes!"
+    );
+    assert_ne!(
+        oracle_final_a, oracle_final_b,
+        "A and B must have distinct SHA-256!"
+    );
+    assert_ne!(
+        oracle_final_b, oracle_initial_b,
+        "B was updated with new bytes!"
+    );
+}
+
+#[test]
+fn test_pdf_pending_save_lifecycle_five_scenarios() {
+    use office_utility_vn_ui::app::AppState;
+
+    let app_state = AppState::default();
+    let state = app_state.pdf_studio_state;
+
+    let path_a = "/tmp/test_pdf_pending_a.pdf";
+    let path_b = "/tmp/test_pdf_pending_b.pdf";
+
+    // Mở file A và đánh dấu dirty
+    state.add_file(path_a);
+    state.set_active_document_session(Some("doc-session-A".to_string()), 1);
+    state.set_unsaved_changes(true);
+    let gen_a0 = state.edit_generation.get_untracked();
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 1: Bắt đầu lưu PDF A, iframe gửi dirty(false) sớm trước khi native ghi đĩa xong.
+    // Yêu cầu: Cửa sổ / close guard VẪN PHẢI BỊ CHẶN (close must remain blocked)!
+    // -------------------------------------------------------------------------
+    let req_a1 = "pdf-save-req-a1".to_string();
+    let ctx_a1 = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: req_a1.clone(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some("doc-session-A".to_string()),
+        originating_path: Some(path_a.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_a0,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-a1".to_string(),
+        authorized_dest_path: Some(path_a.to_string()),
+    };
+    state.register_pending_save(req_a1.clone(), ctx_a1.clone());
+    assert!(state.has_pending_saves(), "Phải ghi nhận có pending save");
+    assert!(state.has_pending_saves_for_file(path_a));
+
+    // Iframe gửi thông điệp dirty(false) sớm (do postMessage thành công trong iframe)
+    state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: false });
+
+    // Cực kỳ quan trọng: Close guard phải tiếp tục chặn đóng!
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 1: Close guard phải chặn đóng cửa sổ khi tác vụ lưu PDF vẫn đang pending!"
+    );
+    assert!(
+        state.has_unsaved_changes(),
+        "Scenario 1: Thông báo sạch sớm từ iframe không được nuốt mất dirty flag trước khi ghi đĩa xong!"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 2: Native write gặp lỗi sau khi iframe đã gửi clean notification.
+    // Yêu cầu: Tài liệu VẪN PHẢI GIỮ NGUYÊN DIRTY (document remains dirty)!
+    // -------------------------------------------------------------------------
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Err("Lỗi IO native khi ghi đĩa".to_string()),
+        &ctx_a1,
+        b"%PDF-1.7 CONTENT",
+    );
+    assert!(
+        !state.has_pending_saves_for_file(path_a),
+        "Pending save req_a1 phải được dọn sau khi kết thúc"
+    );
+    assert!(
+        state.has_unsaved_changes(),
+        "Scenario 2: Khi lưu thất bại, document phải giữ nguyên dirty!"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 2: Close guard vẫn phải chặn đóng khi lưu thất bại"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 3: Bắt đầu 2 pending saves (A và B), hoàn tất 1 cái (A).
+    // Yêu cầu: Cái còn lại (B) TIẾP TỤC CHẶN ĐÓNG CỬA SỔ!
+    // -------------------------------------------------------------------------
+    state.add_file(path_b);
+    state.set_active_document_session(Some("doc-session-B".to_string()), 1);
+    state.set_unsaved_changes(true);
+    let gen_b0 = state.edit_generation.get_untracked();
+
+    // Chuyển lại về A
+    state.select_file(0);
+    state.set_unsaved_changes(true);
+    let gen_a1 = state.edit_generation.get_untracked();
+
+    let req_a2 = "pdf-save-req-a2".to_string();
+    let req_b1 = "pdf-save-req-b1".to_string();
+
+    let ctx_a2 = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: req_a2.clone(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some("doc-session-A".to_string()),
+        originating_path: Some(path_a.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_a1,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-a2".to_string(),
+        authorized_dest_path: Some(path_a.to_string()),
+    };
+    let ctx_b1 = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: req_b1.clone(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some("doc-session-B".to_string()),
+        originating_path: Some(path_b.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_b0,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-b1".to_string(),
+        authorized_dest_path: Some(path_b.to_string()),
+    };
+
+    state.register_pending_save(req_a2.clone(), ctx_a2.clone());
+    state.register_pending_save(req_b1.clone(), ctx_b1.clone());
+
+    assert_eq!(state.pending_saves.get_untracked().len(), 2);
+
+    // Hoàn tất lưu A thành công
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_a.to_string(),
+            committed_revision: 2,
+            new_document_id: Some("doc-session-A".to_string()),
+        }),
+        &ctx_a2,
+        b"%PDF-1.7 CONTENT A",
+    );
+
+    assert!(!state.has_pending_saves_for_file(path_a), "A đã lưu xong");
+    assert!(
+        state.has_pending_saves_for_file(path_b),
+        "B vẫn đang pending"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 3: Hoàn tất lưu A nhưng B còn pending thì close guard vẫn phải chặn đóng!"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 4: Người dùng chỉnh sửa tài liệu trong khi save đang chạy (in-flight).
+    // Yêu cầu: Hoàn tất snapshot cũ KHÔNG ĐƯỢC XÓA DIRTY của chỉnh sửa mới hơn!
+    // -------------------------------------------------------------------------
+    state.select_file(1); // Chọn B
+    assert_eq!(state.active_file_path(), Some(path_b.to_string()));
+    let snap_gen_b = gen_b0; // Snapshot bắt đầu lưu ở thế hệ gen_b0
+
+    // Người dùng chỉnh sửa B trong lúc persistence của req_b1 đang chạy
+    state.set_unsaved_changes(true);
+    let newer_gen_b = state.edit_generation.get_untracked();
+    assert!(
+        newer_gen_b > snap_gen_b,
+        "Thế hệ chỉnh sửa mới phải lớn hơn snapshot"
+    );
+
+    // Tác vụ lưu của req_b1 (với snapshot cũ snap_gen_b) hoàn tất thành công
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_b.to_string(),
+            committed_revision: 2,
+            new_document_id: Some("doc-session-B".to_string()),
+        }),
+        &ctx_b1,
+        b"%PDF-1.7 OLD SNAPSHOT B",
+    );
+
+    assert!(
+        state.has_unsaved_changes(),
+        "Scenario 4: Chỉnh sửa mới hơn phải giữ nguyên dirty state sau khi snapshot cũ hoàn tất!"
+    );
+    assert!(
+        app_state.has_unsaved_work_or_running_task(),
+        "Scenario 4: Close guard phải chặn đóng vì vẫn còn chỉnh sửa mới chưa lưu"
+    );
+
+    // -------------------------------------------------------------------------
+    // SCENARIO 5: Lưu thành công khi không có chỉnh sửa mới nào can thiệp.
+    // Yêu cầu: Pending state được dọn sạch, dirty = false, đủ điều kiện đóng ứng dụng.
+    // -------------------------------------------------------------------------
+    let req_b2 = "pdf-save-req-b2".to_string();
+    let current_gen_b = state.edit_generation.get_untracked();
+    let ctx_b2 = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: req_b2.clone(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some("doc-session-B".to_string()),
+        originating_path: Some(path_b.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: current_gen_b,
+        expected_committed_revision: 3,
+        snapshot_fingerprint: "fp-b2".to_string(),
+        authorized_dest_path: Some(path_b.to_string()),
+    };
+    state.register_pending_save(req_b2.clone(), ctx_b2.clone());
+
+    // Không có chỉnh sửa mới, lưu thành công
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_b.to_string(),
+            committed_revision: 3,
+            new_document_id: Some("doc-session-B".to_string()),
+        }),
+        &ctx_b2,
+        b"%PDF-1.7 FINAL B",
+    );
+
+    assert!(!state.has_pending_saves(), "Không còn pending save nào");
+    assert!(!state.has_unsaved_changes(), "Tài liệu B đã sạch");
+    assert!(
+        !app_state.has_unsaved_work_or_running_task(),
+        "Scenario 5: Khi toàn bộ tài liệu đã lưu bền vững, close guard cho phép đóng bình thường!"
+    );
+}
+
+#[test]
+fn test_p1_pdf_grant_validation_strict_rejects_missing_mismatched_and_malformed() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
+        NativeSaveGrantDto, SaveRequestContext, validate_native_save_grant,
+    };
+
+    let doc_id = "doc-session-A";
+    let active_path = "/tmp/doc_a.pdf";
+    let expected_rev = 2;
+    let req_id = "req-123";
+
+    let expected_ctx = SaveRequestContext {
+        document_id: doc_id.to_string(),
+        app_instance_id: "pdf-studio-instance".to_string(),
+        session_generation: 1,
+        authorized_dest_path: Some(active_path.to_string()),
+        expected_revision: expected_rev,
+        request_id: req_id.to_string(),
+    };
+
+    // 1. Hợp lệ chuẩn tắc: Tất cả các trường khớp chính xác
+    let valid_grant = NativeSaveGrantDto {
+        grant_id: "grant-123".to_string(),
+        document_id: doc_id.to_string(),
+        app_instance_id: "pdf-studio-instance".to_string(),
+        session_generation: 1,
+        authorized_dest_path: active_path.to_string(),
+        expected_revision: expected_rev,
+        request_id: req_id.to_string(),
+    };
+    assert!(
+        validate_native_save_grant(&valid_grant, &expected_ctx).is_ok(),
+        "Valid grant must pass centralized validation"
+    );
+
+    // 2. Mismatched destination path: Cấp phép cho /tmp/doc_b.pdf nhưng context yêu cầu /tmp/doc_a.pdf
+    let mismatched_dest_grant = NativeSaveGrantDto {
+        authorized_dest_path: "/tmp/doc_b.pdf".to_string(),
+        ..valid_grant.clone()
+    };
+    let dest_err = validate_native_save_grant(&mismatched_dest_grant, &expected_ctx).unwrap_err();
+    assert!(
+        dest_err.contains("authorized_dest_path"),
+        "Destination mismatch must be caught by validator: {dest_err}"
+    );
+
+    // 3. Mismatched document ID
+    let mismatched_doc_grant = NativeSaveGrantDto {
+        document_id: "doc-session-B".to_string(),
+        ..valid_grant.clone()
+    };
+    let doc_err = validate_native_save_grant(&mismatched_doc_grant, &expected_ctx).unwrap_err();
+    assert!(
+        doc_err.contains("document_id"),
+        "Document ID mismatch must be caught by validator: {doc_err}"
+    );
+
+    // 4. Mismatched expected revision
+    let mismatched_rev_grant = NativeSaveGrantDto {
+        expected_revision: 999,
+        ..valid_grant.clone()
+    };
+    let rev_err = validate_native_save_grant(&mismatched_rev_grant, &expected_ctx).unwrap_err();
+    assert!(
+        rev_err.contains("expected_revision"),
+        "Revision mismatch must be caught by validator: {rev_err}"
+    );
+
+    // 5. Mismatched request ID
+    let mismatched_req_grant = NativeSaveGrantDto {
+        request_id: "req-OTHER".to_string(),
+        ..valid_grant.clone()
+    };
+    let req_err = validate_native_save_grant(&mismatched_req_grant, &expected_ctx).unwrap_err();
+    assert!(
+        req_err.contains("request_id"),
+        "Request ID mismatch must be caught by validator: {req_err}"
+    );
+
+    // 6. Malformed / missing required fields: Deserialization failure
+    let malformed_json = serde_json::json!({
+        "grant_id": "grant-123",
+        // Thiếu authorized_dest_path, document_id, session_generation...
+    });
+    let parse_res = serde_json::from_value::<NativeSaveGrantDto>(malformed_json);
+    assert!(
+        parse_res.is_err(),
+        "Malformed grant with missing required fields must fail deserialization!"
+    );
+}
+
+#[test]
+fn test_p1_pdf_remove_active_file_synchronizes_session_and_preserves_unrelated_file() {
+    let state = office_utility_vn_ui::micro_apps::pdf_studio::state::PdfStudioState::new();
+
+    let path_a = "/tmp/test_remove_sync_a.pdf";
+    let path_b = "/tmp/test_remove_sync_b.pdf";
+    let bytes_a = b"%PDF-1.7 INITIAL_A_CONTENT";
+    let bytes_b = b"%PDF-1.7 INITIAL_B_CONTENT";
+
+    std::fs::write(path_a, bytes_a).expect("write initial a");
+    std::fs::write(path_b, bytes_b).expect("write initial b");
+    let sha_b_initial = sha256_oracle(bytes_b);
+
+    // Nạp cả A và B
+    state.add_file(path_a);
+    state.register_document_session(path_a, Some("doc-session-A".to_string()), 1);
+
+    state.add_file(path_b);
+    state.register_document_session(path_b, Some("doc-session-B".to_string()), 1);
+
+    // File B đang được chọn làm active
+    state.select_file(1);
+    assert_eq!(state.active_file_path(), Some(path_b.to_string()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-B".to_string())
+    );
+
+    // Xóa file B đang active khỏi danh sách làm việc
+    state.remove_file(1);
+
+    // BẤT BIẾN 1: Sau khi xóa B, file active chuyển sang A và active_document_id PHẢI ĐỒNG BỘ VỀ A!
+    assert_eq!(
+        state.active_file_path(),
+        Some(path_a.to_string()),
+        "Active file must now be A"
+    );
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-A".to_string()),
+        "Active document ID must be synchronized to A, NEVER remain stale B!"
+    );
+
+    // Người dùng chỉnh sửa và lưu A
+    let new_bytes_a = b"%PDF-1.7 MODIFIED_CONTENT_FOR_A";
+    let ctx_a = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: "req-save-a-after-remove".to_string(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some("doc-session-A".to_string()),
+        originating_path: Some(path_a.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-a-mod".to_string(),
+        authorized_dest_path: Some(path_a.to_string()),
+    };
+
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: path_a.to_string(),
+            committed_revision: 2,
+            new_document_id: Some("doc-session-A".to_string()),
+        }),
+        &ctx_a,
+        new_bytes_a,
+    );
+    std::fs::write(path_a, new_bytes_a).expect("write modified a");
+
+    // BẤT BIẾN 2: Nội dung của B trên đĩa và SHA-256 của B TUYỆT ĐỐI KHÔNG BỊ THAY ĐỔI
+    let read_b_after = std::fs::read(path_b).expect("read b after");
+    let sha_b_after = sha256_oracle(&read_b_after);
+    assert_eq!(
+        sha_b_initial, sha_b_after,
+        "File B's SHA-256 must remain 100% UNCHANGED after saving A!"
+    );
+    assert_eq!(read_b_after, bytes_b);
+
+    // Nội dung của A đã được cập nhật chính xác
+    let read_a_after = std::fs::read(path_a).expect("read a after");
+    assert_eq!(read_a_after, new_bytes_a);
+}
+
+#[test]
+fn test_p1_pdf_save_as_preserves_originating_context_throughout_lifecycle() {
+    let state = office_utility_vn_ui::micro_apps::pdf_studio::state::PdfStudioState::new();
+
+    let path_a = "/tmp/test_save_as_orig_a.pdf";
+    let path_c = "/tmp/test_save_as_orig_c.pdf";
+    let dest_b = "/tmp/test_save_as_dest_b.pdf";
+
+    state.add_file(path_a);
+    state.register_document_session(path_a, Some("doc-session-A".to_string()), 1);
+    state.set_unsaved_changes(true);
+    let gen_a = state.edit_generation.get_untracked();
+
+    state.add_file(path_c);
+    state.register_document_session(path_c, Some("doc-session-C".to_string()), 1);
+
+    // Đang kích hoạt A
+    state.select_file(0);
+    assert_eq!(state.active_file_path(), Some(path_a.to_string()));
+    assert!(state.has_unsaved_changes());
+
+    // 1. Khởi tạo Save As cho A: Bắt buộc chụp lại SaveRequestContext bất biến qua hàm sản xuất dùng chung
+    let ctx_save_as =
+        office_utility_vn_ui::micro_apps::pdf_studio::bridge::construct_pdf_save_request_context(
+            "req-save-as-1".to_string(),
+            true,
+            Some("doc-session-A".to_string()),
+            Some(path_a.to_string()),
+            1,
+            gen_a,
+            "fp-save-as".to_string(),
+        );
+    state.register_pending_save("req-save-as-1".to_string(), ctx_save_as.clone());
+
+    // BẤT BIẾN: Trong suốt thời gian Save As đang pending, originating_path được bảo vệ
+    assert!(
+        state.has_pending_saves_for_file(path_a),
+        "Pending Save As must protect originating path from premature dirty clearing!"
+    );
+
+    // Iframe bắn dirty(false) sớm: Bị chặn an toàn
+    state.handle_bridge_message(&IncomingBridgeMessage::Dirty { dirty: false });
+    assert!(
+        state.has_unsaved_changes(),
+        "Premature clean from iframe must be rejected during pending Save As!"
+    );
+
+    // 2. Người dùng hủy hộp thoại Save As -> Originating document A VẪN PHẢI GIỮ DIRTY!
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Canceled),
+        &ctx_save_as,
+        b"%PDF-1.7 BYTES",
+    );
+    assert!(
+        state.has_unsaved_changes(),
+        "Canceling Save As must preserve originating document dirty state!"
+    );
+    assert!(
+        state.get_document_session(path_a).unwrap().is_dirty,
+        "Session A must remain dirty in document_sessions map!"
+    );
+
+    // 3. Người dùng bắt đầu Save As lại, nhưng chuyển sang xem Document C trong khi hộp thoại/save đang chạy
+    let ctx_save_as_2 =
+        office_utility_vn_ui::micro_apps::pdf_studio::bridge::construct_pdf_save_request_context(
+            "req-save-as-2".to_string(),
+            true,
+            Some("doc-session-A".to_string()),
+            Some(path_a.to_string()),
+            1,
+            gen_a,
+            "fp-save-as-2".to_string(),
+        );
+    state.register_pending_save("req-save-as-2".to_string(), ctx_save_as_2.clone());
+
+    // Người dùng chuyển sang tab Document C
+    state.select_file(1);
+    assert_eq!(state.active_file_path(), Some(path_c.to_string()));
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-C".to_string())
+    );
+
+    // Bây giờ Save As của A thành công (lưu ra dest_b)
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: dest_b.to_string(),
+            committed_revision: 2,
+            new_document_id: Some("doc-session-B-new".to_string()),
+        }),
+        &ctx_save_as_2,
+        b"%PDF-1.7 NEW B BYTES",
+    );
+
+    // BẤT BIẾN: Active document VẪN PHẢI LÀ C! Không được ghi đè ID hay revision của C!
+    assert_eq!(
+        state.active_file_path(),
+        Some(path_c.to_string()),
+        "Active document must remain C when Save As for A completes in the background!"
+    );
+    assert_eq!(
+        state.active_document_id(),
+        Some("doc-session-C".to_string()),
+        "Active document ID must remain C!"
+    );
+
+    // File B đã được đăng ký phiên riêng biệt an toàn
+    let sess_b = state
+        .get_document_session(dest_b)
+        .expect("B session exists");
+    assert_eq!(sess_b.document_id, Some("doc-session-B-new".to_string()));
+    assert_eq!(sess_b.revision, 2);
+    assert!(!sess_b.is_dirty);
+}
+
+#[test]
+fn test_p2_pdf_ambiguous_commit_advances_revision_preserves_dirty_and_blocks_close() {
+    let state = office_utility_vn_ui::micro_apps::pdf_studio::state::PdfStudioState::new();
+
+    let path_a = "/tmp/test_ambiguous_doc_a.pdf";
+    let doc_id = "doc-session-ambiguous-A";
+
+    state.add_file(path_a);
+    state.register_document_session(path_a, Some(doc_id.to_string()), 1);
+    state.set_unsaved_changes(true);
+    state.select_file(0);
+
+    assert_eq!(state.active_revision(), 1);
+    assert!(state.has_unsaved_changes());
+
+    // 1. Chuẩn bị context lưu với expected_committed_revision = 2
+    let gen_a = state.edit_generation.get_untracked();
+    let ctx = office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext {
+        request_id: "req-ambiguous-1".to_string(),
+        operation_intent: office_utility_vn_ui::platform::adapter::SaveOperationIntent::Save,
+        originating_document_id: Some(doc_id.to_string()),
+        originating_path: Some(path_a.to_string()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_a,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-ambiguous".to_string(),
+        authorized_dest_path: Some(path_a.to_string()),
+    };
+    state.register_pending_save("req-ambiguous-1".to_string(), ctx.clone());
+
+    // 2. Nhận kết quả AmbiguousCommit từ backend (hoán đổi thành công nhưng sync thư mục cha lỗi)
+    let outcome = SaveOutcome::AmbiguousCommit {
+        dest_path: path_a.to_string(),
+        committed_revision: 2,
+        new_document_id: Some(doc_id.to_string()),
+        message: "AmbiguousCommit: fsync failed".to_string(),
+    };
+
+    office_utility_vn_ui::micro_apps::pdf_studio::bridge::apply_save_outcome(
+        &state,
+        Ok(outcome),
+        &ctx,
+        b"%PDF-1.7 SOME BYTES",
+    );
+
+    // BẤT BIẾN P2 #4678429561:
+    // - Session revision được nâng lên 2 để ngăn stale revision write
+    assert_eq!(
+        state.active_revision(),
+        2,
+        "Active revision must advance to committed revision (2) on AmbiguousCommit"
+    );
+    let sess = state.get_document_session(path_a).expect("session exists");
+    assert_eq!(sess.revision, 2, "Stored session revision must be 2");
+
+    // - Trạng thái dirty BẮT BUỘC giữ nguyên true
+    assert!(
+        state.has_unsaved_changes(),
+        "has_unsaved_changes MUST remain true after AmbiguousCommit"
+    );
+    assert!(
+        sess.is_dirty,
+        "Stored session is_dirty MUST remain true after AmbiguousCommit"
+    );
+
+    // - Pending save phải được clear
+    assert!(
+        !state.has_pending_saves_for_file(path_a),
+        "Pending save for req-ambiguous-1 must be cleared"
+    );
+
+    // - Thao tác lưu retry tiếp theo sẽ yêu cầu revision 3 (active_revision + 1)
+    let next_expected_rev = state.active_revision() + 1;
+    assert_eq!(next_expected_rev, 3, "Retry save must target revision 3");
+}
+
+#[test]
+fn test_pdf_remove_unrelated_file_preserves_active_file_unsaved_dirty_state() {
+    let state = PdfStudioState::new();
+    state.add_file("/documents/doc_a.pdf");
+    state.add_file("/documents/doc_b.pdf");
+
+    // Chọn file A (index 0) và thiết lập session
+    state.select_file(0);
+    state.set_active_document_session(Some("doc-session-a".into()), 1);
+
+    // Người dùng thực hiện sửa đổi file A
+    state.set_unsaved_changes(true);
+    assert!(state.has_unsaved_changes());
+    assert_eq!(state.edit_generation.get_untracked(), 1);
+    assert_eq!(
+        state.active_file_path().as_deref(),
+        Some("/documents/doc_a.pdf")
+    );
+
+    // Người dùng xóa file B (index 1) khỏi danh sách
+    state.remove_file(1);
+
+    // BẤT BIẾN: File A VẪN PHẢI LÀ ACTIVE FILE, VẪN PHẢI DIRTY, GENERATION VẪN = 1!
+    // Tuyệt đối không được reset has_unsaved_changes về false hay edit_generation về 0!
+    assert_eq!(
+        state.active_file_path().as_deref(),
+        Some("/documents/doc_a.pdf")
+    );
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-session-a"));
+    assert_eq!(state.active_revision(), 1);
+    assert!(
+        state.has_unsaved_changes(),
+        "Removing unrelated file B MUST NOT reset active file A's unsaved changes to false!"
+    );
+    assert_eq!(
+        state.edit_generation.get_untracked(),
+        1,
+        "Removing unrelated file B MUST NOT reset active file A's edit generation!"
+    );
+}
+
+#[test]
+fn test_p1_4680342554_pdf_save_as_completion_when_newer_edits_exist() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{SaveOutcome, apply_save_outcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let state = PdfStudioState::new();
+
+    // Giả lập một thực thể iframe canvas đang mở và sẵn sàng
+    let inst_id = state.begin_canvas_instance();
+    state.set_canvas_ready(true);
+
+    // 1. Mở A.pdf
+    state.add_file("/documents/doc_A.pdf");
+    state.set_active_document_session(Some("session-doc-A".into()), 1);
+    assert!(state.mark_canvas_bound(inst_id, "/documents/doc_A.pdf"));
+    assert_eq!(
+        state.active_file_path().as_deref(),
+        Some("/documents/doc_A.pdf")
+    );
+    assert!(!state.has_unsaved_changes());
+
+    // 2. Chỉnh sửa A.pdf (generation = 1)
+    state.set_unsaved_changes(true);
+    let gen_after_first_edit = state.edit_generation.get_untracked();
+    assert_eq!(gen_after_first_edit, 1);
+    assert!(state.has_unsaved_changes());
+
+    // 3. Khởi tạo tác vụ Save As sang B.pdf
+    let snapshot_v1_bytes = b"%PDF-1.7 Snapshot 1 content".to_vec();
+    let ctx = SaveRequestContext {
+        request_id: "req-save-as-ab-1".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("session-doc-A".into()),
+        originating_path: Some("/documents/doc_A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: gen_after_first_edit,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-v1".into(),
+        authorized_dest_path: Some("/documents/doc_B.pdf".into()),
+    };
+    state.register_pending_save("req-save-as-ab-1".into(), ctx.clone());
+
+    // 4. Trong lúc tác vụ lưu đang pending, người dùng tạo thêm một sửa đổi mới (generation = 2)
+    state.set_unsaved_changes(true);
+    let live_gen_after_newer_edit = state.edit_generation.get_untracked();
+    assert_eq!(live_gen_after_newer_edit, 2);
+    assert!(live_gen_after_newer_edit > ctx.snapshot_edit_generation);
+
+    // 5. Hoàn tất tác vụ Save As trước đó (lưu snapshot 1 sang doc_B.pdf)
+    let save_as_outcome = SaveOutcome::Saved {
+        dest_path: "/documents/doc_B.pdf".into(),
+        committed_revision: 1,
+        new_document_id: Some("session-doc-B".into()),
+    };
+    apply_save_outcome(&state, Ok(save_as_outcome), &ctx, &snapshot_v1_bytes);
+
+    // 6. BẤT BIẾN P1 #4680342554:
+    // - Active document đã chuyển sang B.pdf
+    assert_eq!(
+        state.active_file_path().as_deref(),
+        Some("/documents/doc_B.pdf")
+    );
+    assert_eq!(state.active_document_id().as_deref(), Some("session-doc-B"));
+    assert_eq!(state.active_revision(), 1);
+
+    // - Thế hệ chỉnh sửa mới hơn (generation = 2) BẮT BUỘC ĐƯỢC BẢO TOÀN
+    assert_eq!(
+        state.edit_generation.get_untracked(),
+        2,
+        "Live edit generation bắt buộc phải là 2!"
+    );
+
+    // - P1 #4680342554: Canvas BẮT BUỘC được ràng buộc danh tính (Identity Rebinding) sang B.pdf
+    // để không bị effect trong canvas_frame nạp lại snapshot cũ v1 từ đĩa đè lên canvas
+    assert_eq!(
+        state.canvas_bound_path.get().as_deref(),
+        Some("/documents/doc_B.pdf"),
+        "Canvas bắt buộc phải được rebind sang doc_B.pdf để bảo toàn nét vẽ/nội dung mới!"
+    );
+
+    // - Trạng thái dirty BẮT BUỘC LÀ TRUE vì các chỉnh sửa mới hơn chưa được lưu đĩa!
+    assert!(
+        state.has_unsaved_changes(),
+        "has_unsaved_changes BẮT BUỘC VẪN LÀ TRUE vì tồn tại chỉnh sửa mới hơn snapshot đã lưu!"
+    );
+
+    // - Phiên tài liệu B trong document_sessions bắt buộc phải dirty
+    let sess_b = state
+        .get_document_session("/documents/doc_B.pdf")
+        .expect("session B");
+    assert!(sess_b.is_dirty, "Session B bắt buộc phải dirty!");
+    assert_eq!(
+        sess_b.edit_generation, 2,
+        "Session B edit generation phải là 2!"
+    );
+
+    // 7. Lưu lần 2 (Lưu thông thường B với các chỉnh sửa mới hơn v2)
+    let newer_v2_bytes = b"%PDF-1.7 Snapshot 2 with newer edits".to_vec();
+    let ctx2 = SaveRequestContext {
+        request_id: "req-save-b-ord-2".into(),
+        operation_intent: SaveOperationIntent::Save,
+        originating_document_id: Some("session-doc-B".into()),
+        originating_path: Some("/documents/doc_B.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 2,
+        expected_committed_revision: 2,
+        snapshot_fingerprint: "fp-v2".into(),
+        authorized_dest_path: Some("/documents/doc_B.pdf".into()),
+    };
+    let save_b_outcome = SaveOutcome::Saved {
+        dest_path: "/documents/doc_B.pdf".into(),
+        committed_revision: 2,
+        new_document_id: Some("session-doc-B".into()),
+    };
+    apply_save_outcome(&state, Ok(save_b_outcome), &ctx2, &newer_v2_bytes);
+
+    // Bây giờ B đã sạch hoàn toàn và revision tiến lên 2
+    assert_eq!(state.active_revision(), 2);
+    assert!(
+        !state.has_unsaved_changes(),
+        "B phải sạch sau khi lưu đầy đủ các thay đổi mới!"
+    );
+    let sess_b_final = state
+        .get_document_session("/documents/doc_B.pdf")
+        .expect("session B final");
+    assert!(!sess_b_final.is_dirty);
+    assert_eq!(sess_b_final.revision, 2);
+    assert_eq!(
+        state.get_cached_document_bytes("/documents/doc_B.pdf"),
+        Some(newer_v2_bytes),
+        "Nội dung nhị phân PDF được ghi nhận bắt buộc phải là v2 chứa các sửa đổi mới nhất!"
+    );
+}
+
+/// Task B (P2 #4684793560): Scope PDF canvas binding to the current iframe instance and verify all 5 scenarios:
+/// 1. Native PDF picker from Hub followed by Canvas entry.
+/// 2. Canvas to Hub and back to Canvas.
+/// 3. Switching between two PDF documents.
+/// 4. Save As identity rebinding without overwriting newer live edits.
+/// 5. Failed or unavailable iframe delivery remains recoverable.
+#[test]
+fn test_p2_4684793560_pdf_canvas_binding_lifecycle_all_five_scenarios() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{
+        IncomingBridgeMessage, SaveOutcome, apply_save_outcome,
+    };
+    use office_utility_vn_ui::micro_apps::pdf_studio::canvas_frame::{
+        finalize_canvas_delivery_result, should_deliver_pdf_to_canvas,
+    };
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::SaveRequestContext;
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let state = PdfStudioState::new();
+
+    // -------------------------------------------------------------------------
+    // Scenario 1: Native PDF picker from Hub followed by Canvas entry
+    // -------------------------------------------------------------------------
+    state.open_hub();
+    state.add_file("/docs/A.pdf");
+    state.set_active_document_session(Some("doc-A".into()), 0);
+    // Hub has no iframe; document MUST NOT be pre-bound before delivery to a ready iframe
+    assert!(!state.is_canvas_ready());
+    assert!(state.active_canvas_instance_id.get_untracked().is_none());
+    assert!(state.canvas_bound_path.get_untracked().is_none());
+    assert!(state.canvas_bound_instance_id.get_untracked().is_none());
+    assert!(!state.is_path_bound_to_active_canvas("/docs/A.pdf"));
+
+    // User enters Canvas -> mounts iframe instance 1
+    state.open_visual_workspace();
+    let inst_1 = state.begin_canvas_instance();
+    // Before Ready arrives, delivery does not happen and mark_canvas_bound refuses
+    assert_eq!(should_deliver_pdf_to_canvas(&state, inst_1, None), None);
+    assert!(!state.mark_canvas_bound(inst_1, "/docs/A.pdf"));
+
+    // Iframe emits pdfcraft:ready -> now delivery is requested and bound ONLY after Ok(())
+    state.handle_bridge_message(&IncomingBridgeMessage::Ready {
+        version: "0.1.0".into(),
+    });
+    assert_eq!(
+        should_deliver_pdf_to_canvas(&state, inst_1, None).as_deref(),
+        Some("/docs/A.pdf")
+    );
+    assert!(finalize_canvas_delivery_result(
+        &state,
+        inst_1,
+        "/docs/A.pdf",
+        Ok(())
+    ));
+    assert!(state.is_path_bound_to_active_canvas("/docs/A.pdf"));
+    assert_eq!(should_deliver_pdf_to_canvas(&state, inst_1, None), None);
+
+    // -------------------------------------------------------------------------
+    // Scenario 2: Canvas to Hub and back to Canvas
+    // -------------------------------------------------------------------------
+    state.open_hub();
+    state.end_canvas_instance(inst_1);
+    assert!(!state.is_canvas_ready());
+    assert!(state.active_canvas_instance_id.get_untracked().is_none());
+    assert!(state.canvas_bound_instance_id.get_untracked().is_none());
+    assert!(state.canvas_bound_path.get_untracked().is_none());
+
+    // Back to Canvas -> mounts fresh iframe instance 2
+    state.open_visual_workspace();
+    let inst_2 = state.begin_canvas_instance();
+    assert_ne!(inst_1, inst_2);
+    assert!(!state.is_path_bound_to_active_canvas("/docs/A.pdf"));
+    state.handle_bridge_message(&IncomingBridgeMessage::Ready {
+        version: "0.1.0".into(),
+    });
+    assert_eq!(
+        should_deliver_pdf_to_canvas(&state, inst_2, None).as_deref(),
+        Some("/docs/A.pdf")
+    );
+    assert!(finalize_canvas_delivery_result(
+        &state,
+        inst_2,
+        "/docs/A.pdf",
+        Ok(())
+    ));
+    assert!(state.is_path_bound_to_active_canvas("/docs/A.pdf"));
+
+    // -------------------------------------------------------------------------
+    // Scenario 3: Switching between two PDF documents
+    // -------------------------------------------------------------------------
+    state.add_file("/docs/B.pdf");
+    state.set_active_document_session(Some("doc-B".into()), 0);
+    assert!(!state.is_path_bound_to_active_canvas("/docs/B.pdf"));
+    assert_eq!(
+        should_deliver_pdf_to_canvas(&state, inst_2, None).as_deref(),
+        Some("/docs/B.pdf")
+    );
+    assert!(finalize_canvas_delivery_result(
+        &state,
+        inst_2,
+        "/docs/B.pdf",
+        Ok(())
+    ));
+    assert!(state.is_path_bound_to_active_canvas("/docs/B.pdf"));
+
+    // Switch back to A.pdf (index 0) -> triggers delivery of A.pdf again
+    state.select_file(0);
+    assert_eq!(
+        should_deliver_pdf_to_canvas(&state, inst_2, None).as_deref(),
+        Some("/docs/A.pdf")
+    );
+    assert!(finalize_canvas_delivery_result(
+        &state,
+        inst_2,
+        "/docs/A.pdf",
+        Ok(())
+    ));
+    assert!(state.is_path_bound_to_active_canvas("/docs/A.pdf"));
+
+    // -------------------------------------------------------------------------
+    // Scenario 4: Save As identity rebinding without overwriting newer live edits
+    // -------------------------------------------------------------------------
+    state.set_unsaved_changes(true); // gen 1
+    let ctx_save_as = SaveRequestContext {
+        request_id: "req-pdf-saveas-ac".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-A".into()),
+        originating_path: Some("/docs/A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-1".into(),
+        authorized_dest_path: Some("/docs/C.pdf".into()),
+    };
+    state.register_pending_save("req-pdf-saveas-ac".into(), ctx_save_as.clone());
+    // Newer live edit occurs while Save As is pending
+    state.set_unsaved_changes(true); // gen 2
+
+    apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: "/docs/C.pdf".into(),
+            committed_revision: 1,
+            new_document_id: Some("doc-C".into()),
+        }),
+        &ctx_save_as,
+        b"%PDF-1.7 SNAPSHOT_1",
+    );
+    // Current ready iframe instance MUST be rebound to /docs/C.pdf so Effect does NOT reload snapshot 1 over gen 2 live edits
+    assert!(state.is_path_bound_to_active_canvas("/docs/C.pdf"));
+    assert_eq!(should_deliver_pdf_to_canvas(&state, inst_2, None), None);
+    assert!(state.has_unsaved_changes());
+    assert_eq!(state.edit_generation.get_untracked(), 2);
+
+    // -------------------------------------------------------------------------
+    // Scenario 5: Failed or unavailable iframe delivery remains recoverable
+    // -------------------------------------------------------------------------
+    state.add_file("/docs/D.pdf");
+    state.set_active_document_session(Some("doc-D".into()), 0);
+    assert_eq!(
+        should_deliver_pdf_to_canvas(&state, inst_2, None).as_deref(),
+        Some("/docs/D.pdf")
+    );
+    // Simulate failed postMessage / unavailable read
+    let bound_after_fail = finalize_canvas_delivery_result(
+        &state,
+        inst_2,
+        "/docs/D.pdf",
+        Err("postMessage failed: iframe unavailable".into()),
+    );
+    assert!(!bound_after_fail);
+    assert!(!state.is_path_bound_to_active_canvas("/docs/D.pdf"));
+    assert!(state.canvas_bound_path.get_untracked().is_none());
+    // Recoverable: next reactive pass or retry still requests delivery!
+    assert_eq!(
+        should_deliver_pdf_to_canvas(&state, inst_2, None).as_deref(),
+        Some("/docs/D.pdf")
+    );
+    assert!(finalize_canvas_delivery_result(
+        &state,
+        inst_2,
+        "/docs/D.pdf",
+        Ok(())
+    ));
+    assert!(state.is_path_bound_to_active_canvas("/docs/D.pdf"));
+}
+
+#[test]
+fn test_p2_4689114193_reconcile_originating_pdf_session_after_clean_save_as() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{SaveOutcome, apply_save_outcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::{PdfStudioState, SaveRequestContext};
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+
+    let state = PdfStudioState::new();
+    let inst_1 = state.begin_canvas_instance();
+    state.set_canvas_ready(true);
+
+    // 1. Mở A.pdf và đánh dấu thay đổi chưa lưu
+    state.add_file("/docs/A.pdf");
+    state.register_document_session("/docs/A.pdf", Some("doc-A".into()), 1);
+    state.set_active_document_session(Some("doc-A".into()), 1);
+    assert!(state.mark_canvas_bound(inst_1, "/docs/A.pdf"));
+
+    state.set_unsaved_changes(true);
+    assert!(state.has_unsaved_changes());
+    assert!(state.has_unsaved_documents_or_pending_saves());
+
+    // 2. Save As A.pdf -> B.pdf không có chỉnh sửa phát sinh thêm (snapshot_gen == 1)
+    let ctx_save_as = SaveRequestContext {
+        request_id: "req-pdf-clean-saveas-ab".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-A".into()),
+        originating_path: Some("/docs/A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-ab-1".into(),
+        authorized_dest_path: Some("/docs/B.pdf".into()),
+    };
+    state.register_pending_save("req-pdf-clean-saveas-ab".into(), ctx_save_as.clone());
+
+    apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::Saved {
+            dest_path: "/docs/B.pdf".into(),
+            committed_revision: 1,
+            new_document_id: Some("doc-B".into()),
+        }),
+        &ctx_save_as,
+        b"%PDF-1.7 SAVED_AS_B",
+    );
+
+    // 3. BẤT BIẾN P2 #4689114193: B.pdf được kích hoạt sạch, đồng thời phiên nguồn A.pdf KHÔNG bị kẹt is_dirty = true!
+    assert_eq!(state.active_file_path().as_deref(), Some("/docs/B.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-B"));
+    assert!(!state.has_unsaved_changes());
+
+    let sess_a = state
+        .get_document_session("/docs/A.pdf")
+        .expect("Originating session A should remain indexed");
+    assert!(
+        !sess_a.is_dirty,
+        "Originating session A must NOT retain stale pre-save dirty flag after clean Save As to B!"
+    );
+    let sess_b = state
+        .get_document_session("/docs/B.pdf")
+        .expect("Destination session B should be indexed");
+    assert!(!sess_b.is_dirty);
+    assert!(
+        !state.has_unsaved_documents_or_pending_saves(),
+        "Window close guard must NOT remain blocked after clean Save As from A.pdf to B.pdf!"
+    );
+}
+
+#[test]
+fn test_p2_4689901525_ambiguous_save_as_keeps_pdf_path_and_session_consistent() {
+    use office_utility_vn_ui::micro_apps::pdf_studio::bridge::{SaveOutcome, apply_save_outcome};
+    use office_utility_vn_ui::micro_apps::pdf_studio::state::{PdfStudioState, SaveRequestContext};
+    use office_utility_vn_ui::platform::adapter::SaveOperationIntent;
+    use office_utility_vn_ui::platform::{NativeSaveGrantDto, validate_native_save_grant};
+
+    let state = PdfStudioState::new();
+    let inst_1 = state.begin_canvas_instance();
+    state.set_canvas_ready(true);
+
+    // 1. Mở A.pdf và chỉnh sửa
+    state.add_file("/docs/A.pdf");
+    state.register_document_session("/docs/A.pdf", Some("doc-A".into()), 1);
+    state.set_active_document_session(Some("doc-A".into()), 1);
+    assert!(state.mark_canvas_bound(inst_1, "/docs/A.pdf"));
+    state.set_unsaved_changes(true);
+
+    // 2. Save As A.pdf -> B.pdf bị AmbiguousCommit (rename xong nhưng parent dir sync fail)
+    let ctx_save_as = SaveRequestContext {
+        request_id: "req-pdf-ambig-saveas".into(),
+        operation_intent: SaveOperationIntent::SaveAs,
+        originating_document_id: Some("doc-A".into()),
+        originating_path: Some("/docs/A.pdf".into()),
+        session_generation: 1,
+        snapshot_edit_generation: 1,
+        expected_committed_revision: 1,
+        snapshot_fingerprint: "fp-ab-ambig".into(),
+        authorized_dest_path: Some("/docs/B.pdf".into()),
+    };
+    state.register_pending_save("req-pdf-ambig-saveas".into(), ctx_save_as.clone());
+
+    apply_save_outcome(
+        &state,
+        Ok(SaveOutcome::AmbiguousCommit {
+            dest_path: "/docs/B.pdf".into(),
+            committed_revision: 1,
+            new_document_id: Some("doc-B".into()),
+            message: "AmbiguousCommit: dir fsync failed".into(),
+        }),
+        &ctx_save_as,
+        b"%PDF-1.7 SAVED_AS_B",
+    );
+
+    // BẤT BIẾN P2 #4689901525: Active path, document_id, revision và canvas binding PHẢI đồng bộ sang B.pdf,
+    // đồng thời BẮT BUỘC giữ is_dirty = true để lần ordinary Save thử lại thành công!
+    assert_eq!(state.active_file_path().as_deref(), Some("/docs/B.pdf"));
+    assert_eq!(state.active_document_id().as_deref(), Some("doc-B"));
+    assert_eq!(state.active_revision(), 1);
+    assert!(state.has_unsaved_changes());
+    assert!(state.is_path_bound_to_active_canvas("/docs/B.pdf"));
+    assert!(!state.get_document_session("/docs/A.pdf").unwrap().is_dirty);
+
+    // Mô phỏng lần Ordinary Save tiếp theo trên state hiện hành: cặp (active_file_path, active_document_id, active_revision + 1)
+    // PHẢI khớp 100% với grant cho B.pdf ở revision 2!
+    let next_expected_rev = state.active_revision() + 1;
+    let retry_grant = NativeSaveGrantDto {
+        grant_id: "grant-retry-b".into(),
+        document_id: "doc-B".into(),
+        app_instance_id: "pdf-studio-instance".into(),
+        session_generation: 1,
+        authorized_dest_path: "/docs/B.pdf".into(),
+        expected_revision: next_expected_rev,
+        request_id: "req-retry-b".into(),
+    };
+    let retry_ctx = office_utility_vn_ui::platform::SaveRequestContext {
+        document_id: state.active_document_id().unwrap(),
+        app_instance_id: "pdf-studio-instance".into(),
+        session_generation: 1,
+        authorized_dest_path: state.active_file_path(),
+        expected_revision: next_expected_rev,
+        request_id: "req-retry-b".into(),
+    };
+    validate_native_save_grant(&retry_grant, &retry_ctx)
+        .expect("Ordinary Save retry after ambiguous Save As MUST match dest_path and doc-B!");
 }

@@ -713,3 +713,30 @@ fn test_data_lab_v2_column_type_variants() {
     assert_eq!(ColumnType::Address.icon(), "📍");
     assert_eq!(ColumnType::Other.icon(), "⚡");
 }
+
+#[test]
+fn test_data_lab_gridcraft_preview_state_and_toggle() {
+    let state = DataLabState::new();
+    // 1. Mặc định phải là Bảng tính Cổ điển (is_gridcraft_preview = false)
+    assert!(!state.is_gridcraft_preview.get(), "Mặc định phải là Bảng tính Cổ điển");
+    assert!(!state.is_canvas_ready.get());
+
+    // 2. Chuyển sang chế độ xem trước GridCraft Canvas
+    state.toggle_gridcraft_preview();
+    assert!(state.is_gridcraft_preview.get(), "Sau khi toggle phải là GridCraft preview");
+
+    // 3. Chuyển ngược lại
+    state.toggle_gridcraft_preview();
+    assert!(!state.is_gridcraft_preview.get(), "Sau khi toggle lần 2 phải quay lại Bảng tính Cổ điển");
+}
+
+#[test]
+fn test_gridcraft_canvas_frame_component_instantiation() {
+    use office_utility_vn_ui::micro_apps::data_lab::canvas_frame::GridCraftCanvasFrame;
+
+    let state = DataLabState::new();
+    // Kiểm tra khởi tạo view không gây panic
+    let _view = leptos::prelude::view! {
+        <GridCraftCanvasFrame state=state />
+    };
+}
