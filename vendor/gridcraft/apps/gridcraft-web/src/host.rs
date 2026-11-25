@@ -83,6 +83,10 @@ pub struct Bridge {
     current_open_id: Rc<RefCell<Option<String>>>,
     failed_save_happened: Rc<Cell<bool>>,
     pending_save_intents: Rc<RefCell<Vec<HostSaveIntent>>>,
+    /// Native filesystem destinations keyed by iframe `doc_uid` (P1 #4683798594).
+    /// Kept strictly as bridge metadata so `doc.path` remains `None` in the WASM engine
+    /// and repeated Ctrl+S / toolbar Save never hits `io::write_file` ("no file system in the browser").
+    hosted_paths: Rc<RefCell<HashMap<u64, String>>>,
 }
 
 impl Bridge {
@@ -109,6 +113,7 @@ impl Bridge {
             current_open_id: Rc::default(),
             failed_save_happened: Rc::new(Cell::new(false)),
             pending_save_intents: Rc::default(),
+            hosted_paths: Rc::default(),
         })
     }
 
@@ -255,9 +260,6 @@ impl Bridge {
                             name: file_name(&name),
                         },
                     );
-                    if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
-                        log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
-                    }
                     if let Some(w) = web_sys::window()
                         && let Ok(Some(parent)) = w.parent()
                     {
@@ -268,6 +270,9 @@ impl Bridge {
                         let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
                         let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
                         let _ = parent.post_message(&meta_obj, "*");
+                    }
+                    if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
+                        log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                     }
                 }
             }
@@ -307,9 +312,6 @@ impl Bridge {
                         name: file_name(&name),
                     },
                 );
-                if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
-                    log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
-                }
                 if let Some(w) = web_sys::window()
                     && let Ok(Some(parent)) = w.parent()
                 {
@@ -320,6 +322,9 @@ impl Bridge {
                     let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("uid"), &wasm_bindgen::JsValue::from_f64(doc_uid as f64));
                     let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
                     let _ = parent.post_message(&meta_obj, "*");
+                }
+                if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
+                    log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
                 }
             } else if let Err(e) = self.post_export(&name, &downloaded_bytes) {
                 log::error!("couldn't hand export {name} to the page: {e}");
@@ -345,7 +350,7 @@ impl Bridge {
                                     doc.title = pending.name.clone();
                                 }
                                 if let Some(ref new_p) = ack.new_path {
-                                    doc.path = Some(new_p.clone());
+                                    self.hosted_paths.borrow_mut().insert(pending.doc_uid, new_p.clone());
                                 }
                             }
                         } else {
@@ -358,7 +363,7 @@ impl Bridge {
                                     doc.title = pending.name.clone();
                                 }
                                 if let Some(ref new_p) = ack.new_path {
-                                    doc.path = Some(new_p.clone());
+                                    self.hosted_paths.borrow_mut().insert(pending.doc_uid, new_p.clone());
                                 }
                             }
                             app.session.set_active(cur);

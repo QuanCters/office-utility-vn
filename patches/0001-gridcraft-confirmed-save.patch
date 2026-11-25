@@ -1,5 +1,5 @@
---- a/apps/gridcraft-web/src/host.rs	2026-11-24 18:24:17.742317023 +0000
-+++ b/apps/gridcraft-web/src/host.rs	2026-11-24 18:24:17.742317023 +0000
+--- a/apps/gridcraft-web/src/host.rs	2026-11-24 19:45:54.768708826 +0000
++++ b/apps/gridcraft-web/src/host.rs	2026-11-24 19:27:43.357085116 +0000
 @@ -23,11 +23,16 @@
  //! exports are handed to the page rather than downloaded, and `?author=` names the user for new
  //! notes and comments.
@@ -18,7 +18,7 @@
  
  use crate::hostmode::open_name;
  
-@@ -43,11 +48,41 @@
+@@ -43,11 +48,45 @@
  /// The longest user name taken from `?author=`.
  const MAX_AUTHOR_CHARS: usize = 200;
  
@@ -58,10 +58,14 @@
 +    current_open_id: Rc<RefCell<Option<String>>>,
 +    failed_save_happened: Rc<Cell<bool>>,
 +    pending_save_intents: Rc<RefCell<Vec<HostSaveIntent>>>,
++    /// Native filesystem destinations keyed by iframe `doc_uid` (P1 #4683798594).
++    /// Kept strictly as bridge metadata so `doc.path` remains `None` in the WASM engine
++    /// and repeated Ctrl+S / toolbar Save never hits `io::write_file` ("no file system in the browser").
++    hosted_paths: Rc<RefCell<HashMap<u64, String>>>,
  }
  
  impl Bridge {
-@@ -55,7 +90,26 @@
+@@ -55,7 +94,27 @@
      /// `data-host="page"` on the canvas, an unframed `?host=parent` page (it stays the normal app
      /// with downloads), or a parent on another origin.
      pub fn detect(canvas: &web_sys::HtmlCanvasElement) -> Option<Self> {
@@ -85,11 +89,12 @@
 +            current_open_id: Rc::default(),
 +            failed_save_happened: Rc::new(Cell::new(false)),
 +            pending_save_intents: Rc::default(),
++            hosted_paths: Rc::default(),
 +        })
      }
  
      /// Send saved and exported files to the host instead of downloading them, and hear files
-@@ -152,7 +206,7 @@
+@@ -152,7 +211,7 @@
                      doc.title = name.clone();
                  }
              }
@@ -98,10 +103,10 @@
              return;
          }
  
-@@ -204,6 +258,17 @@
-                     if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
-                         log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
-                     }
+@@ -201,6 +260,17 @@
+                             name: file_name(&name),
+                         },
+                     );
 +                    if let Some(w) = web_sys::window()
 +                        && let Ok(Some(parent)) = w.parent()
 +                    {
@@ -113,13 +118,13 @@
 +                        let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
 +                        let _ = parent.post_message(&meta_obj, "*");
 +                    }
-                 }
-             }
-         }
-@@ -245,15 +310,26 @@
-                 if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
-                     log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
-                 }
+                     if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
+                         log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
+                     }
+@@ -242,6 +312,17 @@
+                         name: file_name(&name),
+                     },
+                 );
 +                if let Some(w) = web_sys::window()
 +                    && let Ok(Some(parent)) = w.parent()
 +                {
@@ -131,8 +136,10 @@
 +                    let _ = js_sys::Reflect::set(&meta_obj, &wasm_bindgen::JsValue::from_str("revision"), &wasm_bindgen::JsValue::from_f64(revision as f64));
 +                    let _ = parent.post_message(&meta_obj, "*");
 +                }
-             } else if let Err(e) = self.post_export(&name, &downloaded_bytes) {
-                 log::error!("couldn't hand export {name} to the page: {e}");
+                 if let Err(e) = self.host.post_save(&name, &bytes, Some(&id), is_save_as) {
+                     log::error!("couldn't hand confirmed {name} ({id}) to the page: {e}");
+                 }
+@@ -250,10 +331,10 @@
              }
          }
  
@@ -146,7 +153,7 @@
                  let mut last_revs = self.last_saved_revisions.borrow_mut();
                  let last_rev = last_revs.get(&pending.doc_uid).copied().unwrap_or(0);
                  if pending.revision >= last_rev {
-@@ -263,16 +339,26 @@
+@@ -263,16 +344,26 @@
                          if cur == i {
                              if let Some(doc) = app.session.active_mut() {
                                  doc.saved = pending.snapshot.clone();
@@ -158,7 +165,7 @@
 +                                    doc.title = pending.name.clone();
 +                                }
 +                                if let Some(ref new_p) = ack.new_path {
-+                                    doc.path = Some(new_p.clone());
++                                    self.hosted_paths.borrow_mut().insert(pending.doc_uid, new_p.clone());
                                  }
                              }
                          } else {
@@ -173,11 +180,11 @@
 +                                    doc.title = pending.name.clone();
 +                                }
 +                                if let Some(ref new_p) = ack.new_path {
-+                                    doc.path = Some(new_p.clone());
++                                    self.hosted_paths.borrow_mut().insert(pending.doc_uid, new_p.clone());
                                  }
                              }
                              app.session.set_active(cur);
-@@ -319,16 +405,104 @@
+@@ -319,16 +410,104 @@
                      });
                  } else {
                      log::warn!(
@@ -285,7 +292,7 @@
      }
  
      fn post_save(&self, path: &str, bytes: &[u8]) -> Result<(), String> {
-@@ -361,7 +535,8 @@
+@@ -361,7 +540,8 @@
  
      fn listen(&self, inbox: Inbox, ctx: egui::Context) {
          let confirmed = self.confirmed;
@@ -295,7 +302,7 @@
          let pending_saves_for_fail = self.pending_saves.clone();
          let app_ctx_for_open = ctx.clone();
          let app_ctx_for_saved = ctx.clone();
-@@ -373,7 +548,15 @@
+@@ -373,7 +553,15 @@
              }
              Message::Saved { id } => {
                  if confirmed {
@@ -312,7 +319,7 @@
                      app_ctx_for_saved.request_repaint();
                  }
              }
-@@ -428,6 +611,35 @@
+@@ -428,6 +616,35 @@
                                  save_as,
                              });
                              app_ctx_for_intents.request_repaint();

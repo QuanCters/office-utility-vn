@@ -33,6 +33,8 @@ pub struct GridCraftState {
     pub edit_revision: RwSignal<u64>,
     /// Ánh xạ các phiên workbook theo ID hoặc tên tệp (Finding 2: Multi-Workbook Save Isolation)
     pub document_sessions: RwSignal<std::collections::HashMap<String, WorkbookSession>>,
+    /// Tập các request_id -> document_id đang có lệnh lưu native pending (P2 #4683038858)
+    pub pending_save_requests: RwSignal<std::collections::HashMap<String, String>>,
 }
 
 /// Dữ liệu phiên làm việc của một workbook độc lập (Stage 4C-1 Workbook Session Identity)
@@ -85,6 +87,7 @@ impl GridCraftState {
             pending_close_request_id: RwSignal::new(None),
             edit_revision: RwSignal::new(0),
             document_sessions: RwSignal::new(std::collections::HashMap::new()),
+            pending_save_requests: RwSignal::new(std::collections::HashMap::new()),
         }
     }
 
@@ -112,7 +115,9 @@ impl GridCraftState {
             if let Some(s) = map.get(doc_id_or_name) {
                 Some(s.clone())
             } else {
-                map.values().find(|s| s.file_name == doc_id_or_name).cloned()
+                map.values()
+                    .find(|s| s.file_name == doc_id_or_name)
+                    .cloned()
             }
         })
     }
@@ -124,11 +129,17 @@ impl GridCraftState {
     }
 
     /// Phân giải phiên workbook đích chính xác kết hợp với iframe doc UID (P2 #4682914297)
-    pub fn resolve_save_session_with_uid(&self, name_or_doc_id: &str, doc_uid: Option<u64>) -> Option<WorkbookSession> {
+    pub fn resolve_save_session_with_uid(
+        &self,
+        name_or_doc_id: &str,
+        doc_uid: Option<u64>,
+    ) -> Option<WorkbookSession> {
         // 0. Nếu có iframe workbook UID, tìm chính xác theo iframe_doc_uid (Bất biến P2 #4682914297)
         if let Some(uid) = doc_uid {
             let uid_match = self.document_sessions.with_untracked(|map| {
-                map.values().find(|s| s.iframe_doc_uid == Some(uid)).cloned()
+                map.values()
+                    .find(|s| s.iframe_doc_uid == Some(uid))
+                    .cloned()
             });
             if let Some(sess) = uid_match {
                 return Some(sess);
@@ -136,7 +147,9 @@ impl GridCraftState {
         }
 
         // 1. Tìm trực tiếp theo document_id (định danh bền vững duy nhất)
-        let direct_match = self.document_sessions.with_untracked(|map| map.get(name_or_doc_id).cloned());
+        let direct_match = self
+            .document_sessions
+            .with_untracked(|map| map.get(name_or_doc_id).cloned());
         if let Some(sess) = direct_match {
             return Some(sess);
         }
@@ -170,11 +183,7 @@ impl GridCraftState {
 
     /// Di chuyển một phiên workbook sang document_id và đường dẫn mới sau khi Save As thành công (P1 #4683798594)
     /// Đảm bảo không để lại session ma (ghost dirty session) của tài liệu nguồn cũ.
-    pub fn migrate_document_session(
-        &self,
-        old_doc_id: &str,
-        new_session: WorkbookSession,
-    ) {
+    pub fn migrate_document_session(&self, old_doc_id: &str, new_session: WorkbookSession) {
         let mut sessions = self.document_sessions.get_untracked();
         if old_doc_id != new_session.document_id {
             sessions.remove(old_doc_id);
@@ -184,18 +193,44 @@ impl GridCraftState {
         self.recompute_aggregate_dirty();
     }
 
+    /// Ghi nhận một tác vụ lưu native đang pending cho document_id (P2 #4683038858)
+    pub fn register_pending_save_request(&self, request_id: &str, document_id: Option<&str>) {
+        if let Some(doc_id) = document_id {
+            self.pending_save_requests.update(|map| {
+                map.insert(request_id.to_string(), doc_id.to_string());
+            });
+        }
+    }
+
+    /// Giải phóng tác vụ lưu native đã hoàn tất
+    pub fn clear_pending_save_request(&self, request_id: &str) {
+        self.pending_save_requests.update(|map| {
+            map.remove(request_id);
+        });
+    }
+
+    /// Kiểm tra xem có tác vụ lưu nào đang pending cho document_id không
+    pub fn has_pending_save_for_document(&self, document_id: &str) -> bool {
+        self.pending_save_requests
+            .with_untracked(|map| map.values().any(|id| id == document_id))
+    }
+
     /// Đối soát và dọn dẹp các phiên workbook đã bị đóng hoặc hủy trong iframe (P2 #4683038858)
-    /// Chỉ loại bỏ các session không còn trong live_uids NẾU session đó đã sạch (không dirty).
-    /// Tuyệt đối không âm thầm loại bỏ các phiên đang có thay đổi chưa giải quyết hoặc đang pending lưu!
+    /// Mọi phiên đã gắn `iframe_doc_uid` nhưng không còn nằm trong `live_uids` đều đã bị đóng/hủy
+    /// tường minh trong iframe (kể cả khi trước đó từng dirty với "Don't Save"), miễn là không có
+    /// tác vụ lưu native đang pending cho phiên đó.
     pub fn reconcile_closed_sessions(&self, live_uids: &[u64]) {
         let mut sessions = self.document_sessions.get_untracked();
+        let pending_docs: std::collections::HashSet<String> = self
+            .pending_save_requests
+            .with_untracked(|m| m.values().cloned().collect());
         let mut modified = false;
 
         let to_remove: Vec<String> = sessions
             .values()
             .filter(|sess| {
                 if let Some(uid) = sess.iframe_doc_uid {
-                    !live_uids.contains(&uid) && !sess.is_dirty
+                    !live_uids.contains(&uid) && !pending_docs.contains(&sess.document_id)
                 } else {
                     false
                 }
@@ -203,13 +238,24 @@ impl GridCraftState {
             .map(|sess| sess.document_id.clone())
             .collect();
 
+        let active_id = self.active_document_id.get_untracked();
+        let mut removed_active = false;
         for doc_id in to_remove {
+            if active_id.as_deref() == Some(doc_id.as_str()) {
+                removed_active = true;
+            }
             sessions.remove(&doc_id);
             modified = true;
         }
 
         if modified {
             self.document_sessions.set(sessions);
+            if removed_active {
+                self.active_document_id.set(None);
+                self.active_file_path.set(None);
+                self.active_file_name.set(None);
+                self.active_revision.set(0);
+            }
             self.recompute_aggregate_dirty();
         }
     }
@@ -347,7 +393,10 @@ impl GridCraftState {
         self.document_sessions.with_untracked(|map| {
             if let Some(s) = map.get(doc_id_or_name) {
                 s.edit_revision
-            } else if let Some(s) = map.values().find(|s| s.file_name == doc_id_or_name || s.file_path == doc_id_or_name) {
+            } else if let Some(s) = map
+                .values()
+                .find(|s| s.file_name == doc_id_or_name || s.file_path == doc_id_or_name)
+            {
                 s.edit_revision
             } else {
                 self.edit_revision.get_untracked()
@@ -370,6 +419,8 @@ impl GridCraftState {
         self.provisional_open.set(None);
         self.pending_close_request_id.set(None);
         self.document_sessions.set(std::collections::HashMap::new());
+        self.pending_save_requests
+            .set(std::collections::HashMap::new());
     }
 
     /// Tái tính toán trạng thái dirty tổng hợp của toàn bộ workspace từ mọi workbook đang mở
@@ -387,9 +438,12 @@ impl GridCraftState {
                 .and_then(|n| n.to_str())
                 .unwrap_or("workbook.xlsx")
                 .to_string();
-            let (current_dirty, current_edit_rev, current_uid) = self.document_sessions.with(|map| {
-                map.get(d_id).map(|s| (s.is_dirty, s.edit_revision, s.iframe_doc_uid)).unwrap_or((false, 0, None))
-            });
+            let (current_dirty, current_edit_rev, current_uid) =
+                self.document_sessions.with(|map| {
+                    map.get(d_id)
+                        .map(|s| (s.is_dirty, s.edit_revision, s.iframe_doc_uid))
+                        .unwrap_or((false, 0, None))
+                });
             self.register_document_session(WorkbookSession {
                 document_id: d_id.clone(),
                 file_path: f_path.clone(),

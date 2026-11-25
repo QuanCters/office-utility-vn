@@ -122,6 +122,21 @@ impl HostDocumentCoordinator {
         self.dest_path.as_deref()
     }
 
+    /// Trả về định danh tài liệu đang hoạt động trong coordinator (nếu có)
+    pub fn active_document_id(&self) -> Option<&str> {
+        self.active_document_id.as_deref()
+    }
+
+    /// Đặt lại trạng thái về Clean khi toàn bộ tài liệu đã được đóng/hủy tường minh và không có lưu đang chạy
+    pub fn reset_if_dirty_on_close(&mut self) {
+        if matches!(
+            self.state,
+            DocumentState::Dirty | DocumentState::SaveFailed { .. }
+        ) {
+            self.state = DocumentState::Clean;
+        }
+    }
+
     /// Được gọi khi iframe reload hoặc khởi động lại: tăng generation, hủy bỏ request pending.
     pub fn on_iframe_reload(&mut self) {
         self.session_generation = self.session_generation.wrapping_add(1);

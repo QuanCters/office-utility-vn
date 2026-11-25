@@ -1,6 +1,6 @@
-use leptos::prelude::*;
 use crate::app::ToolItem;
 use crate::micro_apps::{MicroAppId, ToolRegistry};
+use leptos::prelude::*;
 
 /// Phân loại 4 nhóm nghiệp vụ xử lý tài liệu PDF trong PDF Studio.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -85,7 +85,9 @@ impl PdfCategory {
 
 /// Ánh xạ một slug công cụ PDF sang nhóm danh mục tương ứng.
 pub fn category_for_tool(slug: &str) -> Option<PdfCategory> {
-    PdfCategory::ALL.into_iter().find(|&cat| cat.slugs().contains(&slug))
+    PdfCategory::ALL
+        .into_iter()
+        .find(|&cat| cat.slugs().contains(&slug))
 }
 
 /// Chế độ hiển thị chính của PDF Studio.
@@ -175,6 +177,10 @@ pub struct PdfStudioState {
     pub hub_active_category: RwSignal<Option<PdfCategory>>,
     /// Đường dẫn tệp hiện đang được ràng buộc (bind) trực tiếp trên iframe canvas mà không cần nạp lại từ đĩa.
     pub canvas_bound_path: RwSignal<Option<String>>,
+    /// ID thực thể iframe canvas hiện tại (mỗi lần mount PdfCraftCanvasFrame tạo một ID mới).
+    pub active_canvas_instance_id: RwSignal<Option<u64>>,
+    /// ID thực thể iframe canvas mà `canvas_bound_path` đang ràng buộc vào (P2 #4684793560).
+    pub canvas_bound_instance_id: RwSignal<Option<u64>>,
 }
 
 impl Default for PdfStudioState {
@@ -217,15 +223,13 @@ impl PdfStudioState {
             pending_saves: RwSignal::new(std::collections::HashMap::new()),
             hub_active_category: RwSignal::new(None),
             canvas_bound_path: RwSignal::new(None),
+            active_canvas_instance_id: RwSignal::new(None),
+            canvas_bound_instance_id: RwSignal::new(None),
         }
     }
 
     /// Đăng ký một tác vụ lưu PDF pending trước khi gọi native async persistence (Finding 4675800826 & 4676016520)
-    pub fn register_pending_save(
-        &self,
-        request_id: String,
-        context: SaveRequestContext,
-    ) {
+    pub fn register_pending_save(&self, request_id: String, context: SaveRequestContext) {
         let mut map = self.pending_saves.get_untracked();
         map.insert(
             request_id.clone(),
@@ -272,7 +276,8 @@ impl PdfStudioState {
         if self.has_unsaved_changes.get_untracked() {
             return true;
         }
-        self.document_sessions.with_untracked(|map| map.values().any(|s| s.is_dirty))
+        self.document_sessions
+            .with_untracked(|map| map.values().any(|s| s.is_dirty))
     }
 
     /// Đăng ký hoặc cập nhật phiên tài liệu cho một đường dẫn tệp cụ thể (Finding 1)
@@ -296,7 +301,8 @@ impl PdfStudioState {
 
     /// Lấy phiên tài liệu theo đường dẫn tệp
     pub fn get_document_session(&self, path: &str) -> Option<PdfDocumentSession> {
-        self.document_sessions.with_untracked(|map| map.get(path).cloned())
+        self.document_sessions
+            .with_untracked(|map| map.get(path).cloned())
     }
 
     /// Lưu bộ đệm nội dung nhị phân của tài liệu đã được ủy quyền
@@ -423,7 +429,9 @@ impl PdfStudioState {
             // P1 #4676016514 Fix: CHỈ đồng bộ hóa phiên tài liệu nếu chính tệp đang active bị xóa!
             // Nếu xóa tệp khác, TUYỆT ĐỐI KHÔNG chạm vào has_unsaved_changes hoặc edit_generation của tệp đang active.
             if was_active_removed {
-                let opt_new_path = self.loaded_files.with_untracked(|f| f.get(next_idx).cloned());
+                let opt_new_path = self
+                    .loaded_files
+                    .with_untracked(|f| f.get(next_idx).cloned());
                 if let Some(new_path) = opt_new_path {
                     if let Some(sess) = self.get_document_session(&new_path) {
                         self.active_document_id.set(sess.document_id);
@@ -460,12 +468,8 @@ impl PdfStudioState {
 
     /// Lấy tên tệp rút gọn (basename) của tệp PDF đang kích hoạt.
     pub fn active_file_name(&self) -> Option<String> {
-        self.active_file_path().map(|p| {
-            p.rsplit(['/', '\\'])
-                .next()
-                .unwrap_or(&p)
-                .to_string()
-        })
+        self.active_file_path()
+            .map(|p| p.rsplit(['/', '\\']).next().unwrap_or(&p).to_string())
     }
 
     /// Chọn một tệp cụ thể trong danh sách theo chỉ số index.
@@ -501,6 +505,7 @@ impl PdfStudioState {
 
     /// Chọn một công cụ PDF, tự động đồng bộ danh mục toolbar và thoát chế độ workflow.
     pub fn select_tool(&self, slug: &str) {
+        self.invalidate_canvas_instance();
         self.active_tool.set(slug.to_string());
         self.is_workflow_active.set(false);
         self.view_mode.set(PdfViewMode::ToolWorkspace);
@@ -511,6 +516,7 @@ impl PdfStudioState {
 
     /// Chuyển tab danh mục toolbar. Nếu công cụ hiện tại không thuộc tab mới, chọn công cụ đầu tiên của tab.
     pub fn select_category(&self, cat: PdfCategory) {
+        self.invalidate_canvas_instance();
         self.active_category.set(cat);
         self.is_workflow_active.set(false);
         self.view_mode.set(PdfViewMode::ToolWorkspace);
@@ -524,6 +530,7 @@ impl PdfStudioState {
 
     /// Mở màn hình thiết kế chuỗi Workflow Macro DAG.
     pub fn open_workflow(&self) {
+        self.invalidate_canvas_instance();
         self.is_workflow_active.set(true);
         self.view_mode.set(PdfViewMode::Workflow);
     }
@@ -542,6 +549,7 @@ impl PdfStudioState {
 
     /// Mở trang chủ Hub/Portal của PDF Studio.
     pub fn open_hub(&self) {
+        self.invalidate_canvas_instance();
         self.view_mode.set(PdfViewMode::Hub);
         self.is_workflow_active.set(false);
     }
@@ -585,7 +593,8 @@ impl PdfStudioState {
 
     /// Kiểm tra xem chế độ workflow có đang hiển thị hay không.
     pub fn is_workflow(&self) -> bool {
-        self.is_workflow_active.get_untracked() || self.view_mode.get_untracked() == PdfViewMode::Workflow
+        self.is_workflow_active.get_untracked()
+            || self.view_mode.get_untracked() == PdfViewMode::Workflow
     }
 
     /// Kiểm tra xem tác vụ có đang chạy hay không.
@@ -631,6 +640,74 @@ impl PdfStudioState {
     /// Cập nhật cờ sẵn sàng của canvas.
     pub fn set_canvas_ready(&self, ready: bool) {
         self.is_canvas_ready.set(ready);
+        if !ready {
+            self.invalidate_canvas_binding();
+        }
+    }
+
+    /// Cấp phát một phiên bản thực thể iframe canvas mới khi PdfCraftCanvasFrame được gắn (mount).
+    /// Đặt lại trạng thái sẵn sàng và hủy bỏ mọi ràng buộc đường dẫn của thực thể iframe cũ (P2 #4684793560).
+    pub fn begin_canvas_instance(&self) -> u64 {
+        static NEXT_CANVAS_INSTANCE_ID: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(1);
+        let id = NEXT_CANVAS_INSTANCE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.active_canvas_instance_id.set(Some(id));
+        self.is_canvas_ready.set(false);
+        self.canvas_bound_instance_id.set(None);
+        self.canvas_bound_path.set(None);
+        id
+    }
+
+    /// Dọn dẹp thực thể iframe canvas khi PdfCraftCanvasFrame bị hủy (unmount).
+    pub fn end_canvas_instance(&self, instance_id: u64) {
+        if self.active_canvas_instance_id.get_untracked() == Some(instance_id) {
+            self.invalidate_canvas_instance();
+        }
+    }
+
+    /// Vô hiệu hóa thực thể iframe canvas hiện tại và toàn bộ ràng buộc gắn với nó.
+    pub fn invalidate_canvas_instance(&self) {
+        self.active_canvas_instance_id.set(None);
+        self.is_canvas_ready.set(false);
+        self.canvas_bound_instance_id.set(None);
+        self.canvas_bound_path.set(None);
+    }
+
+    /// Xóa bỏ ràng buộc tài liệu hiện tại trên canvas (ví dụ khi giao hàng thất bại hoặc cần nạp lại).
+    pub fn invalidate_canvas_binding(&self) {
+        self.canvas_bound_instance_id.set(None);
+        self.canvas_bound_path.set(None);
+    }
+
+    /// Đánh dấu một đường dẫn đã được nạp thành công vào thực thể iframe sẵn sàng `instance_id` (P2 #4684793560).
+    /// TUYỆT ĐỐI từ chối đánh dấu bound nếu iframe chưa sẵn sàng hoặc `instance_id` không phải thực thể hiện hành.
+    pub fn mark_canvas_bound(&self, instance_id: u64, path: &str) -> bool {
+        if self.active_canvas_instance_id.get_untracked() == Some(instance_id)
+            && self.is_canvas_ready.get_untracked()
+        {
+            self.canvas_bound_instance_id.set(Some(instance_id));
+            self.canvas_bound_path.set(Some(path.to_string()));
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Kiểm tra xem `path` đã được nạp và ràng buộc vào chính thực thể iframe hiện hành đang sẵn sàng hay chưa.
+    pub fn is_path_bound_to_active_canvas(&self, path: &str) -> bool {
+        if !self.is_canvas_ready.get() {
+            return false;
+        }
+        match (
+            self.active_canvas_instance_id.get(),
+            self.canvas_bound_instance_id.get(),
+            self.canvas_bound_path.get(),
+        ) {
+            (Some(active_id), Some(bound_id), Some(bound_path)) => {
+                active_id == bound_id && bound_path == path
+            }
+            _ => false,
+        }
     }
 
     /// Cập nhật cờ thay đổi chưa lưu (dirty) và tăng thế hệ chỉnh sửa (edit_generation)
@@ -661,11 +738,15 @@ impl PdfStudioState {
     }
 
     /// Xử lý cập nhật trạng thái phản ứng khi nhận thông điệp từ PDFCraft Bridge.
-    pub fn handle_bridge_message(&self, message: &crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage) {
+    pub fn handle_bridge_message(
+        &self,
+        message: &crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage,
+    ) {
         match message {
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Ready { version } => {
                 self.is_canvas_ready.set(true);
-                self.status_message.set(format!("PDFCraft Canvas sẵn sàng (v{})", version));
+                self.status_message
+                    .set(format!("PDFCraft Canvas sẵn sàng (v{})", version));
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Dirty { dirty } => {
                 if !*dirty {
@@ -685,11 +766,14 @@ impl PdfStudioState {
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Save { name, .. } => {
                 // TUYỆT ĐỐI KHÔNG xóa has_unsaved_changes ở đây! (Gate 1 - Stage 4B-2B)
                 // has_unsaved_changes chỉ được chuyển sang false khi tác vụ lưu nhị phân thực sự thành công
-                self.status_message.set(format!("Đang xử lý yêu cầu lưu tệp {}...", name));
+                self.status_message
+                    .set(format!("Đang xử lý yêu cầu lưu tệp {}...", name));
             }
             crate::micro_apps::pdf_studio::bridge::IncomingBridgeMessage::Failed { error } => {
                 self.is_canvas_ready.set(false);
-                self.status_message.set(format!("Lỗi PDFCraft Canvas: {}", error));
+                self.invalidate_canvas_binding();
+                self.status_message
+                    .set(format!("Lỗi PDFCraft Canvas: {}", error));
             }
         }
     }

@@ -42,6 +42,21 @@ pub enum DevSaveResult {
     Failed(String),
 }
 
+/// Bối cảnh yêu cầu lưu bất biến cho GridCraft, được chụp khi yêu cầu lưu được chấp nhận
+/// (P1 #4684931088: Bảo lưu danh tính tài liệu nguồn, iframe UID, intent, correlation ID và snapshot revision)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GridCraftSaveRequestContext {
+    pub request_id: String,
+    pub operation_intent: crate::platform::adapter::SaveOperationIntent,
+    pub originating_document_id: Option<String>,
+    pub originating_path: Option<String>,
+    pub originating_name: String,
+    pub iframe_doc_uid: Option<u64>,
+    pub snapshot_edit_revision: u64,
+    pub base_committed_revision: u64,
+    pub session_generation: u64,
+}
+
 /// Xử lý hoàn tất lưu tệp và kiểm tra an toàn toàn bộ ứng dụng trước khi ủy quyền đóng cửa sổ (Finding 4)
 pub fn handle_gridcraft_save_completion(
     is_still_dirty: bool,
@@ -76,19 +91,60 @@ pub fn handle_gridcraft_save_completion(
     }
 }
 
-/// Xử lý kết quả lưu tài liệu GridCraft theo các bất biến sản phẩm (Finding 4 & P1 #4676016506)
+/// Xử lý kết quả lưu tài liệu GridCraft theo các bất biến sản phẩm (Finding 4, P1 #4676016506 & P1 #4684931088)
 pub fn handle_gridcraft_save_outcome(
     s: &GridCraftState,
     coordinator: Option<&leptos::prelude::StoredValue<HostDocumentCoordinator>>,
     outcome: Result<DevSaveResult, String>,
-    intent: crate::platform::adapter::SaveOperationIntent,
-    name: &str,
-    req_id: &str,
+    ctx: &GridCraftSaveRequestContext,
     bytes: &[u8],
-    snapshot_edit_rev: u64,
     close_manager: Option<crate::platform::window_close::WindowCloseManager>,
     app_state: Option<crate::app::AppState>,
 ) {
+    s.clear_pending_save_request(&ctx.request_id);
+
+    let intent = ctx.operation_intent;
+    let name = ctx.originating_name.as_str();
+    let req_id = ctx.request_id.as_str();
+    let snapshot_edit_rev = ctx.snapshot_edit_revision;
+
+    // P1 #4684931088: Danh tính tài liệu nguồn và iframe UID bắt buộc lấy từ ngữ cảnh bất biến `ctx`,
+    // TUYỆT ĐỐI KHÔNG suy diễn từ `s.active_document_id` tại thời điểm hoàn tất bất đồng bộ.
+    let originating_doc_id = ctx.originating_document_id.clone();
+    let originating_uid = ctx.iframe_doc_uid.or_else(|| {
+        originating_doc_id.as_deref().and_then(|id| {
+            s.document_sessions
+                .with_untracked(|m| m.get(id).and_then(|sess| sess.iframe_doc_uid))
+        })
+    });
+
+    let lookup_origin_live_edit_rev = || -> u64 {
+        originating_doc_id
+            .as_deref()
+            .and_then(|id| {
+                s.document_sessions
+                    .with_untracked(|m| m.get(id).map(|sess| sess.edit_revision))
+            })
+            .or_else(|| {
+                originating_uid.and_then(|uid| {
+                    s.document_sessions.with_untracked(|m| {
+                        m.values()
+                            .find(|sess| sess.iframe_doc_uid == Some(uid))
+                            .map(|sess| sess.edit_revision)
+                    })
+                })
+            })
+            .unwrap_or(snapshot_edit_rev)
+    };
+
+    let mark_origin_dirty = || {
+        if let Some(ref orig_id) = originating_doc_id {
+            s.set_document_dirty(orig_id, true);
+        } else {
+            s.is_dirty.set(true);
+        }
+    };
+
     match outcome {
         Ok(DevSaveResult::Saved {
             dest_path,
@@ -112,26 +168,37 @@ pub fn handle_gridcraft_save_outcome(
                 .unwrap_or(name)
                 .to_string();
 
+            let live_edit_rev = lookup_origin_live_edit_rev();
+            let mut coord_dirty_for_origin = false;
+
             if let Some(coord) = coordinator {
                 coord.update_value(|c| {
                     let fp = crate::platform::persistence::compute_fingerprint(bytes);
                     c.on_durable_write_completed(req_id, &fp);
-                    // P1 #4679604052: Đồng bộ hóa Coordinator với session và đường dẫn mới sau Save As
-                    c.on_document_opened(&new_doc_id, &dest_path, &fp);
+                    let coord_matches_origin = c.active_document_id().is_none()
+                        || c.active_document_id() == originating_doc_id.as_deref()
+                        || c.active_document_id() == Some(new_doc_id.as_str());
+                    if coord_matches_origin {
+                        coord_dirty_for_origin = c.is_dirty();
+                        // P1 #4679604052: Đồng bộ hóa Coordinator với session và đường dẫn mới sau Save As
+                        c.on_document_opened(&new_doc_id, &dest_path, &fp);
+                        if coord_dirty_for_origin || live_edit_rev > snapshot_edit_rev {
+                            c.on_user_edit();
+                        }
+                    }
                 });
             }
-            let live_edit_rev = s.get_edit_revision(&new_doc_id);
-            let is_still_dirty = coordinator.map(|c| c.read_value().is_dirty()).unwrap_or(false)
-                || (live_edit_rev > snapshot_edit_rev);
-            s.set_document_dirty(&new_doc_id, is_still_dirty);
 
-            let originating_doc_id = s.active_document_id.get_untracked()
-                .or_else(|| s.get_session_for_document(name).map(|s| s.document_id));
-            let originating_uid = originating_doc_id.as_deref()
-                .and_then(|id| s.document_sessions.with_untracked(|m| m.get(id).and_then(|s| s.iframe_doc_uid)));
+            let is_still_dirty = coord_dirty_for_origin || (live_edit_rev > snapshot_edit_rev);
+
+            let cur_active_id = s.active_document_id.get_untracked();
+            let should_update_active_signals = cur_active_id.is_none()
+                || cur_active_id.as_deref() == originating_doc_id.as_deref()
+                || cur_active_id.as_deref() == Some(new_doc_id.as_str());
 
             if intent == crate::platform::adapter::SaveOperationIntent::SaveAs {
-                // P1 #4683798594: Di chuyển phiên nguồn sang danh tính mới, không để lại ghost dirty session
+                // P1 #4683798594 & #4684931088: Di chuyển phiên nguồn đã chụp từ ctx sang danh tính mới,
+                // tuyệt đối không động vào các phiên workbook khác (ví dụ B khi đang Save As A -> C)
                 let old_id = originating_doc_id.as_deref().unwrap_or(&new_doc_id);
                 s.migrate_document_session(
                     old_id,
@@ -156,12 +223,16 @@ pub fn handle_gridcraft_save_outcome(
                     iframe_doc_uid: originating_uid,
                 });
             }
-            s.set_document_session(
-                Some(new_doc_id.clone()),
-                Some(dest_path.clone()),
-                committed_rev,
-            );
-            s.active_file_name.set(Some(actual_file_name.clone()));
+
+            if should_update_active_signals {
+                s.set_document_session(
+                    Some(new_doc_id.clone()),
+                    Some(dest_path.clone()),
+                    committed_rev,
+                );
+                s.active_file_name.set(Some(actual_file_name.clone()));
+            }
+
             send_saved_to_iframe(
                 GRIDCRAFT_IFRAME_ID,
                 req_id,
@@ -172,12 +243,7 @@ pub fn handle_gridcraft_save_outcome(
 
             let close_req = s.pending_close_request_id.get_untracked();
             s.pending_close_request_id.set(None);
-            handle_gridcraft_save_completion(
-                is_still_dirty,
-                close_req,
-                close_manager,
-                app_state,
-            );
+            handle_gridcraft_save_completion(is_still_dirty, close_req, close_manager, app_state);
         }
         Ok(DevSaveResult::AmbiguousCommit {
             dest_path,
@@ -201,9 +267,8 @@ pub fn handle_gridcraft_save_outcome(
                     s.pending_close_request_id.set(None);
                     if let Some(cm) = close_manager {
                         cm.cancel_close(&close_req_id);
-                        cm.error_message.set(Some(format!(
-                            "Lỗi xuất tệp (Ambiguous Commit): {message}"
-                        )));
+                        cm.error_message
+                            .set(Some(format!("Lỗi xuất tệp (Ambiguous Commit): {message}")));
                     }
                 }
                 return;
@@ -214,24 +279,39 @@ pub fn handle_gridcraft_save_outcome(
                     let _ = c.on_durable_write_failed(req_id, &message);
                 });
             }
-            let live_edit_rev = s.get_edit_revision(&new_doc_id);
-            s.set_document_dirty(&new_doc_id, true);
-            let orig_uid = s.document_sessions.with_untracked(|m| m.get(&new_doc_id).and_then(|s| s.iframe_doc_uid));
-            s.register_document_session(crate::micro_apps::gridcraft::state::WorkbookSession {
+            let actual_file_name = std::path::Path::new(&dest_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(name)
+                .to_string();
+            let live_edit_rev = lookup_origin_live_edit_rev();
+
+            let cur_active_id = s.active_document_id.get_untracked();
+            let should_update_active_signals = cur_active_id.is_none()
+                || cur_active_id.as_deref() == originating_doc_id.as_deref()
+                || cur_active_id.as_deref() == Some(new_doc_id.as_str());
+
+            let session = crate::micro_apps::gridcraft::state::WorkbookSession {
                 document_id: new_doc_id.clone(),
                 file_path: dest_path.clone(),
-                file_name: name.to_string(),
+                file_name: actual_file_name.clone(),
                 revision: committed_rev,
                 is_dirty: true,
                 edit_revision: live_edit_rev,
-                iframe_doc_uid: orig_uid,
-            });
-            s.set_document_session(
-                Some(new_doc_id),
-                Some(dest_path),
-                committed_rev,
-            );
-            s.active_file_name.set(Some(name.to_string()));
+                iframe_doc_uid: originating_uid,
+            };
+
+            if intent == crate::platform::adapter::SaveOperationIntent::SaveAs {
+                let old_id = originating_doc_id.as_deref().unwrap_or(&new_doc_id);
+                s.migrate_document_session(old_id, session);
+            } else {
+                s.register_document_session(session);
+            }
+
+            if should_update_active_signals {
+                s.set_document_session(Some(new_doc_id), Some(dest_path), committed_rev);
+                s.active_file_name.set(Some(actual_file_name));
+            }
             s.is_dirty.set(true);
 
             s.save_blocked_detail.set(format!(
@@ -244,9 +324,8 @@ pub fn handle_gridcraft_save_outcome(
                 s.pending_close_request_id.set(None);
                 if let Some(cm) = close_manager {
                     cm.cancel_close(&close_req_id);
-                    cm.error_message.set(Some(format!(
-                        "Lỗi ghi đĩa (Ambiguous Commit): {message}"
-                    )));
+                    cm.error_message
+                        .set(Some(format!("Lỗi ghi đĩa (Ambiguous Commit): {message}")));
                 }
             }
         }
@@ -257,13 +336,9 @@ pub fn handle_gridcraft_save_outcome(
                 });
             }
             if intent != crate::platform::adapter::SaveOperationIntent::Export {
-                s.is_dirty.set(true);
+                mark_origin_dirty();
             }
-            send_save_failed_to_iframe(
-                GRIDCRAFT_IFRAME_ID,
-                "Đã hủy thao tác lưu",
-                Some(req_id),
-            );
+            send_save_failed_to_iframe(GRIDCRAFT_IFRAME_ID, "Đã hủy thao tác lưu", Some(req_id));
             if let Some(close_req_id) = s.pending_close_request_id.get_untracked() {
                 s.pending_close_request_id.set(None);
                 if let Some(cm) = close_manager {
@@ -278,7 +353,7 @@ pub fn handle_gridcraft_save_outcome(
                         let _ = c.on_durable_write_failed(req_id, &err);
                     });
                 }
-                s.is_dirty.set(true);
+                mark_origin_dirty();
             }
             s.save_blocked_detail.set(format!("❌ Lỗi ghi đĩa: {err}"));
             s.is_save_blocked_alert.set(true);
@@ -298,7 +373,7 @@ pub fn handle_gridcraft_save_outcome(
                         let _ = c.on_durable_write_failed(req_id, &err);
                     });
                 }
-                s.is_dirty.set(true);
+                mark_origin_dirty();
             }
             s.save_blocked_detail.set(format!("❌ Lỗi hệ thống: {err}"));
             s.is_save_blocked_alert.set(true);
@@ -341,6 +416,9 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
         let window = web_sys::window();
         if let Some(win) = window {
             let s = state;
+            let pending_save_metadata: std::rc::Rc<
+                std::cell::RefCell<std::collections::HashMap<String, (u64, u64)>>,
+            > = std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashMap::new()));
             let listener = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(
                 move |ev: web_sys::MessageEvent| {
                     let data = ev.data();
@@ -426,34 +504,65 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                 .and_then(|v| v.dyn_into::<js_sys::Array>().ok());
 
                                 // 1. Đồng bộ trạng thái dirty chi tiết của từng workbook nếu mảng documents có mặt
+                                let has_documents_snapshot = documents.is_some();
                                 let mut live_uids: Vec<u64> = Vec::new();
                                 if let Some(docs) = documents {
                                     for i in 0..docs.length() {
                                         let item = docs.get(i);
                                         if let Ok(obj) = item.dyn_into::<js_sys::Object>() {
-                                            let n = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("name"))
-                                                .ok().and_then(|v| v.as_string());
-                                            let d = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("dirty"))
-                                                .ok().and_then(|v| v.as_bool()).unwrap_or(false);
-                                            let u = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("uid"))
-                                                .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
-                                                .or_else(|| {
-                                                    js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("doc_uid"))
-                                                        .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
-                                                });
-                                            let r = js_sys::Reflect::get(&obj, &wasm_bindgen::JsValue::from_str("revision"))
-                                                .ok().and_then(|v| v.as_f64()).map(|v| v as u64);
+                                            let n = js_sys::Reflect::get(
+                                                &obj,
+                                                &wasm_bindgen::JsValue::from_str("name"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_string());
+                                            let d = js_sys::Reflect::get(
+                                                &obj,
+                                                &wasm_bindgen::JsValue::from_str("dirty"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false);
+                                            let u = js_sys::Reflect::get(
+                                                &obj,
+                                                &wasm_bindgen::JsValue::from_str("uid"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_f64())
+                                            .map(|v| v as u64)
+                                            .or_else(|| {
+                                                js_sys::Reflect::get(
+                                                    &obj,
+                                                    &wasm_bindgen::JsValue::from_str("doc_uid"),
+                                                )
+                                                .ok()
+                                                .and_then(|v| v.as_f64())
+                                                .map(|v| v as u64)
+                                            });
+                                            let r = js_sys::Reflect::get(
+                                                &obj,
+                                                &wasm_bindgen::JsValue::from_str("revision"),
+                                            )
+                                            .ok()
+                                            .and_then(|v| v.as_f64())
+                                            .map(|v| v as u64);
 
                                             if let Some(uid_val) = u {
                                                 live_uids.push(uid_val);
                                             }
-                                            s.sync_workbook_dirty_and_revision(n.as_deref(), u, d, r);
+                                            s.sync_workbook_dirty_and_revision(
+                                                n.as_deref(),
+                                                u,
+                                                d,
+                                                r,
+                                            );
                                         }
                                     }
                                 }
 
                                 // 2. Đối soát các workbook đã bị đóng/hủy trong iframe (P2 #4683038858)
-                                if !live_uids.is_empty() {
+                                // Chạy ngay cả khi live_uids rỗng (workbook cuối cùng bị đóng với "Don't Save")
+                                if has_documents_snapshot {
                                     s.reconcile_closed_sessions(&live_uids);
                                 }
 
@@ -478,6 +587,48 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     coordinator.update_value(|c| c.on_user_edit());
                                 } else {
                                     s.recompute_aggregate_dirty();
+                                    if !s.is_dirty.get_untracked()
+                                        && s.pending_save_requests.with_untracked(|m| m.is_empty())
+                                    {
+                                        coordinator.update_value(|c| c.reset_if_dirty_on_close());
+                                    }
+                                }
+                            }
+                            "gridcraft:save_metadata" => {
+                                let meta_id = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("id"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_string());
+                                let meta_uid = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("doc_uid"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_f64())
+                                .map(|v| v as u64)
+                                .or_else(|| {
+                                    js_sys::Reflect::get(
+                                        &data,
+                                        &wasm_bindgen::JsValue::from_str("uid"),
+                                    )
+                                    .ok()
+                                    .and_then(|v| v.as_f64())
+                                    .map(|v| v as u64)
+                                });
+                                let meta_rev = js_sys::Reflect::get(
+                                    &data,
+                                    &wasm_bindgen::JsValue::from_str("revision"),
+                                )
+                                .ok()
+                                .and_then(|v| v.as_f64())
+                                .map(|v| v as u64)
+                                .unwrap_or(0);
+                                if let (Some(id), Some(uid)) = (meta_id, meta_uid) {
+                                    pending_save_metadata
+                                        .borrow_mut()
+                                        .insert(id, (uid, meta_rev));
                                 }
                             }
                             "gridcraft:save" | "gridcraft:export" => {
@@ -525,9 +676,15 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                     Some(crate::platform::adapter::SaveOperationIntent::Export)
                                 } else {
                                     match explicit_intent_str.as_deref() {
-                                        Some("export") => Some(crate::platform::adapter::SaveOperationIntent::Export),
-                                        Some("save_as") => Some(crate::platform::adapter::SaveOperationIntent::SaveAs),
-                                        Some("save") => Some(crate::platform::adapter::SaveOperationIntent::Save),
+                                        Some("export") => Some(
+                                            crate::platform::adapter::SaveOperationIntent::Export,
+                                        ),
+                                        Some("save_as") => Some(
+                                            crate::platform::adapter::SaveOperationIntent::SaveAs,
+                                        ),
+                                        Some("save") => Some(
+                                            crate::platform::adapter::SaveOperationIntent::Save,
+                                        ),
                                         Some(_) => None,
                                         None => {
                                             let save_as_flag = js_sys::Reflect::get(
@@ -573,8 +730,10 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         return;
                                     }
                                 };
-                                let save_as = intent == crate::platform::adapter::SaveOperationIntent::SaveAs
-                                    || intent == crate::platform::adapter::SaveOperationIntent::Export;
+                                let save_as = intent
+                                    == crate::platform::adapter::SaveOperationIntent::SaveAs
+                                    || intent
+                                        == crate::platform::adapter::SaveOperationIntent::Export;
 
                                 let bytes_val = js_sys::Reflect::get(
                                     &data,
@@ -613,46 +772,71 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         }
                                     }
                                 } else {
-                                    // Finding 2, P1 #4679604052 & P2 #4682914297: Phân giải chính xác phiên workbook đích bằng doc_uid, doc_id hoặc name
-                                    let incoming_uid = js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("doc_uid"))
-                                        .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
-                                        .or_else(|| {
-                                            js_sys::Reflect::get(&data, &wasm_bindgen::JsValue::from_str("uid"))
-                                                .ok().and_then(|v| v.as_f64()).map(|v| v as u64)
-                                        })
-                                        .or_else(|| {
-                                            req_id.as_deref().and_then(|id| {
-                                                if id.starts_with("save-") {
-                                                    let parts: Vec<&str> = id.split('-').collect();
-                                                    if parts.len() >= 3 {
-                                                        parts[1].parse::<u64>().ok()
-                                                    } else {
-                                                        None
-                                                    }
+                                    // Finding 2, P1 #4679604052, P2 #4682914297 & P1 #4684931088:
+                                    // Phân giải chính xác phiên workbook đích bằng metadata, doc_uid, doc_id hoặc name
+                                    let meta_pair = req_id.as_deref().and_then(|id| {
+                                        pending_save_metadata.borrow_mut().remove(id)
+                                    });
+                                    let incoming_uid = js_sys::Reflect::get(
+                                        &data,
+                                        &wasm_bindgen::JsValue::from_str("doc_uid"),
+                                    )
+                                    .ok()
+                                    .and_then(|v| v.as_f64())
+                                    .map(|v| v as u64)
+                                    .or_else(|| {
+                                        js_sys::Reflect::get(
+                                            &data,
+                                            &wasm_bindgen::JsValue::from_str("uid"),
+                                        )
+                                        .ok()
+                                        .and_then(|v| v.as_f64())
+                                        .map(|v| v as u64)
+                                    })
+                                    .or_else(|| meta_pair.map(|(uid, _)| uid))
+                                    .or_else(|| {
+                                        req_id.as_deref().and_then(|id| {
+                                            if id.starts_with("save-") {
+                                                let parts: Vec<&str> = id.split('-').collect();
+                                                if parts.len() >= 3 {
+                                                    parts[1].parse::<u64>().ok()
                                                 } else {
                                                     None
                                                 }
-                                            })
-                                        });
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                    });
 
                                     let lookup_key = incoming_doc_id.as_deref().unwrap_or(&name);
-                                    let resolved_session = s.resolve_save_session_with_uid(lookup_key, incoming_uid);
-                                    let (target_doc_id, target_path, target_rev) =
-                                        if let Some(ref sess) = resolved_session {
-                                            (
-                                                Some(sess.document_id.clone()),
-                                                Some(sess.file_path.clone()),
-                                                sess.revision,
-                                            )
-                                        } else if save_as {
-                                            (None, None, 0)
-                                        } else {
-                                            // Tệp lạ không thuộc phiên đã đăng ký -> buộc Save As để bảo vệ file hiện hành
-                                            (None, None, 0)
-                                        };
+                                    let resolved_session =
+                                        s.resolve_save_session_with_uid(lookup_key, incoming_uid);
+                                    let (
+                                        target_doc_id,
+                                        target_path,
+                                        target_rev,
+                                        resolved_uid,
+                                        resolved_edit_rev,
+                                    ) = if let Some(ref sess) = resolved_session {
+                                        (
+                                            Some(sess.document_id.clone()),
+                                            Some(sess.file_path.clone()),
+                                            sess.revision,
+                                            sess.iframe_doc_uid.or(incoming_uid),
+                                            Some(sess.edit_revision),
+                                        )
+                                    } else if save_as {
+                                        (None, None, 0, incoming_uid, None)
+                                    } else {
+                                        // Tệp lạ không thuộc phiên đã đăng ký -> buộc Save As để bảo vệ file hiện hành
+                                        (None, None, 0, incoming_uid, None)
+                                    };
 
-                                    let effective_doc_id =
-                                        target_doc_id.as_deref().or(incoming_doc_id.as_deref()).unwrap_or("gridcraft-doc");
+                                    let effective_doc_id = target_doc_id
+                                        .as_deref()
+                                        .or(incoming_doc_id.as_deref())
+                                        .unwrap_or("gridcraft-doc");
                                     let effective_path = target_path.as_deref().unwrap_or(&name);
 
                                     // Finding 1: Đồng bộ hóa Coordinator với workbook này trước khi phát lệnh lưu
@@ -686,11 +870,11 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                             counter
                                         )
                                     });
-                                    let name_clone = name.clone();
                                     let bytes_clone = bytes.clone();
                                     let req_clone = req_id_str.clone();
 
-                                    let is_export_op = intent == crate::platform::adapter::SaveOperationIntent::Export;
+                                    let is_export_op = intent
+                                        == crate::platform::adapter::SaveOperationIntent::Export;
 
                                     if !is_export_op {
                                         let mut action =
@@ -733,31 +917,40 @@ pub fn GridCraftWorkspace(#[prop(into)] state: GridCraftState) -> impl IntoView 
                                         }
                                     }
 
-                                    // Finding 2: Chụp lại edit revision của tài liệu tại thời điểm serialize snapshot
-                                    let snapshot_edit_rev = s.get_edit_revision(effective_doc_id);
+                                    // Finding 2 & P1 #4684931088: Chụp ngữ cảnh yêu cầu lưu bất biến tại thời điểm chấp nhận yêu cầu
+                                    let snapshot_edit_rev = resolved_edit_rev
+                                        .or_else(|| meta_pair.map(|(_, rev)| rev))
+                                        .unwrap_or_else(|| s.get_edit_revision(effective_doc_id));
+                                    let save_ctx = GridCraftSaveRequestContext {
+                                        request_id: req_clone.clone(),
+                                        operation_intent: intent,
+                                        originating_document_id: target_doc_id
+                                            .clone()
+                                            .or_else(|| incoming_doc_id.clone()),
+                                        originating_path: target_path.clone(),
+                                        originating_name: name.clone(),
+                                        iframe_doc_uid: resolved_uid,
+                                        snapshot_edit_revision: snapshot_edit_rev,
+                                        base_committed_revision: target_rev,
+                                        session_generation: session_gen,
+                                    };
+                                    if !is_export_op {
+                                        s.register_pending_save_request(
+                                            &save_ctx.request_id,
+                                            save_ctx.originating_document_id.as_deref(),
+                                        );
+                                    }
 
                                     wasm_bindgen_futures::spawn_local(async move {
-                                        let outcome = execute_gridcraft_save(
-                                            &name_clone,
-                                            target_path.as_deref(),
-                                            target_doc_id.as_deref(),
-                                            target_rev + 1,
-                                            session_gen,
-                                            save_as,
-                                            &req_clone,
-                                            &bytes_clone,
-                                        )
-                                        .await;
+                                        let outcome =
+                                            execute_gridcraft_save(&save_ctx, &bytes_clone).await;
 
                                         handle_gridcraft_save_outcome(
                                             &s,
                                             Some(&coordinator),
                                             outcome,
-                                            intent,
-                                            &name_clone,
-                                            &req_clone,
+                                            &save_ctx,
                                             &bytes_clone,
-                                            snapshot_edit_rev,
                                             close_manager,
                                             app_state,
                                         );
@@ -1032,7 +1225,8 @@ pub fn send_saved_to_iframe(
     _new_name: Option<&str>,
     _dest_path: Option<&str>,
     _new_doc_id: Option<&str>,
-) {}
+) {
+}
 
 /// Gửi thông điệp yêu cầu iframe GridCraft tuần tự hóa và lưu tệp chủ động (Stage 4C-0C Task 1)
 /// Trả về true nếu đã gửi thành công tới iframe, false nếu iframe không tồn tại trong DOM (Finding 4)
@@ -1078,7 +1272,8 @@ pub fn send_request_save_to_iframe(iframe_id: &str, req_id: Option<&str>, save_a
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-static MOCK_IFRAME_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+static MOCK_IFRAME_AVAILABLE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(true);
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn set_mock_iframe_available(available: bool) {
@@ -1086,7 +1281,11 @@ pub fn set_mock_iframe_available(available: bool) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn send_request_save_to_iframe(_iframe_id: &str, _req_id: Option<&str>, _save_as: bool) -> bool {
+pub fn send_request_save_to_iframe(
+    _iframe_id: &str,
+    _req_id: Option<&str>,
+    _save_as: bool,
+) -> bool {
     MOCK_IFRAME_AVAILABLE.load(std::sync::atomic::Ordering::SeqCst)
 }
 
@@ -1134,18 +1333,21 @@ pub fn send_open_to_iframe(iframe_id: &str, name: &str, bytes: &[u8], open_id: O
 #[cfg(not(target_arch = "wasm32"))]
 pub fn send_open_to_iframe(_iframe_id: &str, _name: &str, _bytes: &[u8], _open_id: Option<&str>) {}
 
-/// Thực thi quy trình lưu đĩa bảo mật chính thức của GridCraft (Stage 4C-1 Product Cutover)
+/// Thực thi quy trình lưu đĩa bảo mật chính thức của GridCraft (Stage 4C-1 Product Cutover & P1 #4684931088)
 #[cfg(target_arch = "wasm32")]
 pub async fn execute_gridcraft_save(
-    name: &str,
-    file_path: Option<&str>,
-    document_id: Option<&str>,
-    expected_rev: u64,
-    session_gen: u64,
-    save_as: bool,
-    req_id: &str,
+    ctx: &GridCraftSaveRequestContext,
     bytes: &[u8],
 ) -> Result<DevSaveResult, String> {
+    let name = ctx.originating_name.as_str();
+    let file_path = ctx.originating_path.as_deref();
+    let document_id = ctx.originating_document_id.as_deref();
+    let expected_rev = ctx.base_committed_revision + 1;
+    let session_gen = ctx.session_generation;
+    let save_as = ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::SaveAs
+        || ctx.operation_intent == crate::platform::adapter::SaveOperationIntent::Export;
+    let req_id = ctx.request_id.as_str();
+
     // 1. Regular Save: Có sẵn file_path và document_id đã đăng ký
     if !save_as && let (Some(_path), Some(doc_id)) = (file_path, document_id) {
         let grant_args = serde_wasm_bindgen::to_value(&serde_json::json!({
@@ -1160,7 +1362,9 @@ pub async fn execute_gridcraft_save(
         let grant_val = match invoke("request_save_grant", grant_args).await {
             Ok(val) => val,
             Err(e) => {
-                return Ok(DevSaveResult::Failed(format!("Yêu cầu cấp phép ghi đĩa thất bại: {e:?}")));
+                return Ok(DevSaveResult::Failed(format!(
+                    "Yêu cầu cấp phép ghi đĩa thất bại: {e:?}"
+                )));
             }
         };
 
@@ -1174,7 +1378,7 @@ pub async fn execute_gridcraft_save(
                 }
             };
 
-        let ctx = crate::platform::SaveRequestContext {
+        let grant_ctx = crate::platform::SaveRequestContext {
             document_id: doc_id.to_string(),
             app_instance_id: "gridcraft-workspace-instance".to_string(),
             session_generation: session_gen,
@@ -1183,7 +1387,7 @@ pub async fn execute_gridcraft_save(
             request_id: req_id.to_string(),
         };
 
-        if let Err(err) = crate::platform::validate_native_save_grant(&grant, &ctx) {
+        if let Err(err) = crate::platform::validate_native_save_grant(&grant, &grant_ctx) {
             return Ok(DevSaveResult::Failed(format!("Lỗi bất biến: {err}")));
         }
 
@@ -1241,7 +1445,9 @@ pub async fn execute_gridcraft_save(
     } else if name.ends_with(".csv") || std::str::from_utf8(bytes).is_ok() {
         ("Tệp CSV (*.csv)", vec!["csv"])
     } else {
-        return Ok(DevSaveResult::Failed("Định dạng dữ liệu không được hỗ trợ".to_string()));
+        return Ok(DevSaveResult::Failed(
+            "Định dạng dữ liệu không được hỗ trợ".to_string(),
+        ));
     };
 
     let args = serde_wasm_bindgen::to_value(&serde_json::json!({
@@ -1266,7 +1472,7 @@ pub async fn execute_gridcraft_save(
                     return Ok(DevSaveResult::Failed(err));
                 }
 
-                let ctx = crate::platform::SaveRequestContext {
+                let grant_ctx = crate::platform::SaveRequestContext {
                     document_id: handle.document_id.clone(),
                     app_instance_id: "gridcraft-workspace-instance".to_string(),
                     session_generation: session_gen,
@@ -1275,8 +1481,12 @@ pub async fn execute_gridcraft_save(
                     request_id: handle.grant.request_id.clone(),
                 };
 
-                if let Err(err) = crate::platform::validate_native_save_grant(&handle.grant, &ctx) {
-                    return Ok(DevSaveResult::Failed(format!("Lỗi bất biến Save As: {err}")));
+                if let Err(err) =
+                    crate::platform::validate_native_save_grant(&handle.grant, &grant_ctx)
+                {
+                    return Ok(DevSaveResult::Failed(format!(
+                        "Lỗi bất biến Save As: {err}"
+                    )));
                 }
 
                 let save_args = serde_wasm_bindgen::to_value(&serde_json::json!({
@@ -1373,28 +1583,27 @@ pub async fn execute_gridcraft_dev_save(
     req_id: &str,
     bytes: &[u8],
 ) -> Result<DevSaveResult, String> {
-    execute_gridcraft_save(
-        name,
-        file_path,
-        document_id,
-        expected_rev,
-        1,
-        save_as,
-        req_id,
-        bytes,
-    )
-    .await
+    let ctx = GridCraftSaveRequestContext {
+        request_id: req_id.to_string(),
+        operation_intent: if save_as {
+            crate::platform::adapter::SaveOperationIntent::SaveAs
+        } else {
+            crate::platform::adapter::SaveOperationIntent::Save
+        },
+        originating_document_id: document_id.map(str::to_string),
+        originating_path: file_path.map(str::to_string),
+        originating_name: name.to_string(),
+        iframe_doc_uid: None,
+        snapshot_edit_revision: 0,
+        base_committed_revision: expected_rev.saturating_sub(1),
+        session_generation: 1,
+    };
+    execute_gridcraft_save(&ctx, bytes).await
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn execute_gridcraft_save(
-    _name: &str,
-    _file_path: Option<&str>,
-    _document_id: Option<&str>,
-    _expected_rev: u64,
-    _session_gen: u64,
-    _save_as: bool,
-    _req_id: &str,
+    _ctx: &GridCraftSaveRequestContext,
     _bytes: &[u8],
 ) -> Result<DevSaveResult, String> {
     Ok(DevSaveResult::Canceled)

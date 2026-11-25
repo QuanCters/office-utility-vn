@@ -1003,3 +1003,169 @@ fn test_stage4c0b_hosted_save_changes_edit_during_save_aborts_deferred_action() 
         "Dữ liệu B1 phải được bảo toàn 100%"
     );
 }
+
+#[test]
+fn test_p1_4683798594_repeated_ordinary_save_via_hosted_toolbar_and_ctrl_s() {
+    let downloads = Arc::new(Mutex::new(Vec::<(String, usize)>::new()));
+    let dl_capture = downloads.clone();
+    let services = Services {
+        open_async: Some(Box::new(|| {})),
+        download: Some(Box::new(move |name, bytes| {
+            dl_capture.lock().unwrap().push((name.to_string(), bytes.len()));
+        })),
+        ..Default::default()
+    };
+    let mut h = harness(services);
+
+    // 1. Edit A1 -> dirty
+    h.state_mut()
+        .run("cell.set", serde_json::json!({"cell": "A1", "input": "First Edit"}))
+        .unwrap();
+    h.run_steps(2);
+    assert!(h.state().session.active().unwrap().is_dirty());
+
+    // 2. First ordinary Save via real hosted toolbar "Save" icon button (immediately left of "Undo")
+    let undo_rect = h
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Undo")
+        .rect();
+    let save_btn_pos = egui::pos2(undo_rect.left() - 18.0, undo_rect.center().y);
+    let click_toolbar_save = |h: &mut egui_kittest::Harness<'_, SheetApp>| {
+        h.input_mut().events.push(egui::Event::PointerMoved(save_btn_pos));
+        h.input_mut().events.push(egui::Event::PointerButton {
+            pos: save_btn_pos,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.input_mut().events.push(egui::Event::PointerButton {
+            pos: save_btn_pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(3);
+    };
+    click_toolbar_save(&mut h);
+    assert_eq!(downloads.lock().unwrap().len(), 1, "First toolbar Save must deliver bytes to host");
+    assert!(h.state().message.is_none(), "First toolbar Save must not show error");
+
+    // Simulate Bridge::sync ack handling WITHOUT setting doc.path (P1 #4683798594 fix)
+    {
+        let doc = h.state_mut().session.active_mut().unwrap();
+        doc.saved = doc.wb.clone();
+        doc.title = "budget.xlsx".to_string();
+        assert!(doc.path.is_none(), "Hosted WASM doc.path must stay None");
+    }
+    assert!(!h.state().session.active().unwrap().is_dirty());
+
+    // 3. Edit A2 -> dirty again, then SECOND ordinary Save via real toolbar "Save" button
+    h.state_mut()
+        .run("cell.set", serde_json::json!({"cell": "A2", "input": "Second Edit"}))
+        .unwrap();
+    h.run_steps(2);
+    click_toolbar_save(&mut h);
+    assert_eq!(
+        downloads.lock().unwrap().len(),
+        2,
+        "Second toolbar Save MUST still route through hosted download/post_save, not io::write_file"
+    );
+    assert!(h.state().message.is_none(), "Second toolbar Save must not show error");
+
+    {
+        let doc = h.state_mut().session.active_mut().unwrap();
+        doc.saved = doc.wb.clone();
+        assert!(doc.path.is_none());
+    }
+
+    // 4. Edit A3 -> dirty again, then THIRD ordinary Save via real Ctrl+S shortcut
+    h.state_mut()
+        .run("cell.set", serde_json::json!({"cell": "A3", "input": "Third Edit"}))
+        .unwrap();
+    h.run_steps(2);
+    h.input_mut().events.push(egui::Event::Key {
+        key: egui::Key::S,
+        physical_key: Some(egui::Key::S),
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    h.run_steps(3);
+    assert_eq!(
+        downloads.lock().unwrap().len(),
+        3,
+        "Third ordinary Save via Ctrl+S MUST route through hosted download/post_save"
+    );
+    assert!(h.state().message.is_none(), "Ctrl+S Save must not show error");
+
+    {
+        let doc = h.state_mut().session.active_mut().unwrap();
+        doc.saved = doc.wb.clone();
+    }
+
+    // 5. Fourth ordinary Save via Ctrl+S with no intervening edit (repeated Save)
+    h.input_mut().events.push(egui::Event::Key {
+        key: egui::Key::S,
+        physical_key: Some(egui::Key::S),
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    h.run_steps(3);
+    assert_eq!(
+        downloads.lock().unwrap().len(),
+        4,
+        "Repeated Ctrl+S without intervening edits must still route cleanly through host"
+    );
+    assert!(h.state().message.is_none());
+
+    // 6. Contrast check: if doc.path WERE populated with a filesystem path, file.save bypasses
+    // services.download and attempts direct io::write_file (which fails in WASM browser)!
+    let tmp_path = std::env::temp_dir().join("gridcraft_4683798594_contrast_test.xlsx");
+    h.state_mut().session.active_mut().unwrap().path = Some(tmp_path.to_string_lossy().to_string());
+    h.state_mut().run_or_alert("file.save", serde_json::json!({}));
+    let _ = std::fs::remove_file(&tmp_path);
+    assert_eq!(
+        downloads.lock().unwrap().len(),
+        4,
+        "When doc.path is populated, file.save bypasses services.download (which fails in WASM)"
+    );
+}
+
+#[test]
+fn test_p2_4683038858_hosted_dont_save_close_removes_dirty_document_from_session() {
+    let services = Services {
+        open_async: Some(Box::new(|| {})),
+        download: Some(Box::new(|_, _| {})),
+        ..Default::default()
+    };
+    let mut h = harness(services);
+
+    // 1. Open/create workbook A and workbook B
+    h.state_mut().run("cell.set", serde_json::json!({"cell": "A1", "input": "Dirty A"})).unwrap();
+    let uid_a = h.state().session.active().unwrap().uid;
+    h.state_mut().run("file.new", serde_json::json!({"force": true})).unwrap();
+    let uid_b = h.state().session.active().unwrap().uid;
+    assert_ne!(uid_a, uid_b);
+    assert_eq!(h.state().session.documents().len(), 2);
+
+    // Switch back to A and trigger file.close -> opens saveChanges dialog
+    let win_a = h.state().session.doc_window(uid_a).unwrap();
+    h.state_mut().enter_window(win_a);
+    let close_res = h.state_mut().run("file.close", serde_json::json!({})).unwrap();
+    assert_eq!(close_res["dirty"], true);
+    assert_eq!(h.state().dialog.as_ref().map(|d| d.name()), Some("saveChanges"));
+    h.run_steps(2);
+
+    // Click "Don't Save" in the real saveChanges dialog
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Don't Save").click();
+    h.run_steps(3);
+
+    // Authoritative documents list now contains ONLY B, and no dirty documents remain
+    let remaining: Vec<u64> = h.state().session.documents().iter().map(|d| d.uid).collect();
+    assert_eq!(remaining, vec![uid_b], "Closed dirty workbook A must be removed from iframe session");
+    assert!(
+        !h.state().session.documents().iter().any(|d| d.is_dirty()),
+        "No dirty documents remain after explicit Don't Save & Close"
+    );
+}
+
